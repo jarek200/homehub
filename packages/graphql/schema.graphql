@@ -15,10 +15,156 @@ input UpdateUserInput {
   avatar: String
 }
 
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+enum CommandStatus {
+  PENDING
+  SENT
+  ACKNOWLEDGED
+  FAILED
+}
+
+enum IssueStatus {
+  OPEN
+  MONITORING
+  RESOLVED
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+type Device {
+  deviceId: ID!
+  name: String!
+  type: String!
+  location: String
+  status: DeviceStatus!
+  configuration: String
+  lastSeenAt: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+type Reading {
+  readingId: ID!
+  deviceId: ID!
+  temperature: Float
+  humidity: Float
+  motionDetected: Boolean
+  cameraOnline: Boolean
+  recordedAt: String!
+  createdAt: String!
+}
+
+type Command {
+  commandId: ID!
+  deviceId: ID!
+  command: String!
+  status: CommandStatus!
+  result: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+type DeviceConnection {
+  items: [Device!]!
+  nextToken: String
+}
+
+type ReadingConnection {
+  items: [Reading!]!
+  nextToken: String
+}
+
+type CommandConnection {
+  items: [Command!]!
+  nextToken: String
+}
+
+type HomeIssue {
+  issueId: ID!
+  title: String!
+  deviceId: ID
+  severity: IssueSeverity!
+  status: IssueStatus!
+  notes: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+type HomeIssueConnection {
+  items: [HomeIssue!]!
+  nextToken: String
+}
+
+input CreateDeviceInput {
+  name: String!
+  type: String!
+  location: String
+  configuration: String
+}
+
+input UpdateDeviceInput {
+  name: String
+  type: String
+  location: String
+  status: DeviceStatus
+  configuration: String
+  lastSeenAt: String
+}
+
+input CreateReadingInput {
+  temperature: Float
+  humidity: Float
+  motionDetected: Boolean
+  cameraOnline: Boolean
+  recordedAt: String
+}
+
+input SendCommandInput {
+  command: String!
+}
+
+input CreateHomeIssueInput {
+  title: String!
+  deviceId: ID
+  severity: IssueSeverity
+  status: IssueStatus
+  notes: String
+}
+
+input UpdateHomeIssueInput {
+  title: String
+  deviceId: ID
+  severity: IssueSeverity
+  status: IssueStatus
+  notes: String
+}
+
 type Query {
   getMyProfile: User
+  listMyDevices(limit: Int, nextToken: String): DeviceConnection!
+  getDevice(deviceId: ID!): Device
+  listDeviceReadings(deviceId: ID!, limit: Int, nextToken: String): ReadingConnection!
+  listDeviceCommands(deviceId: ID!, limit: Int, nextToken: String): CommandConnection!
+  listMyIssues(limit: Int, nextToken: String): HomeIssueConnection!
+  getIssue(issueId: ID!): HomeIssue
 }
 
 type Mutation {
   updateUserProfile(input: UpdateUserInput!): User
+  createDevice(input: CreateDeviceInput!): Device!
+  updateDevice(deviceId: ID!, input: UpdateDeviceInput!): Device!
+  deleteDevice(deviceId: ID!): Boolean!
+  createDeviceReading(deviceId: ID!, input: CreateReadingInput!): Reading!
+  sendCommand(deviceId: ID!, input: SendCommandInput!): Command!
+  createIssue(input: CreateHomeIssueInput!): HomeIssue!
+  updateIssue(issueId: ID!, input: UpdateHomeIssueInput!): HomeIssue!
 }

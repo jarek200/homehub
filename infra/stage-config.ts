@@ -23,11 +23,7 @@ type StageConfig = {
 };
 
 const configs: Record<string, StageConfig> = {
-  dev: {
-    lambda: { memory: '256 MB', timeout: '10 seconds' },
-    sveltekit: { memory: '512 MB' },
-  },
-  stage: {
+  int: {
     lambda: { memory: '512 MB', timeout: '15 seconds' },
     sveltekit: { memory: '1024 MB' },
   },
@@ -37,4 +33,5 @@ const configs: Record<string, StageConfig> = {
   },
 };
 
-export const stageConfig: StageConfig = configs[$app.stage] ?? configs.dev;
+/** Personal `sst dev` stages fall back to int sizing. */
+export const stageConfig: StageConfig = configs[$app.stage] ?? configs.int;

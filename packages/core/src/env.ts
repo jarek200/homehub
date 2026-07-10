@@ -19,6 +19,9 @@ export const envSchema = z.object({
   // DynamoDB (server-side only, set via SST link)
   TABLE_NAME: z.string().optional(),
 
+  // REST API (optional API key for demo tenant endpoints)
+  REST_API_KEY: z.string().optional(),
+
   // Stage - accepts any string to support custom SST stage names (feature branches, PR previews, etc.)
   VITE_STAGE: z.string().optional(),
 
@@ -68,6 +71,7 @@ export const lambdaEnvSchema = z.object({
   TABLE_NAME: z.string(),
   AWS_REGION: z.string().default('us-east-1'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
+  REST_API_KEY: z.string().optional(),
 });
 
 export type LambdaEnv = z.infer<typeof lambdaEnvSchema>;

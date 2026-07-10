@@ -22,6 +22,7 @@ export default defineConfig({
     alias: {
       '@sst-monorepo/core': path.resolve(__dirname, './packages/core/src'),
       '@sst-monorepo/graphql': path.resolve(__dirname, './packages/graphql'),
+      '@sst-monorepo/functions': path.resolve(__dirname, './packages/functions/src'),
     },
   },
 });

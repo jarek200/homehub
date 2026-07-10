@@ -13,15 +13,17 @@
  *
  * You can also override per-stage profiles via env vars without touching
  * this file:
- *   AWS_PROFILE_DEV=my-dev-profile pnpm exec sst deploy --stage dev
+ *   AWS_PROFILE_INT=homehub-int pnpm exec sst deploy --stage int
  *
- * Default `dev` uses profile **default** — typical when keys live only in
- * ~/.aws/credentials under [default]. Use AWS_PROFILE_DEV=dev (etc.) for named profiles.
+ * Accounts:
+ *   int  (and personal sst dev stages) → homehub-int  (800309353529)
+ *   prod                               → homehub-prod (570064632535)
+ *
+ * Log in first: pnpm sso
  */
 const STAGE_PROFILES: Record<string, string> = {
-  dev: process.env.AWS_PROFILE_DEV ?? 'default',
-  stage: process.env.AWS_PROFILE_STAGE ?? 'stage',
-  prod: process.env.AWS_PROFILE_PROD ?? 'prod',
+  int: process.env.AWS_PROFILE_INT ?? 'homehub-int',
+  prod: process.env.AWS_PROFILE_PROD ?? 'homehub-prod',
 };
 
 export default $config({
@@ -49,7 +51,7 @@ export default $config({
            * Remove any AWS_PROFILE from your shell / .env if you want this
            * mapping to be effective locally.
            */
-          profile: process.env.CI ? undefined : (STAGE_PROFILES[stage] ?? STAGE_PROFILES.dev),
+          profile: process.env.CI ? undefined : (STAGE_PROFILES[stage] ?? STAGE_PROFILES.int),
         },
       },
     };
@@ -61,6 +63,7 @@ export default $config({
     const { createAuth } = await import('./infra/auth');
     const { createApi, createDataSource } = await import('./infra/api/api-setup');
     const { addAllResolvers } = await import('./infra/api/resolvers');
+    const { createRestApi } = await import('./infra/rest-api');
     const { stageConfig } = await import('./infra/stage-config');
 
     const { table } = createStorage();
@@ -68,6 +71,7 @@ export default $config({
     const { auth, authClient } = createAuth(createUserProfileFunction);
     const api = createApi(auth);
     const dynamoDataSource = createDataSource(api, table);
+    const restApi = createRestApi(table);
 
     addAllResolvers(api, dynamoDataSource, String(table.name));
 
@@ -96,6 +100,7 @@ export default $config({
       VITE_USER_POOL_ID: auth.id,
       VITE_USER_POOL_CLIENT_ID: authClient.id,
       VITE_GRAPHQL_ENDPOINT: api.url,
+      VITE_REST_API_URL: restApi.url,
       VITE_STAGE: $app.stage,
       VITE_APP_URL: webAppUrl,
     };
@@ -113,6 +118,7 @@ export default $config({
       userPoolId: auth.id,
       userPoolClientId: authClient.id,
       apiUrl: api.url,
+      restApiUrl: restApi.url,
       webUrl: web.url,
       webAppUrl: webAppUrl ?? web.url,
     };
