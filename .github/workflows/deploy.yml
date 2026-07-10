@@ -1,31 +1,5 @@
 name: Deploy
 
-# Triggered whenever a label is added to a PR.
-# Each label routes to one environment job; only the matching job runs.
-#
-# Promotion flow (add labels in order):
-#   1. deploy:dev   --> deploys SST to the dev AWS account
-#   2. deploy:stage --> deploys SST to the stage AWS account
-#                       (blocked unless deploy:dev label is also present)
-#   3. deploy:prod  --> deploys SST to the prod AWS account
-#                       (blocked unless both deploy:dev and deploy:stage are present)
-#                       (also gated by GitHub Environment required reviewers)
-#
-# Setup required (one-time, outside this repo):
-#   1. Create GitHub Environments: dev, stage, prod
-#      - Set "Required reviewers" on prod
-#   2. Add secrets to each Environment:
-#      - AWS_ROLE_ARN  (arn:aws:iam::<account-id>:role/GHActions-<Env>)
-#      - DNS_ROLE_ARN  (cross-account role in the management account for Route 53)
-#   3. Add variables to each Environment:
-#      - APP_URL             (e.g. https://my-app-dev.apps.example.com)
-#      - APPS_HOSTED_ZONE_ID (Route 53 hosted zone ID in the management account)
-#   4. Create IAM OIDC provider + role in each AWS account with trust policy:
-#      Condition: token.actions.githubusercontent.com:sub =
-#        "repo:<org>/<repo>:environment:<env-name>"
-#
-# See README.md > "GitHub Actions & Labels" for the full deployment guide.
-
 on:
   pull_request:
     types: [labeled]
@@ -34,37 +8,48 @@ concurrency:
   group: deploy-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
   cancel-in-progress: true
 
-env:
-  AWS_REGION: us-east-1
-
 jobs:
-  # ──────────────────────────────────────────────────────────
-  # DEV
-  # ──────────────────────────────────────────────────────────
-  deploy-dev:
-    name: Deploy → dev
-    if: github.event.label.name == 'deploy:dev'
+  setup:
+    if: startsWith(github.event.label.name, 'deploy:')
     runs-on: ubuntu-latest
-    environment: dev
-    env:
-      APP_URL: ${{ vars.APP_URL }}
-      APPS_HOSTED_ZONE_ID: ${{ vars.APPS_HOSTED_ZONE_ID }}
-      DNS_ROLE_ARN: ${{ secrets.DNS_ROLE_ARN }}
+    outputs:
+      env_name: ${{ steps.parse.outputs.env_name }}
+      env_upper: ${{ steps.parse.outputs.env_upper }}
+    steps:
+      - id: parse
+        name: Parse environment from label
+        run: |
+          LABEL="${{ github.event.label.name }}"
+          ENV_NAME="${LABEL#deploy:}"
+          ENV_UPPER=$(echo "$ENV_NAME" | tr '[:lower:]' '[:upper:]')
+          echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
+
+  deploy:
+    needs: setup
+    runs-on: ubuntu-latest
+    environment: ${{ needs.setup.outputs.env_name }}
     permissions:
       id-token: write
       contents: read
       pull-requests: write
+    env:
+      APP_URL: ${{ vars[format('APP_URL_{0}', needs.setup.outputs.env_upper)] || secrets[format('APP_URL_{0}', needs.setup.outputs.env_upper)] }}
+      APPS_HOSTED_ZONE_ID: ${{ vars.APPS_HOSTED_ZONE_ID || secrets.APPS_HOSTED_ZONE_ID }}
+      DNS_ROLE_ARN: ${{ secrets.DNS_ROLE_ARN }}
+      SST_APP_NAME: ${{ vars.SST_APP_NAME }}
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v6
+      - uses: actions/checkout@v6
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: ./.github/actions/setup-env
-
+          role-to-assume: ${{ secrets[format('AWS_ROLE_ARN_{0}', needs.setup.outputs.env_upper)] }}
+          aws-region: us-east-1
+      - uses: pnpm/action-setup@v5.0.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
       - name: Assume cross-account DNS role
         if: env.DNS_ROLE_ARN != ''
         run: |
@@ -76,170 +61,20 @@ jobs:
           echo "DNS_AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r '.Credentials.AccessKeyId')" >> "$GITHUB_ENV"
           echo "DNS_AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r '.Credentials.SecretAccessKey')" >> "$GITHUB_ENV"
           echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
-
-      - run: pnpm exec sst unlock --stage dev
-
-      - name: Deploy SST → dev
-        run: pnpm exec sst deploy --stage dev
-
+      - run: pnpm exec sst unlock --stage ${{ needs.setup.outputs.env_name }}
+      - run: pnpm exec sst deploy --stage ${{ needs.setup.outputs.env_name }}
       - name: Swap label to error on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          ENV_NAME: ${{ needs.setup.outputs.env_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh label create "deploy-failed:dev" \
+          gh label create "deploy-failed:${ENV_NAME}" \
             --color "d73a4a" \
-            --description "Deploy to dev failed" \
+            --description "Deploy to ${ENV_NAME} failed" \
             --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh pr edit "$PR_NUMBER" \
-            --remove-label "deploy:dev" \
-            --add-label "deploy-failed:dev" \
-            --repo "$GITHUB_REPOSITORY"
-
-  # ──────────────────────────────────────────────────────────
-  # STAGE
-  # ──────────────────────────────────────────────────────────
-  deploy-stage:
-    name: Deploy → stage
-    if: github.event.label.name == 'deploy:stage'
-    runs-on: ubuntu-latest
-    environment: stage
-    env:
-      APP_URL: ${{ vars.APP_URL }}
-      APPS_HOSTED_ZONE_ID: ${{ vars.APPS_HOSTED_ZONE_ID }}
-      DNS_ROLE_ARN: ${{ secrets.DNS_ROLE_ARN }}
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Check deploy:dev label is present
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          labels=$(gh pr view ${{ github.event.pull_request.number }} \
-            --json labels \
-            --repo ${{ github.repository }} \
-            --jq '.labels[].name')
-          echo "Current PR labels: $labels"
-          echo "$labels" | grep -q "deploy:dev" \
-            || (echo "ERROR: 'deploy:dev' label must be present before promoting to stage." && exit 1)
-
-      - uses: actions/checkout@v7
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: ./.github/actions/setup-env
-
-      - name: Assume cross-account DNS role
-        if: env.DNS_ROLE_ARN != ''
-        run: |
-          CREDS=$(aws sts assume-role \
-            --role-arn "$DNS_ROLE_ARN" \
-            --role-session-name "SSTDnsProvider" \
-            --duration-seconds 3600 \
-            --output json)
-          echo "DNS_AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r '.Credentials.AccessKeyId')" >> "$GITHUB_ENV"
-          echo "DNS_AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r '.Credentials.SecretAccessKey')" >> "$GITHUB_ENV"
-          echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
-
-      - run: pnpm exec sst unlock --stage stage
-
-      - name: Deploy SST → stage
-        run: pnpm exec sst deploy --stage stage
-
-      - name: Swap label to error on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh label create "deploy-failed:stage" \
-            --color "d73a4a" \
-            --description "Deploy to stage failed" \
-            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-          gh pr edit "$PR_NUMBER" \
-            --remove-label "deploy:stage" \
-            --add-label "deploy-failed:stage" \
-            --repo "$GITHUB_REPOSITORY"
-
-  # ──────────────────────────────────────────────────────────
-  # PROD
-  # ──────────────────────────────────────────────────────────
-  deploy-prod:
-    name: Deploy → prod
-    if: github.event.label.name == 'deploy:prod'
-    runs-on: ubuntu-latest
-    # The "prod" GitHub Environment enforces required-reviewer approval
-    # before credentials are issued — this is the second gate after the
-    # prerequisite label check below.
-    environment: prod
-    env:
-      APP_URL: ${{ vars.APP_URL }}
-      APPS_HOSTED_ZONE_ID: ${{ vars.APPS_HOSTED_ZONE_ID }}
-      DNS_ROLE_ARN: ${{ secrets.DNS_ROLE_ARN }}
-    permissions:
-      id-token: write
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Check deploy:dev and deploy:stage labels are present
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          labels=$(gh pr view ${{ github.event.pull_request.number }} \
-            --json labels \
-            --repo ${{ github.repository }} \
-            --jq '.labels[].name')
-          echo "Current PR labels: $labels"
-          echo "$labels" | grep -q "deploy:dev" \
-            || (echo "ERROR: 'deploy:dev' label must be present before promoting to prod." && exit 1)
-          echo "$labels" | grep -q "deploy:stage" \
-            || (echo "ERROR: 'deploy:stage' label must be present before promoting to prod." && exit 1)
-
-      - uses: actions/checkout@v7
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - uses: ./.github/actions/setup-env
-
-      - name: Assume cross-account DNS role
-        if: env.DNS_ROLE_ARN != ''
-        run: |
-          CREDS=$(aws sts assume-role \
-            --role-arn "$DNS_ROLE_ARN" \
-            --role-session-name "SSTDnsProvider" \
-            --duration-seconds 3600 \
-            --output json)
-          echo "DNS_AWS_ACCESS_KEY_ID=$(echo "$CREDS" | jq -r '.Credentials.AccessKeyId')" >> "$GITHUB_ENV"
-          echo "DNS_AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r '.Credentials.SecretAccessKey')" >> "$GITHUB_ENV"
-          echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
-
-      - run: pnpm exec sst unlock --stage prod
-
-      - name: Deploy SST → prod
-        run: pnpm exec sst deploy --stage prod
-
-      - name: Swap label to error on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          gh label create "deploy-failed:prod" \
-            --color "d73a4a" \
-            --description "Deploy to prod failed" \
-            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-          gh pr edit "$PR_NUMBER" \
-            --remove-label "deploy:prod" \
-            --add-label "deploy-failed:prod" \
+            --remove-label "deploy:${ENV_NAME}" \
+            --add-label "deploy-failed:${ENV_NAME}" \
             --repo "$GITHUB_REPOSITORY"
