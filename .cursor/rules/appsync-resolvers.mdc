@@ -1,0 +1,506 @@
+---
+description: Create appsync js resolvers
+alwaysApply: false
+---
+
+# Creating AppSync JavaScript Resolvers
+
+## Overview
+
+This monorepo uses AWS AppSync with JavaScript resolvers (VTL is not used). Resolvers are organized by feature domain and use direct DynamoDB data sources for simple CRUD operations.
+
+## File Organization
+
+Resolvers are organized in `infra/api/resolvers/`:
+- Each feature gets its own file (e.g., `users.ts`, `pictures.ts`)
+- All resolvers are aggregated in `index.ts`
+- Resolvers are registered in `sst.config.ts` via `addAllResolvers()`
+
+## Step-by-Step: Creating a New Resolver
+
+### 1. Update GraphQL Schema
+
+First, define your types and operations in `packages/graphql/schema.graphql`:
+
+```graphql
+type Entity {
+  entityId: ID!
+  userId: ID!
+  name: String!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+}
+
+input CreateEntityInput {
+  name: String!
+}
+
+type Query {
+  getMyEntity: Entity
+}
+
+type Mutation {
+  createEntity(input: CreateEntityInput!): Entity
+}
+```
+
+### 2. Create Resolver Module
+
+Create a new file `infra/api/resolvers/[feature].ts`:
+
+```typescript
+/// <reference path="../../../.sst/platform/config.d.ts" />
+
+export function addEntityResolvers(
+  api: ReturnType<typeof import("../api-setup").createApi>,
+  dynamoDataSource: ReturnType<typeof import("../api-setup").createDataSource>,
+  tableName: any
+) {
+  // Query: getMyEntity
+  api.addResolver("Query getMyEntity", {
+    dataSource: dynamoDataSource.name,
+    code: `
+      import { util } from '@aws-appsync/utils';
+      
+      export function request(ctx) {
+        const userId = ctx.identity.sub;
+        return {
+          operation: 'GetItem',
+          key: util.dynamodb.toMapValues({
+            PK: \`USER#\${userId}\`,
+            SK: 'ENTITY'
+          })
+        };
+      }
+      
+      export function response(ctx) {
+        if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+        
+        if (!ctx.result) return util.error('Entity not found', 'NotFound');
+        
+        return ctx.result;
+      }
+    `,
+  });
+
+  // Mutation: createEntity
+  api.addResolver("Mutation createEntity", {
+    dataSource: dynamoDataSource.name,
+    code: `
+      import { util } from '@aws-appsync/utils';
+      
+      export function request(ctx) {
+        const userId = ctx.identity.sub;
+        const { name } = ctx.args.input;
+        const entityId = util.autoId();
+        const timestamp = util.time.nowISO8601();
+        
+        return {
+          operation: 'PutItem',
+          key: util.dynamodb.toMapValues({
+            PK: \`USER#\${userId}\`,
+            SK: \`ENTITY#\${entityId}\`
+          }),
+          attributeValues: util.dynamodb.toMapValues({
+            entityId,
+            userId,
+            name,
+            createdAt: timestamp,
+            updatedAt: timestamp
+          })
+        };
+      }
+      
+      export function response(ctx) {
+        if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+        return ctx.result;
+      }
+    `,
+  });
+}
+```
+
+### 3. Register Resolver Module
+
+Add to `infra/api/resolvers/index.ts`:
+
+```typescript
+/// <reference path="../../../.sst/platform/config.d.ts" />
+
+import { addUserResolvers } from "./users";
+import { addEntityResolvers } from "./entity";  // Add this
+
+export function addAllResolvers(
+  api: ReturnType<typeof import("../api-setup").createApi>,
+  dynamoDataSource: ReturnType<typeof import("../api-setup").createDataSource>,
+  tableName: any
+) {
+  addUserResolvers(api, dynamoDataSource, tableName);
+  addEntityResolvers(api, dynamoDataSource, tableName);  // Add this
+}
+```
+
+### 4. Add Frontend Service
+
+Add GraphQL client functions in `apps/web/src/lib/services/graphql.ts`:
+
+```typescript
+export async function getMyEntity() {
+  const query = `
+    query GetMyEntity {
+      getMyEntity {
+        entityId
+        userId
+        name
+        createdAt
+        updatedAt
+      }
+    }
+  `;
+
+  const client = await getClient();
+  const result = await client.graphql({
+    query,
+  }) as GraphQLResult<any>;
+
+  if (result.errors) {
+    throw new Error(result.errors[0]?.message || 'Failed to get entity');
+  }
+
+  return result.data?.getMyEntity || null;
+}
+
+export async function createEntity(input: { name: string }) {
+  const mutation = `
+    mutation CreateEntity($input: CreateEntityInput!) {
+      createEntity(input: $input) {
+        entityId
+        userId
+        name
+        createdAt
+        updatedAt
+      }
+    }
+  `;
+
+  const client = await getClient();
+  const result = await client.graphql({
+    query: mutation,
+    variables: { input },
+  }) as GraphQLResult<any>;
+
+  if (result.errors) {
+    throw new Error(result.errors[0]?.message || 'Failed to create entity');
+  }
+
+  return result.data?.createEntity || null;
+}
+```
+
+## Resolver Code Patterns
+
+### Standard Request/Response Structure
+
+```javascript
+import { util } from '@aws-appsync/utils';
+
+export function request(ctx) {
+  // 1. Extract user identity (for protected operations)
+  const userId = ctx.identity.sub;
+  
+  // 2. Extract and validate arguments
+  const { input, id, ... } = ctx.args;
+  
+  // 3. Build DynamoDB operation
+  return {
+    operation: 'GetItem' | 'PutItem' | 'UpdateItem' | 'DeleteItem' | 'Query' | 'Scan',
+    // ... operation-specific fields
+  };
+}
+
+export function response(ctx) {
+  // 1. ALWAYS check for errors first
+  if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+  
+  // 2. Validate result exists
+  if (!ctx.result) return util.error('Not found', 'NotFound');
+  
+  // 3. Transform/format response if needed
+  const result = ctx.result;
+  // ... transformations
+  
+  // 4. Return result
+  return result;
+}
+```
+
+### Common DynamoDB Operations
+
+#### GetItem (Single Item)
+```javascript
+export function request(ctx) {
+  const userId = ctx.identity.sub;
+  return {
+    operation: 'GetItem',
+    key: util.dynamodb.toMapValues({
+      PK: `USER#${userId}`,
+      SK: 'PROFILE'
+    })
+  };
+}
+```
+
+#### PutItem (Create)
+```javascript
+export function request(ctx) {
+  const userId = ctx.identity.sub;
+  const { name } = ctx.args.input;
+  const timestamp = util.time.nowISO8601();
+  
+  return {
+    operation: 'PutItem',
+    key: util.dynamodb.toMapValues({
+      PK: `USER#${userId}`,
+      SK: 'PROFILE'
+    }),
+    attributeValues: util.dynamodb.toMapValues({
+      userId,
+      name,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    })
+  };
+}
+```
+
+#### UpdateItem (Partial Update)
+```javascript
+export function request(ctx) {
+  const userId = ctx.identity.sub;
+  const input = ctx.args.input || {};
+  
+  const updateExpression = [];
+  const expressionNames = {};
+  const expressionValues = {};
+  
+  if (input.name !== undefined) {
+    updateExpression.push('#name = :name');
+    expressionNames['#name'] = 'name';
+    expressionValues[':name'] = input.name;
+  }
+  
+  // Always update updatedAt
+  updateExpression.push('#updatedAt = :updatedAt');
+  expressionNames['#updatedAt'] = 'updatedAt';
+  expressionValues[':updatedAt'] = util.time.nowISO8601();
+  
+  return {
+    operation: 'UpdateItem',
+    key: util.dynamodb.toMapValues({
+      PK: `USER#${userId}`,
+      SK: 'PROFILE'
+    }),
+    update: {
+      expression: 'SET ' + updateExpression.join(', '),
+      expressionNames: expressionNames,
+      expressionValues: util.dynamodb.toMapValues(expressionValues)
+    }
+  };
+}
+
+export function response(ctx) {
+  if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+  
+  // Fetch updated item
+  const userId = ctx.identity.sub;
+  return {
+    operation: 'GetItem',
+    key: util.dynamodb.toMapValues({
+      PK: `USER#${userId}`,
+      SK: 'PROFILE'
+    })
+  };
+}
+```
+
+#### Query (With GSI)
+```javascript
+export function request(ctx) {
+  const userId = ctx.identity.sub;
+  const limit = ctx.args.limit || 20;
+  
+  return {
+    operation: 'Query',
+    index: 'GSI1',  // Use GSI for alternative access pattern
+    query: {
+      expression: 'GSI1PK = :pk',
+      expressionValues: util.dynamodb.toMapValues({
+        ':pk': `USER#${userId}`
+      })
+    },
+    limit: limit,
+    nextToken: ctx.args.nextToken
+  };
+}
+
+export function response(ctx) {
+  if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+  
+  return {
+    items: ctx.result.items || [],
+    nextToken: ctx.result.nextToken
+  };
+}
+```
+
+#### DeleteItem
+```javascript
+export function request(ctx) {
+  const userId = ctx.identity.sub;
+  const { entityId } = ctx.args;
+  
+  return {
+    operation: 'DeleteItem',
+    key: util.dynamodb.toMapValues({
+      PK: `USER#${userId}`,
+      SK: `ENTITY#${entityId}`
+    })
+  };
+}
+
+export function response(ctx) {
+  if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+  return true;  // Return boolean for delete operations
+}
+```
+
+## DynamoDB Key Patterns
+
+### Single Table Design
+
+We use a single DynamoDB table with composite keys:
+- **PK** (Partition Key): Entity identifier
+- **SK** (Sort Key): Entity type or relationship
+
+### Common Key Patterns
+
+```javascript
+// User Profile
+PK: `USER#${userId}`
+SK: 'PROFILE'
+
+// Entity Metadata
+PK: `ENTITY#${entityId}`
+SK: 'METADATA'
+
+// User's Entities (for GSI queries)
+GSI1PK: `USER#${userId}`
+GSI1SK: `ENTITY#${timestamp}`
+```
+
+## Authentication & Authorization
+
+### Accessing User Identity
+
+Always use `ctx.identity.sub` for the authenticated user ID:
+
+```javascript
+const userId = ctx.identity.sub;
+```
+
+### User Claims
+
+Access Cognito claims:
+
+```javascript
+const email = ctx.identity.claims?.email;
+const username = ctx.identity.claims?.['cognito:username'];
+```
+
+### Authorization Patterns
+
+- **User-owned resources**: Always verify `userId` matches `ctx.identity.sub`
+- **Public queries**: No identity check needed
+- **Admin operations**: Check user roles/permissions (if implemented)
+
+## Error Handling
+
+### Standard Error Pattern
+
+```javascript
+export function response(ctx) {
+  // Always check for errors first
+  if (ctx.error) {
+    return util.error(ctx.error.message, ctx.error.type);
+  }
+  
+  // Validate result exists
+  if (!ctx.result) {
+    return util.error('Resource not found', 'NotFound');
+  }
+  
+  // Custom validation
+  if (someCondition) {
+    return util.error('Custom error message', 'ValidationError');
+  }
+  
+  return ctx.result;
+}
+```
+
+### Common Error Types
+
+- `NotFound` - Resource doesn't exist
+- `ValidationError` - Invalid input
+- `Unauthorized` - Permission denied
+- `Conflict` - Resource conflict (e.g., duplicate)
+
+## Response Transformation
+
+### Common Transformations
+
+```javascript
+export function response(ctx) {
+  if (ctx.error) return util.error(ctx.error.message, ctx.error.type);
+  
+  const result = ctx.result;
+  
+  // Ensure required fields exist
+  if (!result.userId) {
+    result.userId = ctx.identity.sub;
+  }
+  
+  // Derive fields from other data
+  if (!result.username && result.email) {
+    result.username = result.email.split('@')[0];
+  }
+  
+  // Format timestamps
+  result.createdAt = result.createdAt || util.time.nowISO8601();
+  
+  return result;
+}
+```
+
+## Important Notes
+
+1. **Template Strings**: Resolver code uses template strings (backticks). Escape backticks inside: `` \` ``
+2. **No External Packages**: Resolvers run in a JavaScript runtime, not Node.js. Only AWS AppSync utils are available.
+3. **Always Handle Errors**: Check `ctx.error` first in `response()` function
+4. **Use Utilities**: Always use `util.dynamodb.toMapValues()` for DynamoDB values
+5. **Timestamps**: Use `util.time.nowISO8601()` for timestamps
+6. **Auto IDs**: Use `util.autoId()` to generate unique IDs
+
+## Testing
+
+1. Use AWS AppSync Console to test queries/mutations
+2. Check CloudWatch Logs for resolver execution
+3. Verify DynamoDB items are created/updated correctly
+
+## Performance Best Practices
+
+1. Use Query instead of Scan when possible
+2. Limit results with `limit` parameter
+3. Use pagination with `nextToken` for large datasets
+4. Minimize resolver code - keep logic simple
+5. Use GSIs for alternative access patterns

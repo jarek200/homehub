@@ -1,0 +1,7 @@
+.venv
+__pycache__
+.pytest_cache
+.bedrock_agentcore*
+node_modules
+dist
+.turbo

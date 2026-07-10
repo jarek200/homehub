@@ -1,0 +1,25 @@
+{
+  "name": "@sst-monorepo/graphql",
+  "version": "1.0.0",
+  "private": true,
+  "main": "schema.graphql",
+  "types": "index.d.ts",
+  "files": [
+    "schema.graphql",
+    "index.d.ts",
+    "generated"
+  ],
+  "scripts": {
+    "build": "graphql-codegen --config codegen.ts",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "codegen:watch": "graphql-codegen --config codegen.ts --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^6.2.1",
+    "@graphql-codegen/typescript": "^5.0.9",
+    "@graphql-codegen/typescript-operations": "^5.0.9",
+    "typescript": "^6.0.3"
+  },
+  "packageManager": "pnpm@10.20.0"
+}
