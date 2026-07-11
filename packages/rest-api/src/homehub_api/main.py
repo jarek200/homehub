@@ -5,12 +5,30 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from homehub_api.config import table_name
 from homehub_api.errors import ApiError
 from homehub_api.models import ServiceInfoResponse
+from homehub_api.observability import logger
 from homehub_api.routers import devices, issues
 from homehub_api.store import HubStore, build_store
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        logger.append_keys(http_method=request.method, path=request.url.path)
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception("Unhandled request error")
+            raise
+
+        logger.info(
+            "Request completed",
+            extra={"status_code": response.status_code},
+        )
+        return response
 
 
 def create_app(store: HubStore | None = None) -> FastAPI:
@@ -38,9 +56,18 @@ def create_app(store: HubStore | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestLoggingMiddleware)
 
     @app.exception_handler(ApiError)
-    async def api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
+    async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
+        logger.warning(
+            "API error",
+            extra={
+                "status_code": exc.status_code,
+                "code": exc.code,
+                "path": request.url.path,
+            },
+        )
         body: dict[str, Any] = {"error": exc.message}
         if exc.code:
             body["code"] = exc.code
@@ -48,13 +75,17 @@ def create_app(store: HubStore | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
-        _request: Request, exc: RequestValidationError
+        request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         messages = []
         for error in exc.errors():
             loc = ".".join(str(part) for part in error.get("loc", []) if part != "body")
             msg = error.get("msg", "Invalid input")
             messages.append(f"{loc}: {msg}" if loc else msg)
+        logger.warning(
+            "Validation error",
+            extra={"path": request.url.path, "details": messages},
+        )
         return JSONResponse(
             status_code=400,
             content={"error": "; ".join(messages), "code": "ValidationError"},

@@ -39,7 +39,7 @@ Reviewers / curl          HomeHub web app (SvelteKit)
 ## Tech stack
 
 - **Frontend**: SvelteKit 2, TypeScript, Tailwind CSS
-- **REST API**: FastAPI on AWS Lambda (Python 3.13) via API Gateway HTTP API
+- **REST API**: FastAPI on AWS Lambda (Python 3.13) via API Gateway HTTP API, with AWS Lambda Powertools (Logger, Tracer, Metrics)
 - **App API**: AWS AppSync GraphQL + Cognito auth
 - **Database**: DynamoDB
 - **Monorepo**: pnpm workspaces + Turborepo

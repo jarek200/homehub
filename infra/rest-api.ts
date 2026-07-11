@@ -22,6 +22,9 @@ export function createRestApi(
     environment: {
       TABLE_NAME: table.name,
       REST_API_KEY: process.env.REST_API_KEY ?? '',
+      POWERTOOLS_SERVICE_NAME: 'homehub-api',
+      POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
+      POWERTOOLS_LOG_LEVEL: 'INFO',
     },
     permissions: [
       {
@@ -34,7 +37,18 @@ export function createRestApi(
         ],
         resources: [table.arn, $interpolate`${table.arn}/index/*`],
       },
+      {
+        actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+        resources: ['*'],
+      },
     ],
+    transform: {
+      function: {
+        tracingConfig: {
+          mode: 'Active',
+        },
+      },
+    },
   };
 
   api.route('$default', routeArgs);

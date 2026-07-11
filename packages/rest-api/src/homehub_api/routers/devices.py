@@ -15,6 +15,7 @@ from homehub_api.models import (
     ReadingListResponse,
     UpdateDeviceRequest,
 )
+from homehub_api.observability import MetricUnit, logger, metrics, tracer
 from homehub_api.store import HubStore
 
 router = APIRouter(prefix="/devices", dependencies=[Depends(verify_api_key)])
@@ -26,11 +27,15 @@ def list_devices(store: HubStore = Depends(get_store)) -> DeviceListResponse:
 
 
 @router.post("", response_model=DeviceResponse, status_code=201)
+@tracer.capture_method
 def create_device(
     payload: CreateDeviceRequest,
     store: HubStore = Depends(get_store),
 ) -> DeviceResponse:
-    return store.create_device(payload)
+    device = store.create_device(payload)
+    metrics.add_metric(name="DeviceCreated", unit=MetricUnit.Count, value=1)
+    logger.info("Device created", extra={"device_id": device.device_id, "type": device.type})
+    return device
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)
@@ -65,12 +70,21 @@ def list_readings(device_id: str, store: HubStore = Depends(get_store)) -> Readi
 
 
 @router.post("/{device_id}/readings", response_model=CreateReadingResponse, status_code=201)
+@tracer.capture_method
 def create_reading(
     device_id: str,
     payload: CreateReadingRequest,
     store: HubStore = Depends(get_store),
 ) -> CreateReadingResponse:
-    return store.create_reading(device_id, payload)
+    result = store.create_reading(device_id, payload)
+    metrics.add_metric(name="ReadingCreated", unit=MetricUnit.Count, value=1)
+    if result.issue is not None:
+        metrics.add_metric(name="HumidityIssueRaised", unit=MetricUnit.Count, value=1)
+        logger.info(
+            "Humidity issue raised from reading",
+            extra={"device_id": device_id, "issue_id": result.issue.issue_id},
+        )
+    return result
 
 
 @router.get("/{device_id}/commands", response_model=CommandListResponse)
@@ -79,9 +93,16 @@ def list_commands(device_id: str, store: HubStore = Depends(get_store)) -> Comma
 
 
 @router.post("/{device_id}/commands", response_model=CommandResponse, status_code=201)
+@tracer.capture_method
 def create_command(
     device_id: str,
     payload: CreateCommandRequest,
     store: HubStore = Depends(get_store),
 ) -> CommandResponse:
-    return store.create_command(device_id, payload)
+    command = store.create_command(device_id, payload)
+    metrics.add_metric(name="CommandCreated", unit=MetricUnit.Count, value=1)
+    logger.info(
+        "Command created",
+        extra={"device_id": device_id, "command_id": command.command_id},
+    )
+    return command
