@@ -61,19 +61,13 @@ export default $config({
     const { createStorage } = await import('./infra/storage');
     const { createUserProfile } = await import('./infra/functions');
     const { createAuth } = await import('./infra/auth');
-    const { createApi, createDataSource } = await import('./infra/api/api-setup');
-    const { addAllResolvers } = await import('./infra/api/resolvers');
     const { createRestApi } = await import('./infra/rest-api');
     const { stageConfig } = await import('./infra/stage-config');
 
     const { table } = createStorage();
     const createUserProfileFunction = createUserProfile(table);
     const { auth, authClient } = createAuth(createUserProfileFunction);
-    const api = createApi(auth);
-    const dynamoDataSource = createDataSource(api, table);
-    const restApi = createRestApi(table);
-
-    addAllResolvers(api, dynamoDataSource, String(table.name));
+    const restApi = createRestApi(table, auth);
 
     const webAppUrl = getWebAppUrl();
     const webDomain = getWebDomainConfig();
@@ -99,7 +93,6 @@ export default $config({
       VITE_AWS_REGION: aws.getRegionOutput().name,
       VITE_USER_POOL_ID: auth.id,
       VITE_USER_POOL_CLIENT_ID: authClient.id,
-      VITE_GRAPHQL_ENDPOINT: api.url,
       VITE_REST_API_URL: restApi.url,
       VITE_STAGE: $app.stage,
       VITE_APP_URL: webAppUrl,
@@ -107,7 +100,7 @@ export default $config({
 
     const web = new sst.aws.SvelteKit('Web', {
       path: 'apps/web',
-      link: [table, auth, authClient, api],
+      link: [table, auth, authClient, restApi],
       transform: svelteKitTransform,
       environment: sharedEnv,
       ...(webDomain ? { domain: webDomain } : {}),
@@ -117,7 +110,6 @@ export default $config({
       table: table.name,
       userPoolId: auth.id,
       userPoolClientId: authClient.id,
-      apiUrl: api.url,
       restApiUrl: restApi.url,
       webUrl: web.url,
       webAppUrl: webAppUrl ?? web.url,

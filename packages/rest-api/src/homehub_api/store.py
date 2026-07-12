@@ -323,11 +323,60 @@ class HubStore:
         )
         return _to_issue(result["Attributes"])
 
+    def get_profile(self, user_id: str) -> dict[str, Any] | None:
+        result = self._table.get_item(Key={"PK": f"USER#{user_id}", "SK": "PROFILE"})
+        return result.get("Item")
+
+    def update_profile(self, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        existing = self.get_profile(user_id)
+        if not existing:
+            raise ApiError("User profile not found", 404, "NotFound")
+
+        expression_names: dict[str, str] = {}
+        expression_values: dict[str, Any] = {}
+        set_parts: list[str] = []
+
+        for field, value in payload.items():
+            expression_names[f"#{field}"] = field
+            expression_values[f":{field}"] = value
+            set_parts.append(f"#{field} = :{field}")
+
+        updated_at = _now_iso()
+        expression_names["#updatedAt"] = "updatedAt"
+        expression_values[":updatedAt"] = updated_at
+        set_parts.append("#updatedAt = :updatedAt")
+
+        result = self._table.update_item(
+            Key={"PK": f"USER#{user_id}", "SK": "PROFILE"},
+            UpdateExpression="SET " + ", ".join(set_parts),
+            ExpressionAttributeNames=expression_names,
+            ExpressionAttributeValues=expression_values,
+            ReturnValues="ALL_NEW",
+        )
+        return result["Attributes"]
+
     def _require_device(self, device_id: str) -> DeviceResponse:
         device = self.get_device(device_id)
         if not device:
             raise ApiError("Device not found", 404, "NotFound")
         return device
+
+    def seed_demo_devices(self) -> None:
+        if self.list_devices(limit=1):
+            return
+
+        from homehub_api.demo_seed import DEMO_DEVICES
+
+        for device in DEMO_DEVICES:
+            data = device.model_dump(by_alias=True)
+            item = {
+                "PK": self.tenant_pk,
+                "SK": f"DEVICE#{data['deviceId']}",
+                **data,
+                "GSI1PK": self.tenant_pk,
+                "GSI1SK": f"DEVICE#{data['createdAt']}",
+            }
+            self._table.put_item(Item=item)
 
 
 def build_store(table_name: str) -> HubStore:

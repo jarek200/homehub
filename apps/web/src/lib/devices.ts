@@ -1,4 +1,4 @@
-import type { Device } from '@sst-monorepo/graphql';
+import type { Device } from '@sst-monorepo/core';
 
 /** Aico HomeLINK product categories: smoke, heat, CO, and environmental sensors. */
 export const DEVICE_TYPES = [

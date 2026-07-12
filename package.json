@@ -5,7 +5,7 @@
   "scripts": {
     "clean": "pnpm -r exec -- rm -rf node_modules .turbo 2>/dev/null || true && rm -rf node_modules .turbo && rm -f pnpm-lock.yaml",
     "build": "turbo run build",
-    "dev": "pnpm sst dev --stage int",
+    "dev": "uv sync --all-packages && pnpm sst dev --stage int",
     "dev:local": "pnpm --filter @sst-monorepo/web dev",
     "agent:python": "bash -lc 'cd packages/agent-core && if [ -x .venv/bin/python ]; then .venv/bin/python src/agent.py; else python3 src/agent.py; fi'",
     "deploy:int": "pnpm sst deploy --stage int",
@@ -21,18 +21,15 @@
     "test:turbo": "turbo run test",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "codegen": "turbo run codegen",
-    "codegen:watch": "pnpm --filter @sst-monorepo/graphql codegen:watch",
     "prepare": "husky",
-    "verify": "pnpm codegen && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "keywords": [
     "sst",
     "svelte",
     "sveltekit",
     "aws",
-    "appsync",
-    "graphql",
+    "rest",
     "dynamodb",
     "cognito",
     "turborepo",
@@ -42,7 +39,7 @@
   ],
   "author": "",
   "license": "ISC",
-  "description": "HomeHub — smart home IoT hub with REST API, GraphQL app, DynamoDB, and SST IaC",
+  "description": "HomeHub — smart home IoT hub with REST API, DynamoDB, Cognito, and SST IaC",
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
     "@pulumi/aws": "^7.36.0",

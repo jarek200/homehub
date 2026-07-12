@@ -1,4 +1,3 @@
-import { createId } from '@sst-monorepo/core';
 import type {
   Command,
   CreateDeviceInput,
@@ -9,7 +8,8 @@ import type {
   Reading,
   SendCommandInput,
   UpdateDeviceInput,
-} from '@sst-monorepo/graphql';
+} from '@sst-monorepo/core';
+import { createId } from '@sst-monorepo/core';
 import { DUMMY_DEVICES, getDefaultConfiguration } from '$lib/devices';
 
 function nowIso(): string {

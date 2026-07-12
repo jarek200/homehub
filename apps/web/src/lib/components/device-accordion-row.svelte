@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Device, DeviceStatus, Reading } from '@sst-monorepo/graphql';
+import type { Device, DeviceStatus, Reading } from '@sst-monorepo/core';
 import DeviceModelLink from '$lib/components/device-model-link.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';

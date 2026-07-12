@@ -4,7 +4,7 @@
 </svelte:head>
 
 <script lang="ts">
-import type { Device, Reading } from '@sst-monorepo/graphql';
+import type { Device, Reading } from '@sst-monorepo/core';
 import { onMount } from 'svelte';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';

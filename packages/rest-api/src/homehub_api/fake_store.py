@@ -186,3 +186,12 @@ class FakeHubStore:
         if not device:
             raise ApiError("Device not found", 404, "NotFound")
         return device
+
+    def seed_demo_devices(self) -> None:
+        if self.devices:
+            return
+
+        from homehub_api.demo_seed import DEMO_DEVICES
+
+        for device in DEMO_DEVICES:
+            self.devices[device.device_id] = device

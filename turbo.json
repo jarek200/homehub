@@ -14,9 +14,6 @@
       "inputs": ["src/**/*.ts", "**/*.test.ts", "**/*.spec.ts", "vitest.config.ts"],
       "outputs": ["coverage/**"]
     },
-    "codegen": {
-      "outputs": ["generated/**"]
-    },
     "dev": {
       "cache": false,
       "persistent": true

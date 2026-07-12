@@ -39,12 +39,7 @@ async function initializeAmplify(): Promise<void> {
   // Get environment variables from window.ENV (injected by SSR) or import.meta.env (Vite dev)
   const env = win.ENV || import.meta.env;
 
-  if (
-    !env.VITE_USER_POOL_ID ||
-    !env.VITE_USER_POOL_CLIENT_ID ||
-    !env.VITE_GRAPHQL_ENDPOINT ||
-    !env.VITE_AWS_REGION
-  ) {
+  if (!env.VITE_USER_POOL_ID || !env.VITE_USER_POOL_CLIENT_ID || !env.VITE_AWS_REGION) {
     console.error('[Amplify] Missing environment variables');
     throw new Error('Amplify configuration failed: missing required environment variables');
   }
@@ -57,17 +52,10 @@ async function initializeAmplify(): Promise<void> {
         loginWith: { email: true, username: true },
       },
     },
-    API: {
-      GraphQL: {
-        endpoint: env.VITE_GRAPHQL_ENDPOINT,
-        region: env.VITE_AWS_REGION,
-        defaultAuthMode: 'userPool',
-      },
-    },
   });
 
   isConfigured = true;
-  console.log('[Amplify] Configuration complete ✅');
+  console.log('[Amplify] Cognito auth configured');
 }
 
 // Auto-initialize on import

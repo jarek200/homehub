@@ -4,7 +4,7 @@
 </svelte:head>
 
 <script lang="ts">
-import type { Command, Device, DeviceStatus, HomeIssue, Reading } from '@sst-monorepo/graphql';
+import type { Command, Device, DeviceStatus, HomeIssue, Reading } from '@sst-monorepo/core';
 import { onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';

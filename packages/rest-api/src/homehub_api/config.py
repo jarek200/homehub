@@ -11,6 +11,8 @@ INPUT_LIMITS = {
     "command": 64,
     "issue_title": 200,
     "issue_notes": 2000,
+    "bio": 500,
+    "avatar": 2048,
 }
 
 

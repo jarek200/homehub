@@ -4,7 +4,7 @@
 </svelte:head>
 
 <script lang="ts">
-import type { User as GraphQLUser } from '@sst-monorepo/graphql';
+import type { User as ProfileUser } from '@sst-monorepo/core';
 import { onMount } from 'svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
@@ -13,7 +13,7 @@ import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import { Textarea } from '$lib/components/ui/textarea/index.js';
 import { inputMinimal } from '$lib/devices';
-import { getMyProfile, updateUserProfile } from '$lib/services/graphql';
+import { getMyProfile, updateUserProfile } from '$lib/services/profile';
 import { auth, type User } from '$lib/stores/auth';
 
 let authState = $state({ user: null as User | null, isAuthenticated: false });
@@ -27,7 +27,7 @@ $effect(() => {
 
 const user = $derived(authState.user);
 
-let profile = $state<GraphQLUser | null>(null);
+let profile = $state<ProfileUser | null>(null);
 let loading = $state(true);
 let saving = $state(false);
 let error = $state('');

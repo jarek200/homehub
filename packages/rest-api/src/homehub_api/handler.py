@@ -4,7 +4,7 @@ from mangum import Mangum
 from homehub_api.main import app
 from homehub_api.observability import logger, metrics, tracer
 
-_asgi_handler = Mangum(app, lifespan="off")
+_asgi_handler = Mangum(app, lifespan="auto")
 
 
 @logger.inject_lambda_context(correlation_id_path=correlation_paths.API_GATEWAY_HTTP)

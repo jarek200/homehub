@@ -22,7 +22,7 @@ import { page as pageStore } from '$app/stores';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
-import { getMyProfile } from '$lib/services/graphql';
+import { getMyProfile } from '$lib/services/profile';
 import { auth } from '$lib/stores/auth';
 
 let email = $state('');

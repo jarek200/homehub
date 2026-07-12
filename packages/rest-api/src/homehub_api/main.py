@@ -11,7 +11,7 @@ from homehub_api.config import table_name
 from homehub_api.errors import ApiError
 from homehub_api.models import ServiceInfoResponse
 from homehub_api.observability import logger
-from homehub_api.routers import devices, issues
+from homehub_api.routers import devices, issues, profile
 from homehub_api.store import HubStore, build_store
 
 
@@ -41,6 +41,7 @@ def create_app(store: HubStore | None = None) -> FastAPI:
             if not name:
                 raise RuntimeError("TABLE_NAME is required")
             app.state.store = build_store(name)
+            app.state.store.seed_demo_devices()
         yield
 
     app = FastAPI(
@@ -110,12 +111,16 @@ def create_app(store: HubStore | None = None) -> FastAPI:
                 "GET /issues",
                 "POST /issues",
                 "GET /issues/{issueId}",
+                "GET /issues/{issueId}",
                 "PATCH /issues/{issueId}",
+                "GET /me",
+                "PATCH /me",
             ],
         )
 
     app.include_router(devices.router)
     app.include_router(issues.router)
+    app.include_router(profile.router)
 
     return app
 

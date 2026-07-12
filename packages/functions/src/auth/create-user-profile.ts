@@ -60,7 +60,7 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
   } catch (error) {
     console.error('Error creating user profile:', error);
     // Don't throw - allow user creation to succeed even if profile creation fails
-    // The profile can be created later via GraphQL mutation
+    // The profile can be created later via the REST API
     return event;
   }
 };

@@ -3,13 +3,14 @@
 import { stageConfig } from './stage-config';
 
 export function createRestApi(
-  table: ReturnType<typeof import('./storage').createStorage>['table']
+  table: ReturnType<typeof import('./storage').createStorage>['table'],
+  auth: ReturnType<typeof import('./auth').createAuth>['auth'],
 ) {
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
     cors: {
       allowOrigins: ['*'],
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'X-Api-Key'],
+      allowHeaders: ['Content-Type', 'X-Api-Key', 'Authorization'],
     },
   });
 
@@ -22,6 +23,7 @@ export function createRestApi(
     environment: {
       TABLE_NAME: table.name,
       REST_API_KEY: process.env.REST_API_KEY ?? '',
+      COGNITO_USER_POOL_ID: auth.id,
       POWERTOOLS_SERVICE_NAME: 'homehub-api',
       POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
       POWERTOOLS_LOG_LEVEL: 'INFO',

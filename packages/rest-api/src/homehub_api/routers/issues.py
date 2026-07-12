@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
-from homehub_api.dependencies import get_store, verify_api_key
+from homehub_api.auth import verify_api_key_or_jwt
+from homehub_api.dependencies import get_store
 from homehub_api.errors import ApiError
 from homehub_api.models import (
     CreateIssueRequest,
@@ -10,7 +11,7 @@ from homehub_api.models import (
 )
 from homehub_api.store import HubStore
 
-router = APIRouter(prefix="/issues", dependencies=[Depends(verify_api_key)])
+router = APIRouter(prefix="/issues", dependencies=[Depends(verify_api_key_or_jwt)])
 
 
 @router.get("", response_model=IssueListResponse)

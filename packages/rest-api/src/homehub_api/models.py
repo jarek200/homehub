@@ -160,6 +160,25 @@ class IssueListResponse(BaseModel):
     items: list[IssueResponse]
 
 
+class UpdateUserRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=INPUT_LIMITS["name"])
+    bio: str | None = Field(default=None, max_length=INPUT_LIMITS["bio"])
+    avatar: str | None = Field(default=None, max_length=INPUT_LIMITS["avatar"])
+
+
+class UserResponse(BaseModel):
+    user_id: str = Field(alias="userId")
+    username: str
+    email: str
+    name: str | None = None
+    bio: str | None = None
+    avatar: str | None = None
+    created_at: str = Field(alias="createdAt")
+    updated_at: str = Field(alias="updatedAt")
+
+    model_config = {"populate_by_name": True}
+
+
 class DeleteDeviceResponse(BaseModel):
     deleted: bool
     device_id: str = Field(alias="deviceId")

@@ -13,8 +13,9 @@ export const envSchema = z.object({
   VITE_USER_POOL_ID: z.string().optional(),
   VITE_USER_POOL_CLIENT_ID: z.string().optional(),
 
-  // AppSync
-  VITE_GRAPHQL_ENDPOINT: z.string().url().optional(),
+  // REST API
+  VITE_REST_API_URL: z.string().url().optional(),
+  VITE_REST_API_KEY: z.string().optional(),
 
   // DynamoDB (server-side only, set via SST link)
   TABLE_NAME: z.string().optional(),

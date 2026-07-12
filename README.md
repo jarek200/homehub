@@ -15,32 +15,31 @@ It also includes a lightweight **home issues** layer (inspired by housing IoT ca
 | Delete a device | `DELETE /devices/{deviceId}` |
 | State + history storage | DynamoDB single-table design |
 | Error handling | `400` validation errors, `404` not found, consistent JSON error shape |
-| Stretch frontend | SvelteKit devices UI with readings, commands, and issues |
-| IaC deployment | SST v4 (AWS Lambda + API Gateway + DynamoDB + Cognito + AppSync) |
+| Stretch frontend | SvelteKit console (Cognito auth + REST API) |
+| IaC deployment | SST v4 (Lambda + API Gateway + DynamoDB + Cognito) |
 
 ## Architecture
 
 ```
-Reviewers / curl          HomeHub web app (SvelteKit)
-       |                            |
-       v                            v
- REST API (API Gateway)      GraphQL API (AppSync)
-       \                            /
-        \                          /
-         v                        v
-              DynamoDB (single table)
+Reviewers / curl                HomeHub web app (SvelteKit)
+       |                                  |
+       | X-Api-Key                        | Cognito JWT
+       v                                  v
+              REST API (API Gateway HTTP)
+                         |
+                         v
+                 DynamoDB (single table)
 ```
 
-- **REST API** — interview-facing surface on a demo tenant (`HUB#demo`). Reviewers can `curl` endpoints without Cognito.
-- **GraphQL API** — authenticated app API for the Svelte console (per-user devices, readings, commands, issues).
+- **REST API** — the only backend surface. Device/issue data lives on a demo tenant (`HUB#demo`). Reviewers can `curl` with `X-Api-Key`; the signed-in UI sends a Cognito ID token.
+- **Cognito** — sign up / sign in for the web app. User profiles live under `USER#...`.
 - **DynamoDB** — shared storage using composite `PK` / `SK` keys.
-- **SST v4** — infrastructure defined in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
+- **SST v4** — infrastructure in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
 
 ## Tech stack
 
-- **Frontend**: SvelteKit 2, TypeScript, Tailwind CSS
-- **REST API**: FastAPI on AWS Lambda (Python 3.13) via API Gateway HTTP API, with AWS Lambda Powertools (Logger, Tracer, Metrics)
-- **App API**: AWS AppSync GraphQL + Cognito auth
+- **Frontend**: SvelteKit 2, TypeScript, Tailwind CSS, Amplify Auth (Cognito only)
+- **REST API**: FastAPI on AWS Lambda (Python 3.13) via API Gateway HTTP API
 - **Database**: DynamoDB
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Validation / tests**: Pydantic + pytest (REST), Zod + Vitest (shared TS packages)
@@ -57,6 +56,7 @@ Reviewers / curl          HomeHub web app (SvelteKit)
 ```bash
 nvm use
 pnpm install
+uv sync --all-packages   # install Python deps for the REST API Lambda (required for sst dev)
 pnpm sso          # AWS SSO login
 pnpm dev          # SST dev mode (deploys stack + runs web app)
 ```
@@ -76,7 +76,13 @@ pnpm api:local
 
 ## REST API
 
-After `pnpm dev` or `pnpm deploy:int`, SST prints `restApiUrl`. All device endpoints use the demo tenant.
+After `pnpm dev` or `pnpm deploy:int`, SST prints `restApiUrl`. Device endpoints use the demo tenant.
+
+Set the base URL once:
+
+```bash
+export REST_API_URL="https://your-api-id.execute-api.region.amazonaws.com"
+```
 
 ### Register a device
 
@@ -85,6 +91,8 @@ curl -s -X POST "$REST_API_URL/devices" \
   -H "Content-Type: application/json" \
   -d '{"name":"Living Room Camera","type":"security-camera","location":"Living Room","configuration":"{\"motionDetection\":true}"}'
 ```
+
+Returns the full device including a server-generated ULID as `deviceId`.
 
 ### List devices
 
@@ -151,67 +159,85 @@ curl -s -X POST "$REST_API_URL/issues" \
   -d '{"title":"Condensation in bedroom","severity":"HIGH","status":"OPEN"}'
 ```
 
-### Optional API key
+### User profile (web app)
 
-Set `REST_API_KEY` before deploy to require `X-Api-Key` on REST requests:
+```bash
+# Requires Cognito ID token from a signed-in session
+curl -s "$REST_API_URL/me" -H "Authorization: Bearer $ID_TOKEN"
+curl -s -X PATCH "$REST_API_URL/me" \
+  -H "Authorization: Bearer $ID_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Jarek","bio":"HomeHub demo"}'
+```
+
+### Authentication
+
+| Client | Header |
+|---|---|
+| Reviewer curl | `X-Api-Key: your-review-key` (when `REST_API_KEY` is set at deploy) |
+| Web app | `Authorization: Bearer <Cognito ID token>` |
+
+Set `REST_API_KEY` before deploy to require the key for curl:
 
 ```bash
 REST_API_KEY=your-review-key pnpm deploy:int
-```
-
-```bash
 curl -s "$REST_API_URL/devices" -H "X-Api-Key: your-review-key"
 ```
+
+When `REST_API_KEY` is not set (local `pnpm api:local`), auth is open for development.
 
 ## Web app (stretch frontend)
 
 1. Open the deployed web URL (or local dev URL from SST).
 2. Sign up / sign in with Cognito.
-3. Use **Devices** to register, view, update, and delete IoT devices.
-4. Open a device to record readings, send commands, and see linked issues.
-5. Use **Issues** to track home problems raised from sensor data.
+3. Use **Devices** to register, view, update, toggle on/off, and delete IoT devices.
+4. Use **Issues** to track home problems raised from sensor data.
+5. Use **Account** to edit your profile.
+
+Set `USE_MOCK_DEVICES = true` in [`apps/web/src/lib/services/devices.ts`](apps/web/src/lib/services/devices.ts) for offline UI work without a deployed API.
 
 ## Project structure
 
 ```
 apps/web/                  SvelteKit console (devices, issues, account)
 packages/rest-api/         FastAPI REST API (Python, interview deliverable)
-packages/core/             Shared TypeScript validation helpers
+packages/core/             Shared TypeScript types + validation helpers
 packages/functions/        Node.js Lambdas (Cognito post-confirmation)
-packages/graphql/          GraphQL schema + generated types
-infra/                     SST modules (auth, storage, AppSync, REST API)
+infra/                     SST modules (auth, storage, REST API)
 sst.config.ts              Infrastructure entry point
 ```
 
 ## Assumptions
 
-1. **REST is the graded API surface** — GraphQL powers the authenticated web app but REST maps directly to the interview brief.
-2. **Demo tenant for REST** — Reviewer data lives under `HUB#demo`, separate from per-user Cognito data (`USER#...`).
-3. **Device types are free-form strings** — e.g. `security-camera`, `thermostat`, `smart-light`, `sensor`.
-4. **Configuration is JSON stored as a string** — flexible for lights, thermostats, cameras, etc.
-5. **Commands are queued as `PENDING`** — no real device firmware integration in this task.
-6. **Home issues are a stretch feature** — simplified case tracking, not full housing compliance software.
+1. **REST is the only API surface** — matches the interview brief directly.
+2. **Demo tenant for devices** — Reviewer/device data lives under `HUB#demo`; user profiles under `USER#...`.
+3. **Device IDs are ULIDs** — server-generated, time-sortable; `createdAt` / `updatedAt` remain explicit fields.
+4. **Device types are free-form strings** — e.g. `smoke-alarm`, `environmental-sensor`.
+5. **Configuration is JSON stored as a string** — flexible for different device models.
+6. **Commands are queued as `PENDING`** — no real device firmware integration in this task.
+7. **Home issues are a stretch feature** — simplified case tracking, not full housing compliance software.
 
 ## Approach and challenges
 
 **Approach**
 
-- Reused the existing SST monorepo instead of a throwaway repo, to show production-style IaC thinking.
-- Implemented the graded REST surface in **Python + FastAPI**, deployed to Lambda with Mangum — matching the interview brief's backend-first focus.
-- Kept GraphQL + Svelte for the authenticated stretch frontend.
-- Used Pydantic validation and pytest for the REST API; TypeScript packages still use Zod/Vitest where relevant.
+- Reused the existing SST monorepo to show production-style IaC thinking.
+- Implemented the graded REST surface in **Python + FastAPI**, deployed to Lambda with Mangum.
+- Kept **Cognito + Svelte** as the stretch frontend; the UI calls REST with JWT, reviewers use curl with API key.
+- Moved shared domain types to `@sst-monorepo/core` (no GraphQL codegen).
 
 **Challenges**
 
-- **Two API surfaces, one table** — REST uses a demo tenant while GraphQL scopes data per Cognito user. Clear key prefixes keep them isolated.
+- **Dual auth on one API** — JWT for the UI, API key for curl; both hit the same FastAPI routes.
 - **FastAPI on Lambda** — Mangum adapts API Gateway HTTP API events to ASGI; a single `$default` route lets FastAPI own all path routing.
-- **IoT “real-time” scope** — True streaming would need MQTT/WebSockets; readings + commands provide monitor/control history within the task scope.
+- **Profile vs demo tenant** — `/me` is user-scoped; devices/issues use the demo tenant for the interview task.
 
 ## QA
 
 ```bash
-pnpm verify    # codegen, lint, typecheck, test, build
-pnpm test      # Vitest only
+pnpm verify    # lint, typecheck, test, build
+pnpm test      # Vitest + pytest
+pnpm api:local # local REST with in-memory store
 ```
 
 Tests cover:
@@ -229,8 +255,8 @@ pnpm deploy:int
 SST outputs:
 
 - `restApiUrl` — REST device API
-- `apiUrl` — AppSync GraphQL endpoint
 - `webUrl` — SvelteKit app
+- `userPoolId` / `userPoolClientId` — Cognito
 
 ## License
 

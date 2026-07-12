@@ -1,4 +1,4 @@
-import type { HomeIssue, IssueSeverity, IssueStatus } from '@sst-monorepo/graphql';
+import type { HomeIssue, IssueSeverity, IssueStatus } from '@sst-monorepo/core';
 
 export const ISSUE_STATUSES = [
   { value: 'OPEN', label: 'Open' },

@@ -4,7 +4,7 @@
 </svelte:head>
 
 <script lang="ts">
-import type { HomeIssue, IssueSeverity, IssueStatus } from '@sst-monorepo/graphql';
+import type { HomeIssue, IssueSeverity, IssueStatus } from '@sst-monorepo/core';
 import { onMount } from 'svelte';
 import { goto } from '$app/navigation';
 import ConsoleShell from '$lib/components/console-shell.svelte';
@@ -21,7 +21,7 @@ import {
   ISSUE_SEVERITIES,
   ISSUE_STATUSES,
 } from '$lib/issues';
-import { createIssue, listMyIssues, updateIssue } from '$lib/services/graphql';
+import { createIssue, listMyIssues, updateIssue } from '$lib/services/issues';
 
 let issues = $state<HomeIssue[]>([]);
 let loading = $state(true);
