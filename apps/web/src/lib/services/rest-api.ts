@@ -63,12 +63,11 @@ export async function listDeviceReadings(deviceId: string): Promise<Reading[]> {
 export async function createDeviceReading(
   deviceId: string,
   input: CreateReadingInput
-): Promise<Reading> {
-  const result = await restRequest<{ reading: Reading }>(
+): Promise<{ reading: Reading; issue: HomeIssue | null }> {
+  return restRequest<{ reading: Reading; issue: HomeIssue | null }>(
     `/devices/${encodeURIComponent(deviceId)}/readings`,
     { method: 'POST', body: input }
   );
-  return result.reading;
 }
 
 export async function listDeviceCommands(deviceId: string): Promise<Command[]> {

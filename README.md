@@ -230,8 +230,10 @@ pnpm test      # Vitest + pytest
 
 Tests cover:
 
-- FastAPI route behaviour (create, list, 404, 400, readings, commands) via pytest with an in-memory test store
-- Humidity threshold logic via Vitest
+- FastAPI device CRUD (create, list, get, patch, delete) including 404/400 paths
+- Readings and commands (create, list) plus humidity-triggered issue creation
+- Issues CRUD and resolve flow
+- Humidity threshold helpers via Vitest
 
 ## Deploy (optional)
 

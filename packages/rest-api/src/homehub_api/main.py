@@ -111,7 +111,6 @@ def create_app(store: HubStore | None = None) -> FastAPI:
                 "GET /issues",
                 "POST /issues",
                 "GET /issues/{issueId}",
-                "GET /issues/{issueId}",
                 "PATCH /issues/{issueId}",
                 "GET /me",
                 "PATCH /me",

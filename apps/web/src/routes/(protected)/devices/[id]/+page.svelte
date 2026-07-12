@@ -5,7 +5,6 @@
 
 <script lang="ts">
 import type { Command, Device, DeviceStatus, HomeIssue, Reading } from '@sst-monorepo/core';
-import { humidityIssueTitle, shouldRaiseHumidityIssue } from '@sst-monorepo/core';
 import { onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
@@ -39,7 +38,6 @@ import {
 import { formatReadingSummary } from '$lib/issues';
 import {
   createDeviceReading,
-  createIssue,
   deleteDevice,
   getDevice,
   listDeviceCommands,
@@ -220,7 +218,7 @@ async function handleRecordReading() {
   }
 
   try {
-    const reading = await createDeviceReading(deviceId, {
+    const result = await createDeviceReading(deviceId, {
       temperature:
         isEnvironmentalSensor(deviceType) ||
         isHeatAlarm(deviceType) ||
@@ -231,23 +229,12 @@ async function handleRecordReading() {
       motionDetected: isSmokeAlarm(deviceType) ? motionDetected : undefined,
       cameraOnline: isSmokeAlarm(deviceType) ? deviceOnline : undefined,
     });
-    readings = [reading, ...readings];
+    readings = [result.reading, ...readings];
+    if (result.issue) {
+      issues = [result.issue, ...issues];
+    }
     temperature = '';
     humidity = '';
-
-    if (shouldRaiseHumidityIssue(parsedHumidity)) {
-      const hasOpenIssue = issues.some((issue) => issue.status === 'OPEN');
-      if (!hasOpenIssue) {
-        const issue = await createIssue({
-          title: humidityIssueTitle(parsedHumidity as number),
-          deviceId,
-          severity: 'HIGH',
-          status: 'OPEN',
-          notes: 'Raised automatically from a high humidity sensor reading.',
-        });
-        issues = [issue, ...issues];
-      }
-    }
 
     const refreshed = await getDevice(deviceId);
     if (refreshed) {
