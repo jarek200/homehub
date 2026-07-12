@@ -181,8 +181,13 @@ export function createIotProvisioning(table: StorageTable) {
     ([parseArn, certArn, thingArn, finalizeArn, failedArn]) =>
       JSON.stringify({
         Comment: 'Provision HomeHub IoT device with per-device certificate',
-        StartAt: 'ParseInput',
+        StartAt: 'NormalizeInput',
         States: {
+          NormalizeInput: {
+            Type: 'Pass',
+            InputPath: '$[0]',
+            Next: 'ParseInput',
+          },
           ParseInput: {
             Type: 'Task',
             Resource: parseArn,

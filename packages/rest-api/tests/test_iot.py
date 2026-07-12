@@ -1,6 +1,11 @@
 """Tests for IoT Step Functions provisioning helpers."""
 
-from homehub_api.iot.sfn.common import parse_stream_record, ssm_prefix_for, thing_name_for
+from homehub_api.iot.sfn.common import (
+    _unwrap_pipe_input,
+    parse_stream_record,
+    ssm_prefix_for,
+    thing_name_for,
+)
 
 
 def test_thing_name_for_prefixes_device_id() -> None:
@@ -9,6 +14,22 @@ def test_thing_name_for_prefixes_device_id() -> None:
 
 def test_ssm_prefix_for_device() -> None:
     assert ssm_prefix_for("abc123") == "/homehub/devices/abc123"
+
+
+def test_unwrap_pipe_input_accepts_eventbridge_pipe_array() -> None:
+    record = {
+        "eventName": "INSERT",
+        "dynamodb": {"Keys": {"SK": {"S": "DEVICE#dev1"}}},
+    }
+    assert _unwrap_pipe_input([record]) == record
+
+
+def test_unwrap_pipe_input_accepts_lambda_records_wrapper() -> None:
+    record = {
+        "eventName": "INSERT",
+        "dynamodb": {"Keys": {"SK": {"S": "DEVICE#dev1"}}},
+    }
+    assert _unwrap_pipe_input({"Records": [record]}) == record
 
 
 def test_parse_stream_record_filters_provisioning_inserts() -> None:

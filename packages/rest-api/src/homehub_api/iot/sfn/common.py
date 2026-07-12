@@ -25,14 +25,24 @@ def skip_iot_provisioning() -> bool:
     return os.environ.get("SKIP_IOT_PROVISIONING", "").lower() in {"1", "true", "yes"}
 
 
-def _unwrap_pipe_input(event: dict[str, Any]) -> dict[str, Any]:
+def _unwrap_pipe_input(event: dict[str, Any] | list[Any]) -> dict[str, Any]:
+    if isinstance(event, list):
+        if not event:
+            raise ValueError("Pipe input array is empty")
+        first = event[0]
+        if not isinstance(first, dict):
+            raise ValueError("Pipe input array must contain stream record objects")
+        return first
+
     if "dynamodb" in event:
         return event
+
     records = event.get("Records")
     if isinstance(records, list) and records:
         first = records[0]
         if isinstance(first, dict):
             return first
+
     return event
 
 

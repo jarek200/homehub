@@ -7,7 +7,7 @@ from typing import Any
 from homehub_api.iot.sfn.common import _unwrap_pipe_input, parse_stream_record
 
 
-def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
+def handler(event: dict[str, Any] | list[Any], _context: Any) -> dict[str, Any]:
     record = _unwrap_pipe_input(event)
     device = parse_stream_record(record)
     if not device:
