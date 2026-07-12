@@ -222,7 +222,7 @@ export function createIotTelemetry(table: StorageTable) {
     enabled: true,
     sql: "SELECT topic(3) AS deviceid, hubId AS hubid, thingName AS thingname, timestamp() AS recordedat, temperature, humidity, motionDetected AS motiondetected, cameraOnline AS cameraonline FROM 'homehub/devices/+/telemetry'",
     sqlVersion: '2016-03-23',
-    firehose: [
+    firehoses: [
       {
         deliveryStreamName: firehoseStream.name,
         roleArn: iotFirehoseRole.arn,

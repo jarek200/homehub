@@ -6,7 +6,6 @@
 <script lang="ts">
 import type { Device, Reading } from '@sst-monorepo/core';
 import { onMount } from 'svelte';
-import { goto } from '$app/navigation';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
 import DeviceAccordionRow from '$lib/components/device-accordion-row.svelte';
@@ -154,7 +153,8 @@ async function handleCreate() {
     type = 'smoke-alarm';
     model = getDefaultModelForType('smoke-alarm');
     showCreate = false;
-    await goto(`/devices/${created.deviceId}`);
+    devices = [created, ...devices];
+    lastReadings = { ...lastReadings, [created.deviceId]: null };
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to register device';

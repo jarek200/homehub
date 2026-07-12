@@ -74,12 +74,14 @@ class VirtualDevice:
         while not self._stop.is_set():
             try:
                 event_loop_group = io.EventLoopGroup(1)
+                host_resolver = io.DefaultHostResolver(event_loop_group)
+                client_bootstrap = io.ClientBootstrap(event_loop_group, host_resolver)
                 host_name = self.iot_endpoint.removeprefix("https://").removeprefix("ssl://")
                 self._connection = mqtt_connection_builder.mtls_from_path(
                     endpoint=host_name,
                     cert_filepath=cert_path,
                     pri_key_filepath=key_path,
-                    client_bootstrap=io.ClientBootstrap(event_loop_group),
+                    client_bootstrap=client_bootstrap,
                     ca_filepath=ca_path,
                     client_id=client_id,
                     clean_session=False,
