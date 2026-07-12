@@ -8,12 +8,14 @@ import {
   applyModelToConfiguration,
   DEVICE_TYPES,
   formatDeviceType,
+  formatLifecycleStatus,
   formatWhen,
   getDefaultConfiguration,
   getDefaultModelForType,
   getDeviceModelsForType,
   getDeviceModelUrl,
   inputMinimal,
+  lifecycleColorClass,
   parseModelFromConfiguration,
   statusColorClass,
 } from '$lib/devices';
@@ -211,6 +213,11 @@ $effect(() => {
     {device.location || '—'}
   </td>
   <td class={tdClass}>
+    <span class="text-sm font-medium {lifecycleColorClass(device.lifecycleStatus)}">
+      {formatLifecycleStatus(device.lifecycleStatus)}
+    </span>
+  </td>
+  <td class={tdClass}>
     <p class="text-sm text-foreground">
       {formatLastReadingPrimary(device.type, lastReading)}
     </p>
@@ -294,7 +301,7 @@ $effect(() => {
 
 {#if expanded}
   <tr class={selected ? 'bg-muted/30' : ''}>
-    <td colspan="7" class="border-border border-b px-4 pb-8 pt-0">
+    <td colspan="8" class="border-border border-b px-4 pb-8 pt-0">
       <div class="ml-2 space-y-4 border-border border-l pl-6 sm:ml-4">
         {#if actionError}
           <p class="text-[0.75rem] text-destructive">{actionError}</p>

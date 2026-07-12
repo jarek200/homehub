@@ -11,6 +11,8 @@ DEMO_DEVICES: list[DeviceResponse] = [
         type="smoke-alarm",
         location="Hallway",
         status="ONLINE",
+        lifecycleStatus="READY",
+        thingName="homehub-dummy-hallway-smoke-alarm",
         configuration=(
             '{"model":"Ei3016","series":"3000","interconnect":"RadioLINK+",'
             '"opticalSensor":true,"testIntervalDays":30}'
@@ -25,6 +27,8 @@ DEMO_DEVICES: list[DeviceResponse] = [
         type="heat-alarm",
         location="Kitchen",
         status="ONLINE",
+        lifecycleStatus="READY",
+        thingName="homehub-dummy-kitchen-heat-alarm",
         configuration=(
             '{"model":"Ei3014","series":"3000","fixedTemperatureC":58,"rateOfRise":true}'
         ),
@@ -38,6 +42,8 @@ DEMO_DEVICES: list[DeviceResponse] = [
         type="carbon-monoxide-alarm",
         location="Landing",
         status="ONLINE",
+        lifecycleStatus="READY",
+        thingName="homehub-dummy-landing-co-alarm",
         configuration=(
             '{"model":"Ei3018","series":"3000","coThresholdPpm":50,"sensorLifeYears":10}'
         ),
@@ -51,6 +57,8 @@ DEMO_DEVICES: list[DeviceResponse] = [
         type="environmental-sensor",
         location="Bedroom",
         status="ONLINE",
+        lifecycleStatus="READY",
+        thingName="homehub-dummy-bedroom-env-sensor",
         configuration=(
             '{"model":"Ei1020","series":"1000","reportingIntervalSeconds":300,'
             '"temperatureAlertThreshold":28,"humidityAlertThreshold":70}'

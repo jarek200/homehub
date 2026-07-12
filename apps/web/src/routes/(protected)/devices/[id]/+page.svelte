@@ -5,7 +5,7 @@
 
 <script lang="ts">
 import type { Command, Device, DeviceStatus, HomeIssue, Reading } from '@sst-monorepo/core';
-import { onMount, tick } from 'svelte';
+import { onDestroy, onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
@@ -20,7 +20,9 @@ import {
   COMMAND_OPTIONS,
   DEVICE_STATUSES,
   DEVICE_TYPES,
+  formatConfigurationSummary,
   formatDeviceType,
+  formatLifecycleStatus,
   formatStatus,
   formatWhen,
   getDefaultConfiguration,
@@ -31,6 +33,7 @@ import {
   isEnvironmentalSensor,
   isHeatAlarm,
   isSmokeAlarm,
+  lifecycleColorClass,
   parseModelFromConfiguration,
   statusColorClass,
   supportsReadings,
@@ -79,6 +82,10 @@ const deviceType = $derived(device?.type ?? type);
 const showReadings = $derived(supportsReadings(deviceType));
 const availableModels = $derived(getDeviceModelsForType(type));
 
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+const isProvisioning = $derived(device?.lifecycleStatus === 'PROVISIONING');
+
 onMount(() => {
   loadDevice().then(async () => {
     if ($page.url.searchParams.get('mode') === 'update') {
@@ -86,7 +93,33 @@ onMount(() => {
       document.getElementById('update')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   });
+  pollTimer = setInterval(() => {
+    if (device?.lifecycleStatus === 'PROVISIONING') {
+      void refreshDevice();
+    }
+  }, 2000);
 });
+
+onDestroy(() => {
+  if (pollTimer) clearInterval(pollTimer);
+});
+
+async function refreshDevice() {
+  if (!deviceId) return;
+  try {
+    const [deviceResult, readingResult] = await Promise.all([
+      getDevice(deviceId),
+      listDeviceReadings(deviceId),
+    ]);
+    if (deviceResult) {
+      device = deviceResult;
+      syncForm(deviceResult);
+    }
+    readings = readingResult;
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 function syncForm(nextDevice: Device) {
   name = nextDevice.name;
@@ -317,15 +350,34 @@ async function handleSendCommand() {
             {/if}
           </p>
         </div>
-        <span class="text-sm font-medium {statusColorClass(device.status)}">
-          {formatStatus(device.status)}
-        </span>
+        <div class="flex flex-col items-end gap-1">
+          <span class="text-sm font-medium {lifecycleColorClass(device.lifecycleStatus)}">
+            {formatLifecycleStatus(device.lifecycleStatus)}
+          </span>
+          <span class="text-sm font-medium {statusColorClass(device.status)}">
+            {formatStatus(device.status)}
+          </span>
+        </div>
       </div>
+
+      {#if device.lifecycleStatus === 'FAILED' && device.failureReason}
+        <p class="text-[0.75rem] text-destructive">Provisioning failed: {device.failureReason}</p>
+      {/if}
+
+      {#if isProvisioning}
+        <p class="text-[0.75rem] text-muted-foreground">
+          Provisioning IoT resources… this page refreshes automatically.
+        </p>
+      {/if}
 
       <dl class="grid gap-3 text-[0.75rem] text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt class="uppercase tracking-widest">Device ID</dt>
           <dd class="mt-1 break-all text-foreground">{device.deviceId}</dd>
+        </div>
+        <div>
+          <dt class="uppercase tracking-widest">Thing name</dt>
+          <dd class="mt-1 break-all text-foreground">{device.thingName ?? '—'}</dd>
         </div>
         <div>
           <dt class="uppercase tracking-widest">Last seen</dt>
@@ -336,8 +388,8 @@ async function handleSendCommand() {
           <dd class="mt-1 text-foreground">{formatWhen(device.createdAt)}</dd>
         </div>
         <div>
-          <dt class="uppercase tracking-widest">Updated</dt>
-          <dd class="mt-1 text-foreground">{formatWhen(device.updatedAt)}</dd>
+          <dt class="uppercase tracking-widest">Configuration</dt>
+          <dd class="mt-1 text-foreground">{formatConfigurationSummary(device.configuration)}</dd>
         </div>
       </dl>
     </section>

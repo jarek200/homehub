@@ -14,6 +14,9 @@ export const DEMO_TENANT_PK = `HUB#${DEMO_TENANT_ID}`;
 export const DEVICE_STATUSES = ['ONLINE', 'OFFLINE', 'UNKNOWN'] as const;
 export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 
+export const LIFECYCLE_STATUSES = ['PROVISIONING', 'READY', 'FAILED', 'DECOMMISSIONED'] as const;
+export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
+
 export const COMMAND_STATUSES = ['PENDING', 'SENT', 'ACKNOWLEDGED', 'FAILED'] as const;
 export type CommandStatus = (typeof COMMAND_STATUSES)[number];
 
@@ -51,6 +54,9 @@ export interface DeviceRecord {
   type: string;
   location?: string | null;
   status: DeviceStatus;
+  lifecycleStatus: LifecycleStatus;
+  thingName?: string | null;
+  failureReason?: string | null;
   configuration?: string | null;
   lastSeenAt?: string | null;
   createdAt: string;

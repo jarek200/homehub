@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from homehub_api.config import INPUT_LIMITS
 
 DeviceStatus = Literal["ONLINE", "OFFLINE", "UNKNOWN"]
+LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
 CommandStatus = Literal["PENDING", "SENT", "ACKNOWLEDGED", "FAILED"]
 IssueStatus = Literal["OPEN", "MONITORING", "RESOLVED"]
 IssueSeverity = Literal["LOW", "MEDIUM", "HIGH"]
@@ -98,6 +99,9 @@ class DeviceResponse(BaseModel):
     type: str
     location: str | None = None
     status: DeviceStatus
+    lifecycle_status: LifecycleStatus = Field(default="READY", alias="lifecycleStatus")
+    thing_name: str | None = Field(default=None, alias="thingName")
+    failure_reason: str | None = Field(default=None, alias="failureReason")
     configuration: str | None = None
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")
     created_at: str = Field(alias="createdAt")

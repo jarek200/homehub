@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import os
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -43,6 +45,9 @@ def _to_device(item: dict[str, Any]) -> DeviceResponse:
         type=str(item["type"]),
         location=item.get("location"),
         status=item.get("status", "UNKNOWN"),
+        lifecycleStatus=item.get("lifecycleStatus", "READY"),
+        thingName=item.get("thingName"),
+        failureReason=item.get("failureReason"),
         configuration=item.get("configuration"),
         lastSeenAt=item.get("lastSeenAt"),
         createdAt=str(item["createdAt"]),
@@ -119,6 +124,7 @@ class HubStore:
             "location": payload.location,
             "configuration": payload.configuration,
             "status": "UNKNOWN",
+            "lifecycleStatus": "PROVISIONING",
             "createdAt": timestamp,
             "updatedAt": timestamp,
             "GSI1PK": self.tenant_pk,
@@ -159,10 +165,35 @@ class HubStore:
         return _to_device(result["Attributes"])
 
     def delete_device(self, device_id: str) -> dict[str, Any]:
-        if not self.get_device(device_id):
+        device = self.get_device(device_id)
+        if not device:
             raise ApiError("Device not found", 404, "NotFound")
+
+        self._decommission_device(device_id)
         self._table.delete_item(Key={"PK": self.tenant_pk, "SK": f"DEVICE#{device_id}"})
         return {"deleted": True, "deviceId": device_id}
+
+    def _decommission_device(self, device_id: str) -> None:
+        timestamp = _now_iso()
+        try:
+            self._table.update_item(
+                Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"},
+                UpdateExpression="SET enabled = :enabled, #status = :status, updatedAt = :updatedAt",
+                ExpressionAttributeNames={"#status": "status"},
+                ExpressionAttributeValues={
+                    ":enabled": False,
+                    ":status": "STOPPED",
+                    ":updatedAt": timestamp,
+                },
+            )
+        except Exception:
+            pass
+        queue_url = os.environ.get("SIMULATOR_QUEUE_URL", "").strip()
+        if queue_url:
+            boto3.client("sqs").send_message(
+                QueueUrl=queue_url,
+                MessageBody=json.dumps({"eventType": "DEVICE_STOP", "deviceId": device_id}),
+            )
 
     def list_readings(self, device_id: str, limit: int = 50) -> list[ReadingResponse]:
         self._require_device(device_id)

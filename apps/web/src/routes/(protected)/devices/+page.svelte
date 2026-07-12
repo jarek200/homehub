@@ -6,6 +6,7 @@
 <script lang="ts">
 import type { Device, Reading } from '@sst-monorepo/core';
 import { onMount } from 'svelte';
+import { goto } from '$app/navigation';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
 import DeviceAccordionRow from '$lib/components/device-accordion-row.svelte';
@@ -17,6 +18,7 @@ import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import {
   DEVICE_TYPES,
   formatDeviceType,
+  formatLifecycleStatus,
   formatStatus,
   getDefaultConfiguration,
   getDefaultModelForType,
@@ -62,6 +64,8 @@ const filteredDevices = $derived.by(() => {
       device.location ?? '',
       device.status,
       formatStatus(device.status),
+      device.lifecycleStatus,
+      formatLifecycleStatus(device.lifecycleStatus),
       device.type,
       formatDeviceType(device.type, device.configuration),
       device.deviceId,
@@ -139,7 +143,7 @@ async function handleCreate() {
   creating = true;
   error = '';
   try {
-    await createDevice({
+    const created = await createDevice({
       name: name.trim(),
       type,
       location: location.trim() || null,
@@ -150,7 +154,7 @@ async function handleCreate() {
     type = 'smoke-alarm';
     model = getDefaultModelForType('smoke-alarm');
     showCreate = false;
-    await loadDevices();
+    await goto(`/devices/${created.deviceId}`);
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to register device';
@@ -428,10 +432,11 @@ $effect(() => {
         <colgroup>
           <col class="w-[4%]" />
           <col class="w-[4%]" />
-          <col class="w-[28%]" />
-          <col class="w-[14%]" />
-          <col class="w-[24%]" />
-          <col class="w-[10%]" />
+          <col class="w-[22%]" />
+          <col class="w-[12%]" />
+          <col class="w-[12%]" />
+          <col class="w-[22%]" />
+          <col class="w-[8%]" />
           <col class="w-[16%]" />
         </colgroup>
         <thead>
@@ -449,6 +454,7 @@ $effect(() => {
             </th>
             <th class={thClass}>Device</th>
             <th class={thClass}>Location</th>
+            <th class={thClass}>Lifecycle</th>
             <th class={thClass}>Last reading</th>
             <th class={thClass}>Status</th>
             <th class="{thClass} text-right">Actions</th>

@@ -27,6 +27,8 @@ def test_root_lists_endpoints(client: TestClient) -> None:
 def test_create_and_list_devices(client: TestClient) -> None:
     created = create_device(client)
     device_id = created["deviceId"]
+    assert created["lifecycleStatus"] == "PROVISIONING"
+    assert created["status"] == "UNKNOWN"
 
     listed = client.get("/devices")
     assert listed.status_code == 200

@@ -1,0 +1,14 @@
+services:
+  simulator:
+    build: .
+    restart: unless-stopped
+    environment:
+      TABLE_NAME: ${TABLE_NAME}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+      AWS_REGION: ${AWS_REGION:-eu-west-2}
+      IOT_ENDPOINT: ${IOT_ENDPOINT}
+      CERT_DIR: /certs
+      SSM_CERT_PREFIX: ${SSM_CERT_PREFIX:-/homehub/simulator}
+    volumes:
+      - ${CERT_HOST_DIR:-./certs}:/certs:ro
+    network_mode: host

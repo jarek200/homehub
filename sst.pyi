@@ -23,6 +23,15 @@ class Resource:
     class DeviceRestApi:
         type: str
         url: str
+    class ProvisionDevice:
+        name: str
+        type: str
+    class SimulatorEvents:
+        type: str
+        url: str
+    class TelemetryWriter:
+        name: str
+        type: str
     class Web:
         type: str
         url: str

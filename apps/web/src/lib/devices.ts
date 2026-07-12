@@ -47,6 +47,13 @@ export const DEVICE_STATUSES = [
   { value: 'UNKNOWN', label: 'Unknown' },
 ] as const;
 
+export const LIFECYCLE_STATUSES = [
+  { value: 'PROVISIONING', label: 'Provisioning' },
+  { value: 'READY', label: 'Ready' },
+  { value: 'FAILED', label: 'Failed' },
+  { value: 'DECOMMISSIONED', label: 'Decommissioned' },
+] as const;
+
 export function getDeviceModelsForType(type: string): DeviceModelOption[] {
   return DEVICE_MODELS[type as DeviceType] ?? [];
 }
@@ -185,6 +192,19 @@ export function formatDeviceType(type: string, configuration?: string | null): s
 
 export function formatStatus(status: string): string {
   return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+export function formatLifecycleStatus(status: string): string {
+  const match = LIFECYCLE_STATUSES.find((item) => item.value === status);
+  return match?.label ?? formatStatus(status);
+}
+
+/** Text color for lifecycle status badges. */
+export function lifecycleColorClass(status: string): string {
+  if (status === 'READY') return 'text-emerald-600 dark:text-emerald-400';
+  if (status === 'PROVISIONING') return 'text-amber-600 dark:text-amber-400';
+  if (status === 'FAILED') return 'text-red-600 dark:text-red-400';
+  return 'text-muted-foreground';
 }
 
 /** Text color for device status — green Online, red Offline. */

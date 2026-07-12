@@ -55,6 +55,7 @@ class FakeHubStore:
             type=payload.type,
             location=payload.location,
             status="UNKNOWN",
+            lifecycleStatus="PROVISIONING",
             configuration=payload.configuration,
             createdAt=timestamp,
             updatedAt=timestamp,

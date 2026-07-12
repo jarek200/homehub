@@ -2,9 +2,15 @@
 
 import { stageConfig } from './stage-config';
 
+type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
+type SimulatorQueue = ReturnType<
+  typeof import('./iot-provisioning').createIotProvisioning
+>['simulatorQueue'];
+
 export function createRestApi(
-  table: ReturnType<typeof import('./storage').createStorage>['table'],
-  auth: ReturnType<typeof import('./auth').createAuth>['auth']
+  table: StorageTable,
+  auth: ReturnType<typeof import('./auth').createAuth>['auth'],
+  simulatorQueue?: SimulatorQueue
 ) {
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
     cors: {
@@ -27,6 +33,7 @@ export function createRestApi(
       POWERTOOLS_SERVICE_NAME: 'homehub-api',
       POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
       POWERTOOLS_LOG_LEVEL: 'INFO',
+      ...(simulatorQueue ? { SIMULATOR_QUEUE_URL: simulatorQueue.url } : {}),
     },
     permissions: [
       {
@@ -39,6 +46,14 @@ export function createRestApi(
         ],
         resources: [table.arn, $interpolate`${table.arn}/index/*`],
       },
+      ...(simulatorQueue
+        ? [
+            {
+              actions: ['sqs:SendMessage'],
+              resources: [simulatorQueue.arn],
+            },
+          ]
+        : []),
       {
         actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],

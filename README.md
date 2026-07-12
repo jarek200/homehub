@@ -247,6 +247,65 @@ SST outputs:
 - `restApiUrl` — REST device API
 - `webUrl` — SvelteKit app
 - `userPoolId` / `userPoolClientId` — Cognito
+- `simulatorQueueUrl` — SQS queue for the Docker simulator
+- `iotEndpoint` — IoT Core data endpoint (ATS)
+- `telemetryBucket` — S3 bucket for raw Parquet telemetry
+
+## IoT provision PoC (stretch)
+
+The interview REST API and Svelte console work without Lightsail. The stretch path adds async provisioning and live MQTT telemetry.
+
+### Flow
+
+1. `POST /devices` writes `lifecycleStatus=PROVISIONING` to DynamoDB.
+2. DynamoDB Streams trigger the **ProvisionDevice** Lambda.
+3. Lambda creates an IoT Thing + Shadow, writes a `SIMULATOR` registry item, marks the device `READY`, and sends `DEVICE_READY` to SQS.
+4. The **device simulator** container on Lightsail long-polls SQS and starts an MQTT client per device.
+5. Telemetry on `homehub/devices/{deviceId}/telemetry` fans out:
+   - **Hot path:** IoT Rule → Lambda → DynamoDB readings + `status=ONLINE` (powers the UI).
+   - **Cold path:** IoT Rule → Firehose → S3 Parquet (analytics lake; Parquet conversion requires a 64 MB buffer size — files flush on the 60s interval or when 64 MB accumulates).
+
+Personal `sst dev` stages set `SKIP_IOT_PROVISIONING=true` so devices flip to `READY` without IoT Core — the UI remains demoable locally.
+
+### Demo script
+
+1. Deploy `int`: `pnpm deploy:int`
+2. Register a device in the web console → detail page shows **Provisioning** then **Ready**.
+3. Run the simulator on Lightsail (see `packages/device-simulator/README.md`).
+4. Watch readings appear on the device detail page without manual “Record reading”.
+5. After ~60s, confirm Parquet objects under `s3://{telemetryBucket}/telemetry/` and query with Athena:
+
+```sql
+SELECT deviceid, temperature, humidity, recordedat
+FROM homehub_int_telemetry.device_telemetry
+LIMIT 20;
+```
+
+### Simulator certs (Parameter Store)
+
+Store pre-generated simulator certs as `SecureString` parameters (not in DynamoDB):
+
+- `/homehub/simulator/cert`
+- `/homehub/simulator/key`
+- `/homehub/simulator/ca`
+
+Attach the SST-created IoT policy (`homehub-{stage}-simulator`) to the certificate principal in the IoT console.
+
+### Docker simulator
+
+```bash
+cd packages/device-simulator
+docker build -t homehub-device-simulator:latest .
+docker run -d --restart unless-stopped \
+  -v /opt/homehub/certs:/certs:ro \
+  -e TABLE_NAME=... \
+  -e SQS_QUEUE_URL=... \
+  -e AWS_REGION=eu-west-2 \
+  -e IOT_ENDPOINT=https://....iot.eu-west-2.amazonaws.com \
+  homehub-device-simulator:latest
+```
+
+See [`packages/device-simulator/README.md`](packages/device-simulator/README.md) for Lightsail IAM, compose-based local dev, and scaling notes.
 
 ## License
 

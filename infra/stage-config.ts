@@ -20,18 +20,27 @@ type StageConfig = {
   sveltekit: {
     memory: `${number} MB`;
   };
+  iot: {
+    /** Skip IoT Core provisioning; mark devices READY for local UI demos. */
+    skipProvisioning: boolean;
+  };
 };
 
 const configs: Record<string, StageConfig> = {
   int: {
     lambda: { memory: '512 MB', timeout: '15 seconds' },
     sveltekit: { memory: '1024 MB' },
+    iot: { skipProvisioning: false },
   },
   prod: {
     lambda: { memory: '1024 MB', timeout: '30 seconds' },
     sveltekit: { memory: '1024 MB' },
+    iot: { skipProvisioning: false },
   },
 };
 
-/** Personal `sst dev` stages fall back to int sizing. */
-export const stageConfig: StageConfig = configs[$app.stage] ?? configs.int;
+/** Personal `sst dev` stages fall back to int sizing with provisioning stubbed. */
+export const stageConfig: StageConfig = configs[$app.stage] ?? {
+  ...configs.int,
+  iot: { skipProvisioning: true },
+};
