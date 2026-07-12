@@ -38,6 +38,7 @@ export function createIotTelemetry(table: StorageTable) {
         serializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe',
       },
       columns: [
+        { name: 'hubid', type: 'string' },
         { name: 'deviceid', type: 'string' },
         { name: 'thingname', type: 'string' },
         { name: 'temperature', type: 'double' },
@@ -48,6 +49,7 @@ export function createIotTelemetry(table: StorageTable) {
       ],
     },
     partitionKeys: [
+      { name: 'hub', type: 'string' },
       { name: 'year', type: 'string' },
       { name: 'month', type: 'string' },
       { name: 'day', type: 'string' },
@@ -101,11 +103,33 @@ export function createIotTelemetry(table: StorageTable) {
     extendedS3Configuration: {
       roleArn: firehoseRole.arn,
       bucketArn: telemetryBucket.arn,
-      prefix: 'telemetry/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+      prefix:
+        'telemetry/hub=!{partitionKeyFromQuery:hubid}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
       errorOutputPrefix:
         'errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
       bufferingSize: 64,
       bufferingInterval: 60,
+      dynamicPartitioningConfiguration: {
+        enabled: true,
+      },
+      processingConfiguration: {
+        enabled: true,
+        processors: [
+          {
+            type: 'MetadataExtraction',
+            parameters: [
+              {
+                parameterName: 'MetadataExtractionQuery',
+                parameterValue: '{hubid:.hubid}',
+              },
+              {
+                parameterName: 'JsonParsingEngine',
+                parameterValue: 'JQ-1.6',
+              },
+            ],
+          },
+        ],
+      },
       dataFormatConversionConfiguration: {
         enabled: true,
         inputFormatConfiguration: {
@@ -196,7 +220,7 @@ export function createIotTelemetry(table: StorageTable) {
   const coldRule = new aws.iot.TopicRule('TelemetryColdRule', {
     name: `${$app.name}_${$app.stage}_telemetry_cold`,
     enabled: true,
-    sql: "SELECT topic(3) AS deviceid, timestamp() AS recordedat, temperature, humidity, motionDetected AS motiondetected, cameraOnline AS cameraonline FROM 'homehub/devices/+/telemetry'",
+    sql: "SELECT topic(3) AS deviceid, hubId AS hubid, thingName AS thingname, timestamp() AS recordedat, temperature, humidity, motionDetected AS motiondetected, cameraOnline AS cameraonline FROM 'homehub/devices/+/telemetry'",
     sqlVersion: '2016-03-23',
     firehose: [
       {

@@ -29,6 +29,7 @@ class VirtualDevice:
         self,
         *,
         device_id: str,
+        hub_id: str,
         thing_name: str,
         device_type: str,
         configuration: str | None,
@@ -36,6 +37,7 @@ class VirtualDevice:
         ssm_cert_prefix: str | None = None,
     ) -> None:
         self.device_id = device_id
+        self.hub_id = hub_id
         self.thing_name = thing_name
         self.device_type = device_type
         self.configuration = configuration
@@ -132,34 +134,30 @@ class VirtualDevice:
 
     def _build_telemetry(self) -> dict[str, Any]:
         recorded_at = _now_iso()
-        if self.device_type == "environmental-sensor":
-            return {
-                "deviceId": self.device_id,
-                "thingName": self.thing_name,
-                "temperature": round(random.uniform(18.0, 26.0), 1),
-                "humidity": round(random.uniform(40.0, 65.0), 1),
-                "recordedAt": recorded_at,
-            }
-        if self.device_type == "smoke-alarm":
-            return {
-                "deviceId": self.device_id,
-                "thingName": self.thing_name,
-                "motionDetected": False,
-                "cameraOnline": True,
-                "recordedAt": recorded_at,
-            }
-        if self.device_type in {"heat-alarm", "carbon-monoxide-alarm"}:
-            return {
-                "deviceId": self.device_id,
-                "thingName": self.thing_name,
-                "temperature": round(random.uniform(20.0, 28.0), 1),
-                "recordedAt": recorded_at,
-            }
-        return {
+        base = {
             "deviceId": self.device_id,
+            "hubId": self.hub_id,
             "thingName": self.thing_name,
             "recordedAt": recorded_at,
         }
+        if self.device_type == "environmental-sensor":
+            return {
+                **base,
+                "temperature": round(random.uniform(18.0, 26.0), 1),
+                "humidity": round(random.uniform(40.0, 65.0), 1),
+            }
+        if self.device_type == "smoke-alarm":
+            return {
+                **base,
+                "motionDetected": False,
+                "cameraOnline": True,
+            }
+        if self.device_type in {"heat-alarm", "carbon-monoxide-alarm"}:
+            return {
+                **base,
+                "temperature": round(random.uniform(20.0, 28.0), 1),
+            }
+        return base
 
     def _on_shadow_delta(
         self,

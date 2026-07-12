@@ -30,8 +30,27 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
     parsed = parse_stream_record(record)
     assert parsed is not None
     assert parsed["deviceId"] == "dev1"
+    assert parsed["tenantPk"] == "HUB#demo"
     assert parsed["type"] == "environmental-sensor"
     assert parsed["ssmCertPrefix"] == "/homehub/devices/dev1"
+
+
+def test_parse_stream_record_preserves_user_hub() -> None:
+    record = {
+        "eventName": "INSERT",
+        "dynamodb": {
+            "Keys": {"PK": {"S": "HUB#user-abc"}, "SK": {"S": "DEVICE#dev2"}},
+            "NewImage": {
+                "PK": {"S": "HUB#user-abc"},
+                "SK": {"S": "DEVICE#dev2"},
+                "deviceId": {"S": "dev2"},
+                "lifecycleStatus": {"S": "PROVISIONING"},
+            },
+        },
+    }
+    parsed = parse_stream_record(record)
+    assert parsed is not None
+    assert parsed["tenantPk"] == "HUB#user-abc"
 
 
 def test_parse_stream_record_ignores_ready_devices() -> None:

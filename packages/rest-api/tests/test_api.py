@@ -24,6 +24,13 @@ def test_root_lists_endpoints(client: TestClient) -> None:
     assert response.json()["framework"] == "FastAPI"
 
 
+def test_hub_pk_for_user() -> None:
+    from homehub_api.config import hub_id_from_pk, hub_pk_for_user
+
+    assert hub_pk_for_user("user-abc") == "HUB#user-abc"
+    assert hub_id_from_pk("HUB#user-abc") == "user-abc"
+
+
 def test_create_and_list_devices(client: TestClient) -> None:
     created = create_device(client)
     device_id = created["deviceId"]

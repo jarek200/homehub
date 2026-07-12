@@ -8,6 +8,7 @@ from typing import Any
 
 import boto3
 
+from homehub_api.config import hub_id_from_pk
 from homehub_api.iot.sfn.common import _now_iso, ssm_prefix_for, thing_name_for
 
 
@@ -30,6 +31,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "enabled": True,
         "status": "READY",
         "tenantPk": tenant_pk,
+        "hubId": hub_id_from_pk(tenant_pk),
         "ssmCertPrefix": prefix,
         "updatedAt": timestamp,
     }

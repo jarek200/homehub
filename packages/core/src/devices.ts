@@ -11,6 +11,14 @@ export const INPUT_LIMITS = {
 export const DEMO_TENANT_ID = 'demo';
 export const DEMO_TENANT_PK = `HUB#${DEMO_TENANT_ID}`;
 
+export function hubPkForUser(userId: string): string {
+  return `HUB#${userId}`;
+}
+
+export function hubIdFromPk(tenantPk: string): string {
+  return tenantPk.startsWith('HUB#') ? tenantPk.slice(4) : tenantPk;
+}
+
 export const DEVICE_STATUSES = ['ONLINE', 'OFFLINE', 'UNKNOWN'] as const;
 export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 

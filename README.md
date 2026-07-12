@@ -31,7 +31,7 @@ Reviewers / curl                HomeHub web app (SvelteKit)
                  DynamoDB (single table)
 ```
 
-- **REST API** — the only backend surface. Device/issue data lives on a demo tenant (`HUB#demo`). Reviewers can `curl` with `X-Api-Key`; the signed-in UI sends a Cognito ID token.
+- **REST API** — the only backend surface. Device/issue data is scoped per user hub (`HUB#{cognitoSub}`). Reviewers can `curl` with `X-Api-Key` (demo tenant); the signed-in UI sends a Cognito ID token.
 - **Cognito** — sign up / sign in for the web app. User profiles live under `USER#...`.
 - **DynamoDB** — shared storage using composite `PK` / `SK` keys. Devices start empty until registered via `POST /devices`.
 - **SST v4** — infrastructure in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
@@ -90,7 +90,7 @@ pnpm dev:local
 
 ## REST API
 
-After `pnpm dev` or `pnpm deploy:int`, SST prints `restApiUrl`. Device endpoints use the demo tenant.
+After `pnpm dev` or `pnpm deploy:int`, SST prints `restApiUrl`. Signed-in device endpoints use the caller's hub (`HUB#{sub}`).
 
 Set the base URL once:
 
@@ -220,7 +220,7 @@ sst.config.ts              Infrastructure entry point
 ## Assumptions
 
 1. **REST is the only API surface** — matches the interview brief directly.
-2. **Demo tenant for devices** — Reviewer/device data lives under `HUB#demo`; user profiles under `USER#...`.
+2. **Per-user hubs** — Signup creates `HUB#{userId}`; devices/issues/readings are stored under that hub. API key access still uses `HUB#demo` for scripted testing.
 3. **Device IDs are ULIDs** — server-generated, time-sortable; `createdAt` / `updatedAt` remain explicit fields.
 4. **Device types are free-form strings** — e.g. `smoke-alarm`, `environmental-sensor`.
 5. **Configuration is JSON stored as a string** — flexible for different device models.
@@ -240,7 +240,7 @@ sst.config.ts              Infrastructure entry point
 
 - **Dual auth on one API** — JWT for the UI, API key for curl; both hit the same FastAPI routes.
 - **FastAPI on Lambda** — Mangum adapts API Gateway HTTP API events to ASGI; a single `$default` route lets FastAPI own all path routing.
-- **Profile vs demo tenant** — `/me` is user-scoped; devices/issues use the demo tenant for the interview task.
+- **Profile vs hub** — `/me` is user-scoped; devices/issues use `HUB#{sub}` from the JWT (or `HUB#demo` for API key).
 
 ## QA
 
@@ -300,11 +300,12 @@ Personal `sst dev` stages use the same full IoT pipeline as `int`/`prod`. Set `H
 2. Register a device in the web console → detail page shows **Provisioning** then **Ready**.
 3. Simulator runs on Lightsail automatically (`pnpm dev` deploys it in the background; `pnpm simulator:deploy` for manual updates).
 4. Watch readings appear on the device detail page without manual “Record reading”.
-5. After ~60s, confirm Parquet objects under `s3://{telemetryBucket}/telemetry/` and query with Athena:
+5. After ~60s, confirm Parquet objects under `s3://{telemetryBucket}/telemetry/hub={yourUserId}/` and query with Athena:
 
 ```sql
 SELECT deviceid, temperature, humidity, recordedat
 FROM homehub_int_telemetry.device_telemetry
+WHERE hub = 'your-cognito-sub' AND year = '2026' AND month = '07' AND day = '12'
 LIMIT 20;
 ```
 

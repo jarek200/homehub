@@ -55,7 +55,8 @@ class Reconciler:
             logger.info("Registry disabled or missing for %s", device_id)
             return
 
-        tenant_pk = registry.get("tenantPk", "HUB#demo")
+        tenant_pk = str(registry.get("tenantPk", "HUB#demo"))
+        hub_id = tenant_pk.removeprefix("HUB#")
         device = self._table.get_item(Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"}).get("Item")
         if not device:
             logger.warning("Device config missing for %s", device_id)
@@ -67,6 +68,7 @@ class Reconciler:
 
         virtual = VirtualDevice(
             device_id=device_id,
+            hub_id=hub_id,
             thing_name=str(registry.get("thingName") or device.get("thingName") or f"homehub-{device_id}"),
             device_type=str(device.get("type", "environmental-sensor")),
             configuration=device.get("configuration"),

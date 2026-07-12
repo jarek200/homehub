@@ -10,7 +10,7 @@ from typing import Any
 import boto3
 from ulid import new as new_ulid
 
-from homehub_api.config import DEMO_TENANT_PK, HUMIDITY_ISSUE_THRESHOLD
+from homehub_api.config import DEMO_TENANT_PK, HUMIDITY_ISSUE_THRESHOLD, hub_pk_for_user
 from homehub_api.store import humidity_issue_title
 
 
@@ -22,10 +22,19 @@ def _new_id() -> str:
     return str(new_ulid())
 
 
-def _tenant_pk_for_device(table: Any, device_id: str) -> str:
+def _tenant_pk_for_device(table: Any, device_id: str, event: dict[str, Any]) -> str:
+    hub_id = event.get("hubId")
+    if hub_id:
+        return hub_pk_for_user(str(hub_id))
+
+    registry = table.get_item(Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"}).get("Item")
+    if registry and registry.get("tenantPk"):
+        return str(registry["tenantPk"])
+
     result = table.get_item(Key={"PK": DEMO_TENANT_PK, "SK": f"DEVICE#{device_id}"})
     if result.get("Item"):
         return DEMO_TENANT_PK
+
     return DEMO_TENANT_PK
 
 
@@ -42,7 +51,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
     if not device_id:
         return
 
-    tenant_pk = _tenant_pk_for_device(table, device_id)
+    tenant_pk = _tenant_pk_for_device(table, device_id, event)
     timestamp = _now_iso()
     recorded_at = str(event.get("recordedAt") or timestamp)
     reading_id = _new_id()

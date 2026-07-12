@@ -2,7 +2,7 @@
  * Lambda Handler: Create User Profile
  *
  * Triggered by Cognito post-confirmation event when a user signs up.
- * Creates a user profile in DynamoDB.
+ * Creates a user profile and a per-user hub in DynamoDB.
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -28,6 +28,21 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
     const email = event.request.userAttributes.email || '';
     const username = email.includes('@') ? email.split('@')[0] : 'user';
     const createdAt = new Date().toISOString();
+    const hubPk = `HUB#${userId}`;
+
+    await docClient.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: hubPk,
+          SK: 'METADATA',
+          hubId: userId,
+          ownerUserId: userId,
+          createdAt,
+          updatedAt: createdAt,
+        },
+      })
+    );
 
     // Create user profile in DynamoDB
     await docClient.send(
@@ -37,6 +52,7 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
           PK: `USER#${userId}`,
           SK: 'PROFILE',
           userId,
+          hubId: userId,
           username,
           email,
           name: null,
@@ -54,7 +70,7 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
       })
     );
 
-    console.log('User profile created successfully', { userId, email });
+    console.log('User profile and hub created successfully', { userId, email, hubPk });
 
     return event;
   } catch (error) {

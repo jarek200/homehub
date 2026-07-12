@@ -12,7 +12,7 @@ from homehub_api.errors import ApiError
 from homehub_api.models import ServiceInfoResponse
 from homehub_api.observability import logger
 from homehub_api.routers import devices, issues, profile
-from homehub_api.store import HubStore, build_store
+from homehub_api.store import HubStore
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -36,11 +36,13 @@ def create_app(store: HubStore | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         if store is not None:
             app.state.store = store
+            app.state.table_name = None
         else:
             name = table_name()
             if not name:
                 raise RuntimeError("TABLE_NAME is required")
-            app.state.store = build_store(name)
+            app.state.store = None
+            app.state.table_name = name
         yield
 
     app = FastAPI(
