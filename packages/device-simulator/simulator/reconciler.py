@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 import boto3
@@ -22,7 +21,6 @@ class Reconciler:
         self._table = boto3.resource("dynamodb").Table(table_name)
         self._devices: dict[str, VirtualDevice] = {}
         self._iot_endpoint = resolve_iot_endpoint()
-        self._cert_dir = os.environ.get("CERT_DIR", "/certs")
 
     def poll_once(self) -> None:
         response = self._sqs.receive_message(
@@ -73,7 +71,7 @@ class Reconciler:
             device_type=str(device.get("type", "environmental-sensor")),
             configuration=device.get("configuration"),
             iot_endpoint=self._iot_endpoint,
-            cert_dir=self._cert_dir,
+            ssm_cert_prefix=registry.get("ssmCertPrefix"),
         )
         virtual.start()
         self._devices[device_id] = virtual

@@ -101,6 +101,7 @@ class DeviceResponse(BaseModel):
     status: DeviceStatus
     lifecycle_status: LifecycleStatus = Field(default="READY", alias="lifecycleStatus")
     thing_name: str | None = Field(default=None, alias="thingName")
+    certificate_id: str | None = Field(default=None, alias="certificateId")
     failure_reason: str | None = Field(default=None, alias="failureReason")
     configuration: str | None = None
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")

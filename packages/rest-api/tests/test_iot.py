@@ -1,10 +1,14 @@
-"""Tests for IoT provisioning helpers."""
+"""Tests for IoT Step Functions provisioning helpers."""
 
-from homehub_api.iot.provision import _parse_stream_record, thing_name_for
+from homehub_api.iot.sfn.common import parse_stream_record, ssm_prefix_for, thing_name_for
 
 
 def test_thing_name_for_prefixes_device_id() -> None:
     assert thing_name_for("abc123") == "homehub-abc123"
+
+
+def test_ssm_prefix_for_device() -> None:
+    assert ssm_prefix_for("abc123") == "/homehub/devices/abc123"
 
 
 def test_parse_stream_record_filters_provisioning_inserts() -> None:
@@ -23,10 +27,11 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
             },
         },
     }
-    parsed = _parse_stream_record(record)
+    parsed = parse_stream_record(record)
     assert parsed is not None
     assert parsed["deviceId"] == "dev1"
     assert parsed["type"] == "environmental-sensor"
+    assert parsed["ssmCertPrefix"] == "/homehub/devices/dev1"
 
 
 def test_parse_stream_record_ignores_ready_devices() -> None:
@@ -37,4 +42,4 @@ def test_parse_stream_record_ignores_ready_devices() -> None:
             "NewImage": {"lifecycleStatus": {"S": "READY"}},
         },
     }
-    assert _parse_stream_record(record) is None
+    assert parse_stream_record(record) is None

@@ -1,59 +1,63 @@
 # HomeHub device simulator
 
-Python Docker container that long-polls the simulator SQS queue and runs one MQTT client per virtual device. Deploy on a Lightsail instance (or locally via Docker Compose) — not managed by SST.
+Python Docker container that long-polls the simulator SQS queue and runs one MQTT client per virtual device.
+
+**Managed by SST** on `int` and `prod`: Lightsail Container Service + ECR (`infra/device-simulator.ts`). For local fallback, use `pnpm dev:simulator`.
 
 ## What it does
 
-- Receives `DEVICE_READY` / `DEVICE_STOP` messages from SQS
+- Receives `DEVICE_READY` / `DEVICE_STOP` messages from SQS (deviceId only — no secrets)
+- Loads **per-device** X.509 certs from SSM (`/homehub/devices/{deviceId}/cert|key|ca`)
 - Loads device config from DynamoDB (`SIMULATOR` registry + `DEVICE#` item)
-- Connects to AWS IoT Core with X.509 certs
+- Connects to AWS IoT Core with the device-specific certificate
 - Publishes telemetry to `homehub/devices/{deviceId}/telemetry` (~60s interval)
 - Subscribes to Device Shadow deltas and reports state
 
-## Prerequisites
+Certs are created automatically by the **DeviceProvision** Step Functions workflow when a device is registered.
 
-- DynamoDB table + SQS queue (from `pnpm deploy:int`)
-- IoT policy attached to the simulator **certificate** principal
-- Certs mounted at `/certs` or stored in SSM Parameter Store:
-  - `/homehub/simulator/cert` (`SecureString`)
-  - `/homehub/simulator/key` (`SecureString`)
-  - `/homehub/simulator/ca`
+## SST / Lightsail (int & prod)
 
-## Build
+`pnpm dev` and `pnpm deploy:int` provision:
+
+- ECR repository `homehub-device-simulator-{stage}`
+- Lightsail Container Service `homehub-{stage}-simulator`
+- IAM user + SSM parameters for container AWS credentials
+
+`pnpm dev` auto-deploys the simulator in the background once the stack is ready. To force a rebuild:
 
 ```bash
-docker build -t homehub-device-simulator:latest .
+HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
 ```
 
-## Run on Lightsail
-
-Instance IAM role needs:
-
-- `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes`
-- `dynamodb:GetItem`
-- `iot:Connect`, `iot:Publish`, `iot:Subscribe`, `iot:Receive`
-- `ssm:GetParameter` on `/homehub/simulator/*` (if not mounting certs)
+Skip the Lightsail simulator:
 
 ```bash
-docker run -d --restart unless-stopped \
-  -v /opt/homehub/certs:/certs:ro \
-  -e TABLE_NAME=<from sst output> \
-  -e SQS_QUEUE_URL=<from sst output> \
-  -e AWS_REGION=eu-west-2 \
-  -e IOT_ENDPOINT=https://<id>.iot.eu-west-2.amazonaws.com \
-  homehub-device-simulator:latest
+HOMEHUB_SKIP_SIMULATOR=true pnpm dev
 ```
 
 ## Local dev (compose)
+
+When you want the simulator on your machine instead of Lightsail:
+
+```bash
+pnpm dev:simulator
+```
+
+Or manually:
 
 ```bash
 export TABLE_NAME=...
 export SQS_QUEUE_URL=...
 export IOT_ENDPOINT=https://...
-export CERT_HOST_DIR=./certs
 docker compose up --build
+```
+
+## Build image only
+
+```bash
+docker build -t homehub-device-simulator:latest .
 ```
 
 ## Scaling
 
-The PoC targets 1–10 virtual devices on a £8/month Lightsail (1 GB RAM). For 10→100 devices, increase instance size, tune `reportingIntervalSeconds`, and run multiple reconciler containers with competing consumers on the same queue.
+The PoC targets 1–10 virtual devices on a nano Lightsail container (512 MB). For 10→100 devices, increase `power` in `infra/stage-config.ts`, tune `reportingIntervalSeconds`, and run multiple reconciler containers with competing consumers on the same queue.

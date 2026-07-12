@@ -64,14 +64,16 @@ export default $config({
     const { createRestApi } = await import('./infra/rest-api');
     const { createIotProvisioning } = await import('./infra/iot-provisioning');
     const { createIotTelemetry } = await import('./infra/iot-telemetry');
+    const { createDeviceSimulator } = await import('./infra/device-simulator');
     const { stageConfig } = await import('./infra/stage-config');
 
     const { table } = createStorage();
     const createUserProfileFunction = createUserProfile(table);
     const { auth, authClient } = createAuth(createUserProfileFunction);
     const iotProvisioning = createIotProvisioning(table);
+    const deviceSimulator = createDeviceSimulator(table, iotProvisioning);
     const iotTelemetry = createIotTelemetry(table);
-    const restApi = createRestApi(table, auth, iotProvisioning.simulatorQueue);
+    const restApi = createRestApi(table, auth, iotProvisioning);
 
     const webAppUrl = getWebAppUrl();
     const webDomain = getWebDomainConfig();
@@ -119,7 +121,14 @@ export default $config({
       webAppUrl: webAppUrl ?? web.url,
       simulatorQueueUrl: iotProvisioning.simulatorQueue.url,
       iotEndpoint: iotProvisioning.iotEndpoint.endpointAddress,
+      provisionStateMachineArn: iotProvisioning.stateMachine.arn,
       telemetryBucket: iotTelemetry.telemetryBucket.bucket,
+      ...(deviceSimulator
+        ? {
+            deviceSimulatorServiceName: deviceSimulator.serviceName,
+            deviceSimulatorEcrUrl: deviceSimulator.imageUri,
+          }
+        : {}),
     };
   },
 });

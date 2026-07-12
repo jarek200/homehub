@@ -1,16 +1,15 @@
 /// <reference path="../../.sst/platform/config.d.ts" />
 
+import * as aws from '@pulumi/aws';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
-type SimulatorQueue = ReturnType<
-  typeof import('./iot-provisioning').createIotProvisioning
->['simulatorQueue'];
+type IotProvisioning = ReturnType<typeof import('./iot-provisioning').createIotProvisioning>;
 
 export function createRestApi(
   table: StorageTable,
   auth: ReturnType<typeof import('./auth').createAuth>['auth'],
-  simulatorQueue?: SimulatorQueue
+  iotProvisioning?: Pick<IotProvisioning, 'simulatorQueue' | 'iotPolicy'>
 ) {
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
     cors: {
@@ -33,7 +32,12 @@ export function createRestApi(
       POWERTOOLS_SERVICE_NAME: 'homehub-api',
       POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
       POWERTOOLS_LOG_LEVEL: 'INFO',
-      ...(simulatorQueue ? { SIMULATOR_QUEUE_URL: simulatorQueue.url } : {}),
+      ...(iotProvisioning
+        ? {
+            SIMULATOR_QUEUE_URL: iotProvisioning.simulatorQueue.url,
+            IOT_POLICY_NAME: iotProvisioning.iotPolicy.name,
+          }
+        : {}),
     },
     permissions: [
       {
@@ -46,11 +50,28 @@ export function createRestApi(
         ],
         resources: [table.arn, $interpolate`${table.arn}/index/*`],
       },
-      ...(simulatorQueue
+      ...(iotProvisioning
         ? [
             {
               actions: ['sqs:SendMessage'],
-              resources: [simulatorQueue.arn],
+              resources: [iotProvisioning.simulatorQueue.arn],
+            },
+            {
+              actions: [
+                'iot:UpdateCertificate',
+                'iot:DeleteCertificate',
+                'iot:DescribeCertificate',
+                'iot:DetachPolicy',
+                'iot:DetachThingPrincipal',
+                'iot:DeleteThing',
+              ],
+              resources: ['*'],
+            },
+            {
+              actions: ['ssm:DeleteParameter'],
+              resources: [
+                $interpolate`arn:aws:ssm:${aws.getRegionOutput().name}:${aws.getCallerIdentityOutput().accountId}:parameter/homehub/devices/*`,
+              ],
             },
           ]
         : []),

@@ -47,6 +47,7 @@ def _to_device(item: dict[str, Any]) -> DeviceResponse:
         status=item.get("status", "UNKNOWN"),
         lifecycleStatus=item.get("lifecycleStatus", "READY"),
         thingName=item.get("thingName"),
+        certificateId=item.get("certificateId"),
         failureReason=item.get("failureReason"),
         configuration=item.get("configuration"),
         lastSeenAt=item.get("lastSeenAt"),
@@ -169,6 +170,13 @@ class HubStore:
         if not device:
             raise ApiError("Device not found", 404, "NotFound")
 
+        from homehub_api.iot.decommission import decommission_device_resources
+
+        decommission_device_resources(
+            device_id=device_id,
+            certificate_id=device.certificate_id,
+            thing_name=device.thing_name,
+        )
         self._decommission_device(device_id)
         self._table.delete_item(Key={"PK": self.tenant_pk, "SK": f"DEVICE#{device_id}"})
         return {"deleted": True, "deviceId": device_id}
@@ -391,23 +399,6 @@ class HubStore:
         if not device:
             raise ApiError("Device not found", 404, "NotFound")
         return device
-
-    def seed_demo_devices(self) -> None:
-        if self.list_devices(limit=1):
-            return
-
-        from homehub_api.demo_seed import DEMO_DEVICES
-
-        for device in DEMO_DEVICES:
-            data = device.model_dump(by_alias=True)
-            item = {
-                "PK": self.tenant_pk,
-                "SK": f"DEVICE#{data['deviceId']}",
-                **data,
-                "GSI1PK": self.tenant_pk,
-                "GSI1SK": f"DEVICE#{data['createdAt']}",
-            }
-            self._table.put_item(Item=item)
 
 
 def build_store(table_name: str) -> HubStore:

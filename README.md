@@ -33,7 +33,7 @@ Reviewers / curl                HomeHub web app (SvelteKit)
 
 - **REST API** — the only backend surface. Device/issue data lives on a demo tenant (`HUB#demo`). Reviewers can `curl` with `X-Api-Key`; the signed-in UI sends a Cognito ID token.
 - **Cognito** — sign up / sign in for the web app. User profiles live under `USER#...`.
-- **DynamoDB** — shared storage using composite `PK` / `SK` keys. Demo devices are seeded on first deploy via `demo_seed.py`.
+- **DynamoDB** — shared storage using composite `PK` / `SK` keys. Devices start empty until registered via `POST /devices`.
 - **SST v4** — infrastructure in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
 
 ## Tech stack
@@ -58,7 +58,28 @@ nvm use
 pnpm install
 uv sync --all-packages   # install Python deps for the REST API Lambda (required for sst dev)
 pnpm sso          # AWS SSO login
-pnpm dev          # SST dev mode (deploys stack + runs web app)
+pnpm dev          # SST dev (int stack + web hot reload + Lightsail simulator auto-deploy)
+```
+
+Register a device in the UI → Step Functions provisions cert/Thing → Lightsail simulator picks up `DEVICE_READY` → readings appear.
+
+**Optional local simulator** (instead of Lightsail):
+
+```bash
+HOMEHUB_SKIP_SIMULATOR=true pnpm dev   # terminal 1
+pnpm dev:simulator                     # terminal 2
+```
+
+To stub IoT (READY without cert/Thing) for faster UI-only work:
+
+```bash
+HOMEHUB_SKIP_IOT_PROVISIONING=true pnpm dev
+```
+
+Force rebuild/redeploy the Lightsail simulator image:
+
+```bash
+HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
 ```
 
 For frontend-only local work against an already-deployed backend:
@@ -247,8 +268,10 @@ SST outputs:
 - `restApiUrl` — REST device API
 - `webUrl` — SvelteKit app
 - `userPoolId` / `userPoolClientId` — Cognito
-- `simulatorQueueUrl` — SQS queue for the Docker simulator
+- `simulatorQueueUrl` — SQS queue for the device simulator
 - `iotEndpoint` — IoT Core data endpoint (ATS)
+- `deviceSimulatorServiceName` — Lightsail container service (int/prod)
+- `deviceSimulatorEcrUrl` — ECR image URI for the simulator
 - `telemetryBucket` — S3 bucket for raw Parquet telemetry
 
 ## IoT provision PoC (stretch)
@@ -258,20 +281,24 @@ The interview REST API and Svelte console work without Lightsail. The stretch pa
 ### Flow
 
 1. `POST /devices` writes `lifecycleStatus=PROVISIONING` to DynamoDB.
-2. DynamoDB Streams trigger the **ProvisionDevice** Lambda.
-3. Lambda creates an IoT Thing + Shadow, writes a `SIMULATOR` registry item, marks the device `READY`, and sends `DEVICE_READY` to SQS.
-4. The **device simulator** container on Lightsail long-polls SQS and starts an MQTT client per device.
+2. **EventBridge Pipe** reads the DynamoDB stream and starts the **DeviceProvision** Step Functions execution.
+3. Step Functions (per device):
+   - Creates an IoT **certificate** (`CreateKeysAndCertificate`)
+   - Stores cert + private key in **SSM** (`/homehub/devices/{deviceId}/cert|key|ca`)
+   - Attaches IoT policy, creates **Thing**, attaches cert, initializes **Shadow**
+   - Writes `SIMULATOR` registry, marks device `READY`, sends `DEVICE_READY` to SQS
+4. The **device simulator** on Lightsail (managed by SST) long-polls SQS, fetches per-device certs from SSM, and starts MQTT.
 5. Telemetry on `homehub/devices/{deviceId}/telemetry` fans out:
    - **Hot path:** IoT Rule → Lambda → DynamoDB readings + `status=ONLINE` (powers the UI).
-   - **Cold path:** IoT Rule → Firehose → S3 Parquet (analytics lake; Parquet conversion requires a 64 MB buffer size — files flush on the 60s interval or when 64 MB accumulates).
+   - **Cold path:** IoT Rule → Firehose → S3 Parquet (analytics lake; 64 MB min buffer with Parquet conversion — files flush on the 60s interval or when 64 MB accumulates).
 
-Personal `sst dev` stages set `SKIP_IOT_PROVISIONING=true` so devices flip to `READY` without IoT Core — the UI remains demoable locally.
+Personal `sst dev` stages use the same full IoT pipeline as `int`/`prod`. Set `HOMEHUB_SKIP_IOT_PROVISIONING=true` only when you want to stub provisioning for UI-only work.
 
 ### Demo script
 
-1. Deploy `int`: `pnpm deploy:int`
+1. Deploy `int`: `pnpm deploy:int` (or `pnpm dev`)
 2. Register a device in the web console → detail page shows **Provisioning** then **Ready**.
-3. Run the simulator on Lightsail (see `packages/device-simulator/README.md`).
+3. Simulator runs on Lightsail automatically (`pnpm dev` deploys it in the background; `pnpm simulator:deploy` for manual updates).
 4. Watch readings appear on the device detail page without manual “Record reading”.
 5. After ~60s, confirm Parquet objects under `s3://{telemetryBucket}/telemetry/` and query with Athena:
 
@@ -281,31 +308,31 @@ FROM homehub_int_telemetry.device_telemetry
 LIMIT 20;
 ```
 
-### Simulator certs (Parameter Store)
+### Per-device certs (SSM)
 
-Store pre-generated simulator certs as `SecureString` parameters (not in DynamoDB):
+Provisioning creates real IoT certificates automatically. Private keys are stored as SSM `SecureString` parameters:
 
-- `/homehub/simulator/cert`
-- `/homehub/simulator/key`
-- `/homehub/simulator/ca`
+- `/homehub/devices/{deviceId}/cert`
+- `/homehub/devices/{deviceId}/key`
+- `/homehub/devices/{deviceId}/ca`
 
-Attach the SST-created IoT policy (`homehub-{stage}-simulator`) to the certificate principal in the IoT console.
+Never stored in DynamoDB or SQS. On device delete, the REST API revokes the cert and deletes SSM parameters.
 
 ### Docker simulator
 
+SST provisions Lightsail Container Service + ECR. To redeploy the container image:
+
 ```bash
-cd packages/device-simulator
-docker build -t homehub-device-simulator:latest .
-docker run -d --restart unless-stopped \
-  -v /opt/homehub/certs:/certs:ro \
-  -e TABLE_NAME=... \
-  -e SQS_QUEUE_URL=... \
-  -e AWS_REGION=eu-west-2 \
-  -e IOT_ENDPOINT=https://....iot.eu-west-2.amazonaws.com \
-  homehub-device-simulator:latest
+pnpm simulator:deploy
 ```
 
-See [`packages/device-simulator/README.md`](packages/device-simulator/README.md) for Lightsail IAM, compose-based local dev, and scaling notes.
+Local fallback:
+
+```bash
+pnpm dev:simulator
+```
+
+See [`packages/device-simulator/README.md`](packages/device-simulator/README.md) for scaling notes.
 
 ## License
 

@@ -13,7 +13,7 @@ from typing import Any
 from awscrt import io, mqtt
 from awsiot import mqtt_connection_builder
 
-from simulator.certs import load_cert_paths
+from simulator.certs import load_cert_paths_for_device
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +33,14 @@ class VirtualDevice:
         device_type: str,
         configuration: str | None,
         iot_endpoint: str,
-        cert_dir: str,
+        ssm_cert_prefix: str | None = None,
     ) -> None:
         self.device_id = device_id
         self.thing_name = thing_name
         self.device_type = device_type
         self.configuration = configuration
         self.iot_endpoint = iot_endpoint
-        self.cert_dir = cert_dir
+        self.ssm_cert_prefix = ssm_cert_prefix
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._connection: mqtt.Connection | None = None
@@ -63,7 +63,10 @@ class VirtualDevice:
             self._thread.join(timeout=10)
 
     def _run(self) -> None:
-        cert_path, key_path, ca_path = load_cert_paths(self.cert_dir)
+        cert_path, key_path, ca_path = load_cert_paths_for_device(
+            self.device_id,
+            self.ssm_cert_prefix,
+        )
         client_id = self.thing_name
 
         while not self._stop.is_set():

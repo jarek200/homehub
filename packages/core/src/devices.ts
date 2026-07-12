@@ -56,6 +56,7 @@ export interface DeviceRecord {
   status: DeviceStatus;
   lifecycleStatus: LifecycleStatus;
   thingName?: string | null;
+  certificateId?: string | null;
   failureReason?: string | null;
   configuration?: string | null;
   lastSeenAt?: string | null;

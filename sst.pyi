@@ -23,7 +23,19 @@ class Resource:
     class DeviceRestApi:
         type: str
         url: str
-    class ProvisionDevice:
+    class SfnCreateCert:
+        name: str
+        type: str
+    class SfnCreateThing:
+        name: str
+        type: str
+    class SfnFinalize:
+        name: str
+        type: str
+    class SfnMarkFailed:
+        name: str
+        type: str
+    class SfnParseStream:
         name: str
         type: str
     class SimulatorEvents:

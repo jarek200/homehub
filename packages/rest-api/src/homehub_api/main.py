@@ -41,7 +41,6 @@ def create_app(store: HubStore | None = None) -> FastAPI:
             if not name:
                 raise RuntimeError("TABLE_NAME is required")
             app.state.store = build_store(name)
-            app.state.store.seed_demo_devices()
         yield
 
     app = FastAPI(

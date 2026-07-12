@@ -7,8 +7,5 @@ services:
       SQS_QUEUE_URL: ${SQS_QUEUE_URL}
       AWS_REGION: ${AWS_REGION:-eu-west-2}
       IOT_ENDPOINT: ${IOT_ENDPOINT}
-      CERT_DIR: /certs
-      SSM_CERT_PREFIX: ${SSM_CERT_PREFIX:-/homehub/simulator}
-    volumes:
-      - ${CERT_HOST_DIR:-./certs}:/certs:ro
+      CERT_DIR: /tmp/certs
     network_mode: host
