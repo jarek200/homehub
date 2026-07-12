@@ -112,7 +112,7 @@ body {
 }
 
 .device-status-switch::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 1px;
   left: 1px;
@@ -127,12 +127,12 @@ body {
     border-color 150ms ease;
 }
 
-.device-status-switch[aria-checked='true'] {
+.device-status-switch[aria-checked="true"] {
   background-color: #000;
   border-color: #000;
 }
 
-.device-status-switch[aria-checked='true']::after {
+.device-status-switch[aria-checked="true"]::after {
   transform: translateX(1rem);
   background-color: #fff;
   border-color: #fff;

@@ -1,5 +1,3 @@
-import type { Device } from '@sst-monorepo/core';
-
 /** Aico HomeLINK product categories: smoke, heat, CO, and environmental sensors. */
 export const DEVICE_TYPES = [
   { value: 'smoke-alarm', label: 'Smoke alarm' },
@@ -48,80 +46,6 @@ export const DEVICE_STATUSES = [
   { value: 'OFFLINE', label: 'Offline' },
   { value: 'UNKNOWN', label: 'Unknown' },
 ] as const;
-
-const dummyTimestamp = '2026-07-10T14:22:10.000Z';
-
-/**
- * One sample device per Aico HomeLINK category (via Ei1000G Gateway).
- */
-export const DUMMY_DEVICES: Device[] = [
-  {
-    deviceId: 'dummy-hallway-smoke-alarm',
-    name: 'Hallway Smoke Alarm',
-    type: 'smoke-alarm',
-    location: 'Hallway',
-    status: 'ONLINE',
-    configuration: JSON.stringify({
-      model: 'Ei3016',
-      series: '3000',
-      interconnect: 'RadioLINK+',
-      opticalSensor: true,
-      testIntervalDays: 30,
-    }),
-    lastSeenAt: dummyTimestamp,
-    createdAt: dummyTimestamp,
-    updatedAt: dummyTimestamp,
-  },
-  {
-    deviceId: 'dummy-kitchen-heat-alarm',
-    name: 'Kitchen Heat Alarm',
-    type: 'heat-alarm',
-    location: 'Kitchen',
-    status: 'ONLINE',
-    configuration: JSON.stringify({
-      model: 'Ei3014',
-      series: '3000',
-      fixedTemperatureC: 58,
-      rateOfRise: true,
-    }),
-    lastSeenAt: '2026-07-10T14:18:00.000Z',
-    createdAt: dummyTimestamp,
-    updatedAt: dummyTimestamp,
-  },
-  {
-    deviceId: 'dummy-landing-co-alarm',
-    name: 'Landing CO Alarm',
-    type: 'carbon-monoxide-alarm',
-    location: 'Landing',
-    status: 'ONLINE',
-    configuration: JSON.stringify({
-      model: 'Ei3018',
-      series: '3000',
-      coThresholdPpm: 50,
-      sensorLifeYears: 10,
-    }),
-    lastSeenAt: '2026-07-10T14:15:00.000Z',
-    createdAt: dummyTimestamp,
-    updatedAt: dummyTimestamp,
-  },
-  {
-    deviceId: 'dummy-bedroom-env-sensor',
-    name: 'Bedroom Environmental Sensor',
-    type: 'environmental-sensor',
-    location: 'Bedroom',
-    status: 'ONLINE',
-    configuration: JSON.stringify({
-      model: 'Ei1020',
-      series: '1000',
-      reportingIntervalSeconds: 300,
-      temperatureAlertThreshold: 28,
-      humidityAlertThreshold: 70,
-    }),
-    lastSeenAt: '2026-07-10T14:10:00.000Z',
-    createdAt: dummyTimestamp,
-    updatedAt: dummyTimestamp,
-  },
-];
 
 export function getDeviceModelsForType(type: string): DeviceModelOption[] {
   return DEVICE_MODELS[type as DeviceType] ?? [];

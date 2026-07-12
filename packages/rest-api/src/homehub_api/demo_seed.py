@@ -1,4 +1,4 @@
-"""Demo tenant seed data — mirrors apps/web DUMMY_DEVICES."""
+"""Demo tenant seed data for first DynamoDB deploy."""
 
 from homehub_api.models import DeviceResponse
 

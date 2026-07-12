@@ -13,7 +13,7 @@ import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import { Textarea } from '$lib/components/ui/textarea/index.js';
 import { inputMinimal } from '$lib/devices';
-import { getMyProfile, updateUserProfile } from '$lib/services/profile';
+import { getMyProfile, updateUserProfile } from '$lib/services/rest-api';
 import { auth, type User } from '$lib/stores/auth';
 
 let authState = $state({ user: null as User | null, isAuthenticated: false });

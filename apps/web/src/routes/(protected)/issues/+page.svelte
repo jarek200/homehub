@@ -21,7 +21,7 @@ import {
   ISSUE_SEVERITIES,
   ISSUE_STATUSES,
 } from '$lib/issues';
-import { createIssue, listMyIssues, updateIssue } from '$lib/services/issues';
+import { createIssue, listIssues, updateIssue } from '$lib/services/rest-api';
 
 let issues = $state<HomeIssue[]>([]);
 let loading = $state(true);
@@ -43,8 +43,7 @@ async function loadIssues() {
   loading = true;
   error = '';
   try {
-    const result = await listMyIssues();
-    issues = result.items ?? [];
+    issues = await listIssues();
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to list issues';

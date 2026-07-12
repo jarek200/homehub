@@ -12,22 +12,12 @@ export const ISSUE_SEVERITIES = [
   { value: 'HIGH', label: 'High' },
 ] as const;
 
-export const HUMIDITY_ISSUE_THRESHOLD = 70;
-
 export function formatIssueStatus(status: IssueStatus | string): string {
   return ISSUE_STATUSES.find((item) => item.value === status)?.label ?? status;
 }
 
 export function formatIssueSeverity(severity: IssueSeverity | string): string {
   return ISSUE_SEVERITIES.find((item) => item.value === severity)?.label ?? severity;
-}
-
-export function shouldSuggestHumidityIssue(humidity: number | null | undefined): boolean {
-  return typeof humidity === 'number' && humidity >= HUMIDITY_ISSUE_THRESHOLD;
-}
-
-export function humidityIssueTitle(humidity: number): string {
-  return `High humidity detected (${humidity.toFixed(1)}%)`;
 }
 
 export function formatLastReadingPrimary(

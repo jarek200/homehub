@@ -1,5 +1,5 @@
 {
-  "name": "sst-monorepo-starter",
+  "name": "homehub",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,6 @@
     "build": "turbo run build",
     "dev": "uv sync --all-packages && pnpm sst dev --stage int",
     "dev:local": "pnpm --filter @sst-monorepo/web dev",
-    "agent:python": "bash -lc 'cd packages/agent-core && if [ -x .venv/bin/python ]; then .venv/bin/python src/agent.py; else python3 src/agent.py; fi'",
     "deploy:int": "pnpm sst deploy --stage int",
     "deploy:prod": "pnpm sst deploy --stage prod",
     "remove:int": "pnpm sst remove --stage int",
@@ -16,13 +15,14 @@
     "lint:fix": "pnpm exec biome check . --write",
     "typecheck": "turbo run typecheck",
     "test": "vitest run && pnpm test:api",
-    "test:api": "cd packages/rest-api && uv sync --dev && uv run pytest",
-    "api:local": "cd packages/rest-api && uv sync --dev && uv run uvicorn homehub_api.dev:app --reload --port 8000 --app-dir src",
-    "test:turbo": "turbo run test",
+    "test:api": "uv sync --all-packages --dev && uv run --directory packages/rest-api pytest",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "prepare": "husky",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "lint-staged": {
+    "*.{js,ts,svelte,json,md,yml,yaml}": "biome check --write --no-errors-on-unmatched"
   },
   "keywords": [
     "sst",

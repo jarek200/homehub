@@ -4,7 +4,7 @@ import { stageConfig } from './stage-config';
 
 export function createRestApi(
   table: ReturnType<typeof import('./storage').createStorage>['table'],
-  auth: ReturnType<typeof import('./auth').createAuth>['auth'],
+  auth: ReturnType<typeof import('./auth').createAuth>['auth']
 ) {
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
     cors: {

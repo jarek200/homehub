@@ -24,7 +24,12 @@ import {
   inputMinimal,
 } from '$lib/devices';
 import { formatLastReadingPrimary } from '$lib/issues';
-import { createDevice, deleteDevice, listDeviceReadings, listDevices } from '$lib/services/devices';
+import {
+  createDevice,
+  deleteDevice,
+  listDeviceReadings,
+  listDevices,
+} from '$lib/services/rest-api';
 
 let devices = $state<Device[]>([]);
 let lastReadings = $state<Record<string, Reading | null>>({});

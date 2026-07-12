@@ -4,7 +4,6 @@ import type { Snippet } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { Button } from '$lib/components/ui/button/index.js';
-import { USE_MOCK_DEVICES } from '$lib/services/devices';
 import { auth, type User } from '$lib/stores/auth';
 
 interface Props {
@@ -108,12 +107,6 @@ async function handleLogout() {
       </div>
     </div>
   </header>
-
-  {#if USE_MOCK_DEVICES}
-    <p class="border-border border-b bg-muted/40 px-6 py-2 text-center text-[0.7rem] text-muted-foreground md:px-10">
-      Device data is local preview — changes are not saved to the cloud yet.
-    </p>
-  {/if}
 
   <main class="w-full px-6 py-10 md:px-10">
     {#if actions}

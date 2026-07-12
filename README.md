@@ -33,7 +33,7 @@ Reviewers / curl                HomeHub web app (SvelteKit)
 
 - **REST API** — the only backend surface. Device/issue data lives on a demo tenant (`HUB#demo`). Reviewers can `curl` with `X-Api-Key`; the signed-in UI sends a Cognito ID token.
 - **Cognito** — sign up / sign in for the web app. User profiles live under `USER#...`.
-- **DynamoDB** — shared storage using composite `PK` / `SK` keys.
+- **DynamoDB** — shared storage using composite `PK` / `SK` keys. Demo devices are seeded on first deploy via `demo_seed.py`.
 - **SST v4** — infrastructure in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
 
 ## Tech stack
@@ -42,7 +42,7 @@ Reviewers / curl                HomeHub web app (SvelteKit)
 - **REST API**: FastAPI on AWS Lambda (Python 3.13) via API Gateway HTTP API
 - **Database**: DynamoDB
 - **Monorepo**: pnpm workspaces + Turborepo
-- **Validation / tests**: Pydantic + pytest (REST), Zod + Vitest (shared TS packages)
+- **Validation / tests**: Pydantic + pytest (REST), Vitest (shared TS types)
 
 ## Prerequisites
 
@@ -65,13 +65,6 @@ For frontend-only local work against an already-deployed backend:
 
 ```bash
 pnpm dev:local
-```
-
-Run the REST API locally without AWS (in-memory store):
-
-```bash
-pnpm api:local
-# Open http://127.0.0.1:8000/docs for interactive OpenAPI docs
 ```
 
 ## REST API
@@ -184,8 +177,6 @@ REST_API_KEY=your-review-key pnpm deploy:int
 curl -s "$REST_API_URL/devices" -H "X-Api-Key: your-review-key"
 ```
 
-When `REST_API_KEY` is not set (local `pnpm api:local`), auth is open for development.
-
 ## Web app (stretch frontend)
 
 1. Open the deployed web URL (or local dev URL from SST).
@@ -194,14 +185,12 @@ When `REST_API_KEY` is not set (local `pnpm api:local`), auth is open for develo
 4. Use **Issues** to track home problems raised from sensor data.
 5. Use **Account** to edit your profile.
 
-Set `USE_MOCK_DEVICES = true` in [`apps/web/src/lib/services/devices.ts`](apps/web/src/lib/services/devices.ts) for offline UI work without a deployed API.
-
 ## Project structure
 
 ```
 apps/web/                  SvelteKit console (devices, issues, account)
 packages/rest-api/         FastAPI REST API (Python, interview deliverable)
-packages/core/             Shared TypeScript types + validation helpers
+packages/core/             Shared TypeScript domain types
 packages/functions/        Node.js Lambdas (Cognito post-confirmation)
 infra/                     SST modules (auth, storage, REST API)
 sst.config.ts              Infrastructure entry point
@@ -224,7 +213,7 @@ sst.config.ts              Infrastructure entry point
 - Reused the existing SST monorepo to show production-style IaC thinking.
 - Implemented the graded REST surface in **Python + FastAPI**, deployed to Lambda with Mangum.
 - Kept **Cognito + Svelte** as the stretch frontend; the UI calls REST with JWT, reviewers use curl with API key.
-- Moved shared domain types to `@sst-monorepo/core` (no GraphQL codegen).
+- Moved shared domain types to `@sst-monorepo/core`.
 
 **Challenges**
 
@@ -237,13 +226,12 @@ sst.config.ts              Infrastructure entry point
 ```bash
 pnpm verify    # lint, typecheck, test, build
 pnpm test      # Vitest + pytest
-pnpm api:local # local REST with in-memory store
 ```
 
 Tests cover:
 
-- FastAPI route behaviour (create, list, 404, 400, readings, commands) via pytest
-- TypeScript validation helpers and humidity threshold logic via Vitest
+- FastAPI route behaviour (create, list, 404, 400, readings, commands) via pytest with an in-memory test store
+- Humidity threshold logic via Vitest
 
 ## Deploy (optional)
 

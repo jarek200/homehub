@@ -5,6 +5,7 @@
 
 <script lang="ts">
 import type { Command, Device, DeviceStatus, HomeIssue, Reading } from '@sst-monorepo/core';
+import { humidityIssueTitle, shouldRaiseHumidityIssue } from '@sst-monorepo/core';
 import { onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
@@ -35,7 +36,7 @@ import {
   statusColorClass,
   supportsReadings,
 } from '$lib/devices';
-import { formatReadingSummary, humidityIssueTitle, shouldSuggestHumidityIssue } from '$lib/issues';
+import { formatReadingSummary } from '$lib/issues';
 import {
   createDeviceReading,
   createIssue,
@@ -46,7 +47,7 @@ import {
   listDeviceReadings,
   sendCommand,
   updateDevice,
-} from '$lib/services/devices';
+} from '$lib/services/rest-api';
 
 const deviceId = $derived($page.params.id ?? '');
 
@@ -234,7 +235,7 @@ async function handleRecordReading() {
     temperature = '';
     humidity = '';
 
-    if (shouldSuggestHumidityIssue(parsedHumidity)) {
+    if (shouldRaiseHumidityIssue(parsedHumidity)) {
       const hasOpenIssue = issues.some((issue) => issue.status === 'OPEN');
       if (!hasOpenIssue) {
         const issue = await createIssue({

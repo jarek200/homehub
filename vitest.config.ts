@@ -21,7 +21,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@sst-monorepo/core': path.resolve(__dirname, './packages/core/src'),
-      '@sst-monorepo/functions': path.resolve(__dirname, './packages/functions/src'),
     },
   },
 });

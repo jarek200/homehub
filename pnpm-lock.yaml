@@ -44,6 +44,9 @@ importers:
       '@sst-monorepo/core':
         specifier: workspace:*
         version: link:../../packages/core
+      aws-amplify:
+        specifier: ^6.18.0
+        version: 6.18.0
       bits-ui:
         specifier: ^2.18.1
         version: 2.18.1(@internationalized/date@3.10.0)(@sveltejs/kit@2.69.2(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@7.2.0(svelte@5.56.4(@typescript-eslint/types@8.57.2))(vite@8.1.4(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3)))(svelte@5.56.4(@typescript-eslint/types@8.57.2))(typescript@6.0.3)(vite@8.1.4(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3)))(svelte@5.56.4(@typescript-eslint/types@8.57.2))
@@ -60,9 +63,6 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.3.2
         version: 4.3.2(vite@8.1.4(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3))
-      aws-amplify:
-        specifier: ^6.18.0
-        version: 6.18.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -92,13 +92,6 @@ importers:
         version: 8.1.4(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/core:
-    dependencies:
-      ulid:
-        specifier: ^3.0.2
-        version: 3.0.2
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^24.13.3
@@ -2421,10 +2414,6 @@ packages:
     resolution: {integrity: sha512-fIRiVTJNcSRmXKPZtGzFQv9WRrZ3M9eoptl/teFJvjOzmpU+/K/JH6HZ8deBfb5vMEpicJcLn7JmvdknlMq7Zg==}
     hasBin: true
 
-  ulid@3.0.2:
-    resolution: {integrity: sha512-yu26mwteFYzBAot7KVMqFGCVpsF6g8wXfJzQUHvu1no3+rRRSFcSV2nKeYvNPLD2J4b08jYBDhHUjeH0ygIl9w==}
-    hasBin: true
-
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
@@ -2599,9 +2588,6 @@ packages:
 
   zimmerframe@1.1.4:
     resolution: {integrity: sha512-B58NGBEoc8Y9MWWCQGl/gq9xBCe4IiKM0a2x7GZdQKOW5Exr8S1W24J6OgM1njK8xCRGvAJIL/MxXHf6SkmQKQ==}
-
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
 
@@ -5048,8 +5034,6 @@ snapshots:
 
   ulid@2.4.0: {}
 
-  ulid@3.0.2: {}
-
   undici-types@7.18.2: {}
 
   upath@1.2.0: {}
@@ -5182,5 +5166,3 @@ snapshots:
       yargs-parser: 21.1.1
 
   zimmerframe@1.1.4: {}
-
-  zod@4.4.3: {}

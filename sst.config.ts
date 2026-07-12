@@ -31,7 +31,7 @@ export default $config({
     const stage = input?.stage ?? 'dev';
 
     return {
-      name: 'sst-monorepo-starter',
+      name: 'homehub',
       /**
        * Retain all resources in prod to prevent accidental data loss.
        * All other stages (dev, stage, feature branches) are cleaned up on remove.

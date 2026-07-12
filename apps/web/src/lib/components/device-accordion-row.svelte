@@ -18,7 +18,7 @@ import {
   statusColorClass,
 } from '$lib/devices';
 import { formatLastReadingPrimary } from '$lib/issues';
-import { updateDevice } from '$lib/services/devices';
+import { updateDevice } from '$lib/services/rest-api';
 
 interface Props {
   device: Device;
