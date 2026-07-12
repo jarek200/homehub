@@ -30,21 +30,103 @@ export function humidityIssueTitle(humidity: number): string {
   return `High humidity detected (${humidity.toFixed(1)}%)`;
 }
 
-export function formatReadingSummary(reading: {
-  temperature?: number | null;
-  humidity?: number | null;
-  motionDetected?: boolean | null;
-  cameraOnline?: boolean | null;
-}): string {
+export function formatLastReadingPrimary(
+  deviceType: string,
+  reading:
+    | {
+        temperature?: number | null;
+        humidity?: number | null;
+        motionDetected?: boolean | null;
+        cameraOnline?: boolean | null;
+      }
+    | null
+    | undefined
+): string {
+  if (!reading) return '—';
+
+  if (deviceType === 'carbon-monoxide-alarm' && reading.temperature != null) {
+    return `${reading.temperature} ppm CO`;
+  }
+
+  if (deviceType === 'heat-alarm' && reading.temperature != null) {
+    return `${reading.temperature}°C`;
+  }
+
+  if (deviceType === 'smoke-alarm') {
+    if (reading.motionDetected != null) {
+      return reading.motionDetected ? 'Smoke detected' : 'No smoke';
+    }
+    if (reading.cameraOnline != null) {
+      return reading.cameraOnline ? 'Online' : 'Offline';
+    }
+  }
+
+  if (deviceType === 'environmental-sensor') {
+    const parts: string[] = [];
+    if (reading.temperature != null) parts.push(`${reading.temperature}°C`);
+    if (reading.humidity != null) parts.push(`${reading.humidity}%`);
+    if (parts.length) return parts.join(' · ');
+  }
+
+  if (reading.temperature != null) return `${reading.temperature}°C`;
+  if (reading.humidity != null) return `${reading.humidity}%`;
+
+  return '—';
+}
+
+export function formatLastReading(
+  deviceType: string,
+  reading:
+    | {
+        temperature?: number | null;
+        humidity?: number | null;
+        motionDetected?: boolean | null;
+        cameraOnline?: boolean | null;
+      }
+    | null
+    | undefined
+): string {
+  if (!reading) return '—';
+  return formatReadingSummary(reading, deviceType);
+}
+
+export function formatReadingSummary(
+  reading: {
+    temperature?: number | null;
+    humidity?: number | null;
+    motionDetected?: boolean | null;
+    cameraOnline?: boolean | null;
+  },
+  deviceType?: string
+): string {
   const parts: string[] = [];
-  if (reading.temperature != null) parts.push(`${reading.temperature}°C`);
+
+  if (deviceType === 'carbon-monoxide-alarm' && reading.temperature != null) {
+    parts.push(`${reading.temperature} ppm CO`);
+  } else if (deviceType === 'heat-alarm' && reading.temperature != null) {
+    parts.push(`${reading.temperature}°C heat`);
+  } else {
+    if (reading.temperature != null) parts.push(`${reading.temperature}°C`);
+  }
+
   if (reading.humidity != null) parts.push(`${reading.humidity}% humidity`);
-  if (reading.motionDetected != null) {
-    parts.push(reading.motionDetected ? 'Motion detected' : 'No motion');
+
+  if (deviceType === 'smoke-alarm') {
+    if (reading.motionDetected != null) {
+      parts.push(reading.motionDetected ? 'Smoke detected' : 'No smoke');
+    }
+    if (reading.cameraOnline != null) {
+      parts.push(reading.cameraOnline ? 'Device online' : 'Device offline');
+    }
+  } else {
+    if (reading.motionDetected != null) {
+      parts.push(reading.motionDetected ? 'Motion detected' : 'No motion');
+    }
+    if (reading.cameraOnline != null) {
+      parts.push(reading.cameraOnline ? 'Camera online' : 'Camera offline');
+    }
   }
-  if (reading.cameraOnline != null) {
-    parts.push(reading.cameraOnline ? 'Camera online' : 'Camera offline');
-  }
+
   return parts.length ? parts.join(' · ') : 'Reading recorded';
 }
 

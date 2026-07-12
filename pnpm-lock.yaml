@@ -44,6 +44,9 @@ importers:
       '@aws-amplify/api-graphql':
         specifier: ^4.8.8
         version: 4.8.8
+      '@sst-monorepo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@sst-monorepo/graphql':
         specifier: workspace:*
         version: link:../../packages/graphql
@@ -96,6 +99,9 @@ importers:
 
   packages/core:
     dependencies:
+      ulid:
+        specifier: ^3.0.2
+        version: 3.0.2
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -118,9 +124,6 @@ importers:
       '@sst-monorepo/core':
         specifier: workspace:*
         version: link:../core
-      ulid:
-        specifier: ^3.0.2
-        version: 3.0.2
     devDependencies:
       '@types/aws-lambda':
         specifier: ^8.10.162

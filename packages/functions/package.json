@@ -12,8 +12,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1084.0",
     "@aws-sdk/lib-dynamodb": "^3.1084.0",
-    "@sst-monorepo/core": "workspace:*",
-    "ulid": "^3.0.2"
+    "@sst-monorepo/core": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.162",

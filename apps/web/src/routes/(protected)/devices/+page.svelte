@@ -4,40 +4,105 @@
 </svelte:head>
 
 <script lang="ts">
-import type { Device } from '@sst-monorepo/graphql';
+import type { Device, Reading } from '@sst-monorepo/graphql';
 import { onMount } from 'svelte';
-import { goto } from '$app/navigation';
+import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
-import { Badge } from '$lib/components/ui/badge/index.js';
+import DeviceAccordionRow from '$lib/components/device-accordion-row.svelte';
+import DeviceModelLink from '$lib/components/device-model-link.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import {
   DEVICE_TYPES,
-  DUMMY_DEVICES,
-  formatConfigurationSummary,
   formatDeviceType,
   formatStatus,
-  formatWhen,
+  getDefaultConfiguration,
+  getDefaultModelForType,
+  getDeviceModelsForType,
   inputMinimal,
-  isDummyDevice,
 } from '$lib/devices';
-import { createDevice, deleteDevice, listMyDevices } from '$lib/services/graphql';
+import { formatLastReadingPrimary } from '$lib/issues';
+import { createDevice, deleteDevice, listDeviceReadings, listDevices } from '$lib/services/devices';
 
 let devices = $state<Device[]>([]);
+let lastReadings = $state<Record<string, Reading | null>>({});
 let loading = $state(true);
 let error = $state('');
 let showCreate = $state(false);
 let creating = $state(false);
 let deletingId = $state<string | null>(null);
-
-const displayDevices = $derived(devices.length > 0 ? devices : DUMMY_DEVICES);
-const isPreview = $derived(!loading && devices.length === 0);
+let query = $state('');
+let deleteDialogOpen = $state(false);
+let pendingDeleteIds = $state<string[]>([]);
+let selectedIds = $state<string[]>([]);
+let bulkDeleting = $state(false);
 
 let name = $state('');
-let type = $state('security-camera');
+let type = $state('smoke-alarm');
+let model = $state(getDefaultModelForType('smoke-alarm'));
 let location = $state('');
+
+const availableModels = $derived(getDeviceModelsForType(type));
+
+const filteredDevices = $derived.by(() => {
+  const q = query.trim().toLowerCase();
+  if (!q) return devices;
+
+  return devices.filter((device) => {
+    const reading = lastReadings[device.deviceId];
+    const haystack = [
+      device.name,
+      device.location ?? '',
+      device.status,
+      formatStatus(device.status),
+      device.type,
+      formatDeviceType(device.type, device.configuration),
+      device.deviceId,
+      formatLastReadingPrimary(device.type, reading),
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(q);
+  });
+});
+
+const filteredIds = $derived(filteredDevices.map((device) => device.deviceId));
+const selectedCount = $derived(filteredIds.filter((id) => selectedIds.includes(id)).length);
+const allFilteredSelected = $derived(
+  filteredIds.length > 0 && selectedCount === filteredIds.length
+);
+const someFilteredSelected = $derived(selectedCount > 0 && selectedCount < filteredIds.length);
+
+function isSelected(deviceId: string): boolean {
+  return selectedIds.includes(deviceId);
+}
+
+function toggleSelected(deviceId: string) {
+  if (selectedIds.includes(deviceId)) {
+    selectedIds = selectedIds.filter((id) => id !== deviceId);
+  } else {
+    selectedIds = [...selectedIds, deviceId];
+  }
+}
+
+function toggleSelectAll() {
+  if (allFilteredSelected) {
+    selectedIds = selectedIds.filter((id) => !filteredIds.includes(id));
+  } else {
+    const merged = new Set([...selectedIds, ...filteredIds]);
+    selectedIds = [...merged];
+  }
+}
+
+$effect(() => {
+  const models = getDeviceModelsForType(type);
+  if (!models.some((item) => item.value === model)) {
+    model = getDefaultModelForType(type);
+  }
+});
 
 onMount(() => {
   loadDevices();
@@ -47,8 +112,16 @@ async function loadDevices() {
   loading = true;
   error = '';
   try {
-    const result = await listMyDevices();
-    devices = result.items ?? [];
+    const nextDevices = await listDevices();
+    devices = nextDevices;
+
+    const readingEntries = await Promise.all(
+      nextDevices.map(async (device) => {
+        const readings = await listDeviceReadings(device.deviceId);
+        return [device.deviceId, readings[0] ?? null] as const;
+      })
+    );
+    lastReadings = Object.fromEntries(readingEntries);
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to list devices';
@@ -61,17 +134,18 @@ async function handleCreate() {
   creating = true;
   error = '';
   try {
-    const device = await createDevice({
+    await createDevice({
       name: name.trim(),
       type,
       location: location.trim() || null,
-      configuration: JSON.stringify(getDefaultConfiguration(type)),
+      configuration: JSON.stringify(getDefaultConfiguration(type, model)),
     });
     name = '';
     location = '';
-    type = 'security-camera';
+    type = 'smoke-alarm';
+    model = getDefaultModelForType('smoke-alarm');
     showCreate = false;
-    goto(`/devices/${device.deviceId}`);
+    await loadDevices();
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to register device';
@@ -80,67 +154,80 @@ async function handleCreate() {
   }
 }
 
-function getDefaultConfiguration(deviceType: string) {
-  if (deviceType === 'smart-light') {
-    return { power: 'off', brightness: 50 };
-  }
-  if (deviceType === 'thermostat') {
-    return { targetTemperature: 21, mode: 'auto' };
-  }
-  if (deviceType === 'security-camera') {
-    return {
-      motionDetection: true,
-      captureEnabled: true,
-      captureIntervalSeconds: 30,
-    };
-  }
-  return { reportingIntervalSeconds: 60 };
+function handleDeviceUpdated(updated: Device) {
+  devices = devices.map((item) => (item.deviceId === updated.deviceId ? updated : item));
 }
 
-function openDevice(device: Device) {
-  goto(`/devices/${device.deviceId}`);
+const deleteDialogDescription = $derived.by(() => {
+  if (pendingDeleteIds.length === 0) {
+    return 'Are you sure you want to delete this device? This cannot be undone.';
+  }
+
+  if (pendingDeleteIds.length === 1) {
+    const device = devices.find((item) => item.deviceId === pendingDeleteIds[0]);
+    const label = device?.name ?? 'this device';
+    return `Are you sure you want to delete “${label}”? This cannot be undone.`;
+  }
+
+  return `Are you sure you want to delete ${pendingDeleteIds.length} devices? This cannot be undone.`;
+});
+
+function requestDelete(device: Device) {
+  pendingDeleteIds = [device.deviceId];
+  deleteDialogOpen = true;
+  error = '';
 }
 
-function openDeviceUpdate(device: Device) {
-  goto(`/devices/${device.deviceId}?mode=update`);
+function requestBulkDelete() {
+  const ids = selectedIds.filter((id) => filteredIds.includes(id));
+  if (ids.length === 0) return;
+  pendingDeleteIds = ids;
+  deleteDialogOpen = true;
+  error = '';
 }
 
-async function handleDelete(device: Device) {
-  if (isDummyDevice(device.deviceId)) return;
-  if (!confirm(`Delete ${device.name}? This cannot be undone.`)) return;
+async function confirmDelete() {
+  if (pendingDeleteIds.length === 0) return;
 
-  deletingId = device.deviceId;
+  bulkDeleting = true;
+  deletingId = pendingDeleteIds[0] ?? null;
   error = '';
   try {
-    await deleteDevice(device.deviceId);
+    for (const id of pendingDeleteIds) {
+      deletingId = id;
+      await deleteDevice(id);
+    }
+    const deleted = new Set(pendingDeleteIds);
+    selectedIds = selectedIds.filter((id) => !deleted.has(id));
+    pendingDeleteIds = [];
+    deleteDialogOpen = false;
     await loadDevices();
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to delete device';
   } finally {
     deletingId = null;
+    bulkDeleting = false;
   }
 }
 
-const rowGrid =
-  'grid w-full gap-3 px-4 py-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1fr)_auto] md:items-center md:gap-4';
-const iconButton = 'rounded-sm border-border';
+const checkboxClass = 'device-checkbox';
+const thClass =
+  'px-4 py-3 text-left align-middle text-[0.7rem] font-normal text-muted-foreground uppercase tracking-wide';
+
+let selectAllCheckbox = $state<HTMLInputElement | null>(null);
+
+$effect(() => {
+  if (selectAllCheckbox) {
+    selectAllCheckbox.indeterminate = someFilteredSelected;
+  }
+});
 </script>
 
 <ConsoleShell>
   {#snippet actions()}
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      class="rounded-sm border-border"
-      aria-label={showCreate ? 'Cancel' : 'Register device'}
-      onclick={() => {
-        showCreate = !showCreate;
-        error = '';
-      }}
-    >
-      {#if showCreate}
+    <div class="flex w-full min-w-0 items-center gap-3">
+      <div class="relative min-w-0 flex-1">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -149,29 +236,94 @@ const iconButton = 'rounded-sm border-border';
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"
-          class="size-4"
+          class="pointer-events-none absolute top-1/2 left-0 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden="true"
         >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
+          <circle cx="11" cy="11" r="7" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
-      {:else}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="size-4"
-          aria-hidden="true"
+        <Input
+          id="device-search"
+          type="search"
+          bind:value={query}
+          placeholder="Filter by name, location, status, model…"
+          aria-label="Filter devices"
+          class="rounded-none border-x-0 border-t-0 border-b border-border bg-transparent py-2 pr-0 pl-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-foreground placeholder:text-muted-foreground"
+        />
+      </div>
+      {#if selectedCount > 0}
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          class="shrink-0 rounded-sm border-border text-destructive hover:text-destructive"
+          aria-label="Delete {selectedCount} selected device{selectedCount === 1 ? '' : 's'}"
+          disabled={bulkDeleting}
+          onclick={requestBulkDelete}
         >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+        </Button>
       {/if}
-    </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        class="shrink-0 rounded-sm border-border"
+        aria-label={showCreate ? 'Cancel' : 'Register device'}
+        onclick={() => {
+          showCreate = !showCreate;
+          error = '';
+        }}
+      >
+        {#if showCreate}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+            aria-hidden="true"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        {:else}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4"
+            aria-hidden="true"
+          >
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        {/if}
+      </Button>
+    </div>
   {/snippet}
 
   {#if error}
@@ -191,8 +343,7 @@ const iconButton = 'rounded-sm border-border';
           Register device
         </h2>
         <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
-          Create a new IoT device in your home. The API returns a unique device ID you can use to
-          read, update, or delete it later.
+          Add a smoke alarm, heat alarm, CO alarm, or environmental sensor to your home (Aico HomeLINK).
         </p>
       </div>
 
@@ -201,7 +352,7 @@ const iconButton = 'rounded-sm border-border';
         <Input
           id="name"
           bind:value={name}
-          placeholder="Living Room Camera"
+          placeholder="Hallway Smoke Alarm"
           required
           class={inputMinimal}
         />
@@ -218,6 +369,22 @@ const iconButton = 'rounded-sm border-border';
             <option value={option.value}>{option.label}</option>
           {/each}
         </select>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <Label for="model" class="text-muted-foreground text-xs font-normal">Model</Label>
+        <div class="flex items-center gap-2">
+          <select
+            id="model"
+            bind:value={model}
+            class="h-9 min-w-0 flex-1 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
+          >
+            {#each availableModels as option}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
+          <DeviceModelLink {model} />
+        </div>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -242,139 +409,69 @@ const iconButton = 'rounded-sm border-border';
       <Skeleton class="h-16 w-full rounded-sm bg-muted" />
       <Skeleton class="h-16 w-full rounded-sm bg-muted" />
     </div>
+  {:else if filteredDevices.length === 0}
+    <p class="text-[0.75rem] text-muted-foreground">
+      {#if query.trim()}
+        No devices match “{query.trim()}”.
+      {:else}
+        No devices yet. Use + to register your first device.
+      {/if}
+    </p>
   {:else}
-    {#if isPreview}
-      <p class="mb-6 text-[0.75rem] text-muted-foreground">
-        Sample devices for preview. Use + to register a real device and replace this list.
-      </p>
-    {/if}
-
-    <div class="border-border border-y">
-      <div
-        class="hidden gap-4 border-border border-b px-4 py-3 text-[0.7rem] text-muted-foreground uppercase tracking-widest md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,1fr)_auto] md:items-center"
-      >
-        <span>Device</span>
-        <span>Type</span>
-        <span>Location</span>
-        <span>Status</span>
-        <span>Last seen</span>
-        <span class="text-right">Actions</span>
-      </div>
-
-      <ul class="divide-y divide-border">
-        {#each displayDevices as device (device.deviceId)}
-          <li class={rowGrid}>
-            <div class="min-w-0">
-              <p class="truncate font-medium text-sm">{device.name}</p>
-              <p class="mt-1 truncate text-[0.7rem] text-muted-foreground md:hidden">
-                {device.deviceId}
-              </p>
-              <p class="mt-1 text-[0.7rem] text-muted-foreground">
-                {formatConfigurationSummary(device.configuration)}
-              </p>
-            </div>
-
-            <p class="text-[0.75rem] text-muted-foreground md:text-sm">
-              <span class="md:hidden font-medium text-foreground">Type </span>
-              {formatDeviceType(device.type)}
-            </p>
-
-            <p class="text-[0.75rem] text-muted-foreground md:text-sm">
-              <span class="md:hidden font-medium text-foreground">Location </span>
-              {device.location || '—'}
-            </p>
-
-            <div>
-              <Badge variant="outline" class="rounded-sm font-normal">
-                {formatStatus(device.status)}
-              </Badge>
-            </div>
-
-            <p class="text-[0.75rem] text-muted-foreground md:text-sm">
-              <span class="md:hidden font-medium text-foreground">Last seen </span>
-              {formatWhen(device.lastSeenAt)}
-            </p>
-
-            <div class="flex items-center justify-end gap-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                class={iconButton}
-                aria-label="View {device.name}"
-                onclick={() => openDevice(device)}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-4"
-                  aria-hidden="true"
-                >
-                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                class={iconButton}
-                aria-label="Update {device.name}"
-                onclick={() => openDeviceUpdate(device)}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-4"
-                  aria-hidden="true"
-                >
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                class="{iconButton} text-destructive hover:text-destructive"
-                aria-label="Delete {device.name}"
-                disabled={isDummyDevice(device.deviceId) || deletingId === device.deviceId}
-                onclick={() => handleDelete(device)}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-4"
-                  aria-hidden="true"
-                >
-                  <path d="M3 6h18" />
-                  <path d="M8 6V4h8v2" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                  <line x1="10" y1="11" x2="10" y2="17" />
-                  <line x1="14" y1="11" x2="14" y2="17" />
-                </svg>
-              </Button>
-            </div>
-          </li>
-        {/each}
-      </ul>
+    <div class="overflow-x-auto border-border border-y">
+      <table class="w-full table-fixed border-collapse text-left">
+        <colgroup>
+          <col class="w-[4%]" />
+          <col class="w-[4%]" />
+          <col class="w-[28%]" />
+          <col class="w-[14%]" />
+          <col class="w-[24%]" />
+          <col class="w-[10%]" />
+          <col class="w-[16%]" />
+        </colgroup>
+        <thead>
+          <tr class="border-border border-b">
+            <th class="{thClass} w-10 px-2" aria-label="Expand"></th>
+            <th class="{thClass} w-10 px-3">
+              <input
+                bind:this={selectAllCheckbox}
+                type="checkbox"
+                class={checkboxClass}
+                checked={allFilteredSelected}
+                aria-label="Select all devices"
+                onchange={toggleSelectAll}
+              />
+            </th>
+            <th class={thClass}>Device</th>
+            <th class={thClass}>Location</th>
+            <th class={thClass}>Last reading</th>
+            <th class={thClass}>Status</th>
+            <th class="{thClass} text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          {#each filteredDevices as device (device.deviceId)}
+            <DeviceAccordionRow
+              {device}
+              selected={isSelected(device.deviceId)}
+              lastReading={lastReadings[device.deviceId] ?? null}
+              deleting={deletingId === device.deviceId}
+              onToggleSelect={() => toggleSelected(device.deviceId)}
+              onDelete={() => requestDelete(device)}
+              onUpdated={handleDeviceUpdated}
+            />
+          {/each}
+        </tbody>
+      </table>
     </div>
   {/if}
 </ConsoleShell>
+
+<ConfirmDialog
+  bind:open={deleteDialogOpen}
+  title={pendingDeleteIds.length > 1 ? 'Delete devices?' : 'Delete device?'}
+  description={deleteDialogDescription}
+  confirmLabel="Delete"
+  confirming={bulkDeleting}
+  onConfirm={confirmDelete}
+/>

@@ -8,42 +8,47 @@ import type { Command, Device, DeviceStatus, HomeIssue, Reading } from '@sst-mon
 import { onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
+import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
-import { Badge } from '$lib/components/ui/badge/index.js';
+import DeviceModelLink from '$lib/components/device-model-link.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
-import { Textarea } from '$lib/components/ui/textarea/index.js';
 import {
+  applyModelToConfiguration,
   COMMAND_OPTIONS,
   DEVICE_STATUSES,
+  DEVICE_TYPES,
   formatDeviceType,
   formatStatus,
   formatWhen,
-  getDummyDevice,
-  isDummyDevice,
+  getDefaultConfiguration,
+  getDefaultModelForType,
+  getDeviceModelsForType,
+  inputMinimal,
+  isCarbonMonoxideAlarm,
+  isEnvironmentalSensor,
+  isHeatAlarm,
+  isSmokeAlarm,
+  parseModelFromConfiguration,
+  statusColorClass,
+  supportsReadings,
 } from '$lib/devices';
-import {
-  formatReadingSummary,
-  humidityIssueTitle,
-  issueMatchesDevice,
-  shouldSuggestHumidityIssue,
-} from '$lib/issues';
+import { formatReadingSummary, humidityIssueTitle, shouldSuggestHumidityIssue } from '$lib/issues';
 import {
   createDeviceReading,
   createIssue,
   deleteDevice,
   getDevice,
   listDeviceCommands,
+  listDeviceIssues,
   listDeviceReadings,
-  listMyIssues,
   sendCommand,
   updateDevice,
-} from '$lib/services/graphql';
+} from '$lib/services/devices';
 
 const deviceId = $derived($page.params.id ?? '');
-const isPreview = $derived(isDummyDevice(deviceId));
 
 let device = $state<Device | null>(null);
 let readings = $state<Reading[]>([]);
@@ -54,15 +59,26 @@ let error = $state('');
 let actionError = $state('');
 let saving = $state(false);
 let deleting = $state(false);
+let deleteDialogOpen = $state(false);
 let recording = $state(false);
 let sending = $state(false);
 
+let name = $state('');
+let type = $state('');
+let model = $state('');
+let location = $state('');
 let status = $state<DeviceStatus>('UNKNOWN');
 let configuration = $state('');
 
 let temperature = $state('');
 let humidity = $state('');
+let motionDetected = $state(false);
+let deviceOnline = $state(true);
 let command = $state(COMMAND_OPTIONS[0].value);
+
+const deviceType = $derived(device?.type ?? type);
+const showReadings = $derived(supportsReadings(deviceType));
+const availableModels = $derived(getDeviceModelsForType(type));
 
 onMount(() => {
   loadDevice().then(async () => {
@@ -74,8 +90,21 @@ onMount(() => {
 });
 
 function syncForm(nextDevice: Device) {
+  name = nextDevice.name;
+  type = nextDevice.type;
+  model = parseModelFromConfiguration(nextDevice.configuration, nextDevice.type);
+  location = nextDevice.location ?? '';
   status = nextDevice.status;
   configuration = nextDevice.configuration ?? '';
+}
+
+function handleTypeChange() {
+  model = getDefaultModelForType(type);
+  configuration = JSON.stringify(getDefaultConfiguration(type, model));
+}
+
+function handleModelChange() {
+  configuration = applyModelToConfiguration(configuration, type, model);
 }
 
 async function loadDevice() {
@@ -83,28 +112,17 @@ async function loadDevice() {
   loading = true;
   error = '';
   try {
-    if (isPreview) {
-      const dummy = getDummyDevice(deviceId);
-      device = dummy;
-      if (!dummy) {
-        error = 'Device not found';
-      } else {
-        syncForm(dummy);
-      }
-      return;
-    }
-
     const [deviceResult, readingResult, commandResult, issueResult] = await Promise.all([
       getDevice(deviceId),
       listDeviceReadings(deviceId),
       listDeviceCommands(deviceId),
-      listMyIssues(),
+      listDeviceIssues(deviceId),
     ]);
 
     device = deviceResult;
-    readings = readingResult.items ?? [];
-    commands = commandResult.items ?? [];
-    issues = (issueResult.items ?? []).filter((issue) => issueMatchesDevice(issue, deviceId));
+    readings = readingResult;
+    commands = commandResult;
+    issues = issueResult;
 
     if (!deviceResult) {
       error = 'Device not found';
@@ -120,13 +138,16 @@ async function loadDevice() {
 }
 
 async function handleUpdate() {
-  if (!deviceId || !device || isPreview) return;
+  if (!deviceId || !device) return;
   saving = true;
   actionError = '';
   try {
     const updated = await updateDevice(deviceId, {
+      name: name.trim(),
+      type,
+      location: location.trim() || null,
       status,
-      configuration: configuration.trim() || undefined,
+      configuration: applyModelToConfiguration(configuration, type, model),
     });
     device = updated;
     syncForm(updated);
@@ -138,13 +159,19 @@ async function handleUpdate() {
   }
 }
 
-async function handleDelete() {
-  if (!deviceId || isPreview) return;
-  if (!confirm('Delete this device? This cannot be undone.')) return;
+function requestDelete() {
+  if (!deviceId || !device) return;
+  deleteDialogOpen = true;
+  actionError = '';
+}
+
+async function confirmDelete() {
+  if (!deviceId) return;
   deleting = true;
   actionError = '';
   try {
     await deleteDevice(deviceId);
+    deleteDialogOpen = false;
     goto('/devices');
   } catch (err) {
     console.error(err);
@@ -154,7 +181,7 @@ async function handleDelete() {
 }
 
 async function handleRecordReading() {
-  if (!deviceId || isPreview) return;
+  if (!deviceId || !device) return;
   recording = true;
   actionError = '';
 
@@ -173,16 +200,35 @@ async function handleRecordReading() {
     return;
   }
 
-  if (parsedTemperature == null && parsedHumidity == null) {
+  if (isEnvironmentalSensor(deviceType) && parsedTemperature == null && parsedHumidity == null) {
     actionError = 'Enter at least temperature or humidity';
+    recording = false;
+    return;
+  }
+
+  if (isHeatAlarm(deviceType) && parsedTemperature == null) {
+    actionError = 'Enter a heat reading';
+    recording = false;
+    return;
+  }
+
+  if (isCarbonMonoxideAlarm(deviceType) && parsedTemperature == null) {
+    actionError = 'Enter a CO level in ppm';
     recording = false;
     return;
   }
 
   try {
     const reading = await createDeviceReading(deviceId, {
-      temperature: parsedTemperature,
-      humidity: parsedHumidity,
+      temperature:
+        isEnvironmentalSensor(deviceType) ||
+        isHeatAlarm(deviceType) ||
+        isCarbonMonoxideAlarm(deviceType)
+          ? parsedTemperature
+          : undefined,
+      humidity: isEnvironmentalSensor(deviceType) ? parsedHumidity : undefined,
+      motionDetected: isSmokeAlarm(deviceType) ? motionDetected : undefined,
+      cameraOnline: isSmokeAlarm(deviceType) ? deviceOnline : undefined,
     });
     readings = [reading, ...readings];
     temperature = '';
@@ -201,6 +247,11 @@ async function handleRecordReading() {
         issues = [issue, ...issues];
       }
     }
+
+    const refreshed = await getDevice(deviceId);
+    if (refreshed) {
+      device = refreshed;
+    }
   } catch (err) {
     console.error(err);
     actionError = err instanceof Error ? err.message : 'Failed to record reading';
@@ -210,7 +261,7 @@ async function handleRecordReading() {
 }
 
 async function handleSendCommand() {
-  if (!deviceId || isPreview || !command.trim()) return;
+  if (!deviceId || !command.trim()) return;
   sending = true;
   actionError = '';
   try {
@@ -263,13 +314,6 @@ async function handleSendCommand() {
       Back to devices
     </Button>
   {:else}
-    {#if isPreview}
-      <p class="mb-6 text-[0.75rem] text-muted-foreground">
-        Sample device for preview. Register a real device to record readings, send commands, or
-        update it.
-      </p>
-    {/if}
-
     {#if actionError}
       <p class="mb-6 text-[0.75rem] text-destructive">{actionError}</p>
     {/if}
@@ -279,15 +323,15 @@ async function handleSendCommand() {
         <div>
           <h2 class="font-display font-semibold text-lg tracking-tight">{device.name}</h2>
           <p class="mt-1 text-[0.75rem] text-muted-foreground">
-            {formatDeviceType(device.type)}
+            {formatDeviceType(device.type, device.configuration)}
             {#if device.location}
               · {device.location}
             {/if}
           </p>
         </div>
-        <Badge variant="outline" class="rounded-sm font-normal">
+        <span class="text-sm font-medium {statusColorClass(device.status)}">
           {formatStatus(device.status)}
-        </Badge>
+        </span>
       </div>
 
       <dl class="grid gap-3 text-[0.75rem] text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
@@ -310,72 +354,133 @@ async function handleSendCommand() {
       </dl>
     </section>
 
-    <section class="space-y-6 border-border border-b py-10">
-      <div>
-        <h2 class="font-medium text-muted-foreground text-xs uppercase tracking-widest">
-          Sensor readings
-        </h2>
-        <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
-          Monitor temperature and humidity. Readings above 70% humidity can raise a home issue
-          automatically.
-        </p>
-      </div>
+    {#if showReadings}
+      <section class="space-y-6 border-border border-b py-10">
+        <div>
+          <h2 class="font-medium text-muted-foreground text-xs uppercase tracking-widest">
+            Sensor readings
+          </h2>
+          <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
+            {#if isEnvironmentalSensor(deviceType)}
+              Record temperature and humidity from this Ei1020-style environmental sensor.
+              Readings above 70% humidity can raise a home issue automatically (damp & mould risk).
+            {:else if isSmokeAlarm(deviceType)}
+              Record smoke detection and device connectivity status from this alarm head.
+            {:else if isHeatAlarm(deviceType)}
+              Record ambient heat level readings from this heat alarm.
+            {:else if isCarbonMonoxideAlarm(deviceType)}
+              Record CO level readings. HomeLINK reports Low, Medium, and High CO events via the Gateway.
+            {/if}
+          </p>
+        </div>
 
-      <form
-        class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        onsubmit={(e) => {
-          e.preventDefault();
-          handleRecordReading();
-        }}
-      >
-        <div class="flex flex-col gap-2">
-          <Label for="temperature" class="text-muted-foreground text-xs font-normal">
-            Temperature (°C)
-          </Label>
-          <Input
-            id="temperature"
-            type="number"
-            step="0.1"
-            bind:value={temperature}
-            disabled={isPreview}
-            placeholder="21.5"
-            class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
-          />
-        </div>
-        <div class="flex flex-col gap-2">
-          <Label for="humidity" class="text-muted-foreground text-xs font-normal">
-            Humidity (%)
-          </Label>
-          <Input
-            id="humidity"
-            type="number"
-            step="0.1"
-            bind:value={humidity}
-            disabled={isPreview}
-            placeholder="55"
-            class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
-          />
-        </div>
-        <div class="flex items-end">
-          <Button type="submit" class="rounded-sm" disabled={recording || isPreview}>
-            {recording ? 'Recording…' : 'Record reading'}
-          </Button>
-        </div>
-      </form>
+        <form
+          class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          onsubmit={(e) => {
+            e.preventDefault();
+            handleRecordReading();
+          }}
+        >
+          {#if isEnvironmentalSensor(deviceType)}
+            <div class="flex flex-col gap-2">
+              <Label for="temperature" class="text-muted-foreground text-xs font-normal">
+                Temperature (°C)
+              </Label>
+              <Input
+                id="temperature"
+                type="number"
+                step="0.1"
+                bind:value={temperature}
+                placeholder="21.5"
+                class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+            <div class="flex flex-col gap-2">
+              <Label for="humidity" class="text-muted-foreground text-xs font-normal">
+                Humidity (%)
+              </Label>
+              <Input
+                id="humidity"
+                type="number"
+                step="0.1"
+                bind:value={humidity}
+                placeholder="55"
+                class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+          {:else if isHeatAlarm(deviceType)}
+            <div class="flex flex-col gap-2">
+              <Label for="temperature" class="text-muted-foreground text-xs font-normal">
+                Heat level (°C)
+              </Label>
+              <Input
+                id="temperature"
+                type="number"
+                step="0.1"
+                bind:value={temperature}
+                placeholder="24.5"
+                class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+          {:else if isCarbonMonoxideAlarm(deviceType)}
+            <div class="flex flex-col gap-2">
+              <Label for="temperature" class="text-muted-foreground text-xs font-normal">
+                CO level (ppm)
+              </Label>
+              <Input
+                id="temperature"
+                type="number"
+                step="1"
+                bind:value={temperature}
+                placeholder="12"
+                class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
+              />
+            </div>
+          {:else if isSmokeAlarm(deviceType)}
+            <div class="flex items-center gap-2">
+              <input
+                id="motionDetected"
+                type="checkbox"
+                bind:checked={motionDetected}
+                class="size-4 rounded-sm border border-border"
+              />
+              <Label for="motionDetected" class="text-muted-foreground text-xs font-normal">
+                Smoke detected
+              </Label>
+            </div>
+            <div class="flex items-center gap-2">
+              <input
+                id="deviceOnline"
+                type="checkbox"
+                bind:checked={deviceOnline}
+                class="size-4 rounded-sm border border-border"
+              />
+              <Label for="deviceOnline" class="text-muted-foreground text-xs font-normal">
+                Device online
+              </Label>
+            </div>
+          {/if}
+          <div class="flex items-end">
+            <Button type="submit" class="rounded-sm" disabled={recording}>
+              {recording ? 'Recording…' : 'Record reading'}
+            </Button>
+          </div>
+        </form>
 
-      {#if readings.length > 0}
-        <ul class="divide-y divide-border border-border border-y">
-          {#each readings.slice(0, 8) as reading (reading.readingId)}
-            <li class="flex flex-wrap items-center justify-between gap-3 px-1 py-4">
-              <p class="text-sm">{formatReadingSummary(reading)}</p>
-              <p class="text-[0.7rem] text-muted-foreground">{formatWhen(reading.recordedAt)}</p>
-            </li>
-          {/each}
-        </ul>
-      {:else}
-        <p class="text-[0.75rem] text-muted-foreground">No readings yet.</p>
-      {/if}
-    </section>
+        {#if readings.length > 0}
+          <ul class="divide-y divide-border border-border border-y">
+            {#each readings.slice(0, 8) as reading (reading.readingId)}
+              <li class="flex flex-wrap items-center justify-between gap-3 px-1 py-4">
+                <p class="text-sm">{formatReadingSummary(reading, deviceType)}</p>
+                <p class="text-[0.7rem] text-muted-foreground">{formatWhen(reading.recordedAt)}</p>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="text-[0.75rem] text-muted-foreground">No readings yet.</p>
+        {/if}
+      </section>
+    {/if}
 
     <section class="space-y-6 border-border border-b py-10">
       <div>
@@ -399,15 +504,14 @@ async function handleSendCommand() {
           <select
             id="command"
             bind:value={command}
-            disabled={isPreview}
-            class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground disabled:opacity-50"
+            class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
           >
             {#each COMMAND_OPTIONS as option}
               <option value={option.value}>{option.label}</option>
             {/each}
           </select>
         </div>
-        <Button type="submit" class="rounded-sm" disabled={sending || isPreview}>
+        <Button type="submit" class="rounded-sm" disabled={sending}>
           {sending ? 'Sending…' : 'Send command'}
         </Button>
       </form>
@@ -465,21 +569,61 @@ async function handleSendCommand() {
     <section id="update" class="space-y-6 py-10">
       <div>
         <h2 class="font-medium text-muted-foreground text-xs uppercase tracking-widest">
-          Update status and configuration
+          Update device
         </h2>
         <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
-          Turn a light on or off, adjust a thermostat, or change how the device reports.
+          Change name, type, model, location, or status.
         </p>
       </div>
 
       <div class="grid gap-6 lg:grid-cols-2">
         <div class="flex flex-col gap-2">
+          <Label for="name" class="text-muted-foreground text-xs font-normal">Name</Label>
+          <Input id="name" bind:value={name} required class={inputMinimal} />
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <Label for="type" class="text-muted-foreground text-xs font-normal">Type</Label>
+          <select
+            id="type"
+            bind:value={type}
+            onchange={handleTypeChange}
+            class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
+          >
+            {#each DEVICE_TYPES as option}
+              <option value={option.value}>{option.label}</option>
+            {/each}
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <Label for="model" class="text-muted-foreground text-xs font-normal">Model</Label>
+          <div class="flex items-center gap-2">
+            <select
+              id="model"
+              bind:value={model}
+              onchange={handleModelChange}
+              class="h-9 min-w-0 flex-1 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
+            >
+              {#each availableModels as option}
+                <option value={option.value}>{option.label}</option>
+              {/each}
+            </select>
+            <DeviceModelLink {model} />
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <Label for="location" class="text-muted-foreground text-xs font-normal">Location</Label>
+          <Input id="location" bind:value={location} class={inputMinimal} />
+        </div>
+
+        <div class="flex flex-col gap-2">
           <Label for="status" class="text-muted-foreground text-xs font-normal">Status</Label>
           <select
             id="status"
             bind:value={status}
-            disabled={isPreview}
-            class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground disabled:opacity-50"
+            class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
           >
             {#each DEVICE_STATUSES as option}
               <option value={option.value}>{option.label}</option>
@@ -488,35 +632,16 @@ async function handleSendCommand() {
         </div>
       </div>
 
-      <div class="flex flex-col gap-2">
-        <Label for="configuration" class="text-muted-foreground text-xs font-normal">
-          Configuration
-        </Label>
-        <Textarea
-          id="configuration"
-          bind:value={configuration}
-          disabled={isPreview}
-          rows={6}
-          placeholder={'{"power":"on","brightness":72}'}
-          class="rounded-sm border border-border bg-transparent px-3 py-2 font-mono text-sm placeholder:text-muted-foreground focus-visible:border-foreground focus-visible:outline-none disabled:opacity-50"
-        />
-      </div>
-
       <div class="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          class="rounded-sm"
-          disabled={saving || isPreview}
-          onclick={handleUpdate}
-        >
+        <Button type="button" class="rounded-sm" disabled={saving || !name.trim()} onclick={handleUpdate}>
           {saving ? 'Saving…' : 'Save changes'}
         </Button>
         <Button
           type="button"
           variant="outline"
           class="rounded-sm border-destructive text-destructive"
-          disabled={deleting || isPreview}
-          onclick={handleDelete}
+          disabled={deleting}
+          onclick={requestDelete}
         >
           {deleting ? 'Deleting…' : 'Delete device'}
         </Button>
@@ -524,3 +649,14 @@ async function handleSendCommand() {
     </section>
   {/if}
 </ConsoleShell>
+
+<ConfirmDialog
+  bind:open={deleteDialogOpen}
+  title="Delete device?"
+  description={device
+    ? `Are you sure you want to delete “${device.name}”? This cannot be undone.`
+    : 'Are you sure you want to delete this device? This cannot be undone.'}
+  confirmLabel="Delete"
+  confirming={deleting}
+  onConfirm={confirmDelete}
+/>

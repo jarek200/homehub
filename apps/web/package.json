@@ -37,6 +37,7 @@
   "packageManager": "pnpm@10.20.0",
   "dependencies": {
     "@aws-amplify/api-graphql": "^4.8.8",
+    "@sst-monorepo/core": "workspace:*",
     "@sst-monorepo/graphql": "workspace:*",
     "bits-ui": "^2.18.1"
   }

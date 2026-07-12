@@ -1,12 +1,47 @@
 import type { Device } from '@sst-monorepo/graphql';
 
+/** Aico HomeLINK product categories: smoke, heat, CO, and environmental sensors. */
 export const DEVICE_TYPES = [
-  { value: 'security-camera', label: 'Security camera' },
-  { value: 'thermostat', label: 'Thermostat' },
-  { value: 'smart-light', label: 'Smart light' },
-  { value: 'sensor', label: 'Sensor' },
-  { value: 'other', label: 'Other' },
+  { value: 'smoke-alarm', label: 'Smoke alarm' },
+  { value: 'heat-alarm', label: 'Heat alarm' },
+  { value: 'carbon-monoxide-alarm', label: 'Carbon monoxide alarm' },
+  { value: 'environmental-sensor', label: 'Environmental sensor' },
 ] as const;
+
+export type DeviceType = (typeof DEVICE_TYPES)[number]['value'];
+
+export type DeviceModelOption = {
+  value: string;
+  label: string;
+};
+
+/** Official Aico product pages for each model. */
+export const DEVICE_MODEL_URLS: Record<string, string> = {
+  Ei3016: 'https://www.aico.co.uk/product/ei3016-optical-smoke-alarm/',
+  Ei3024: 'https://www.aico.co.uk/product/ei3024-multi-sensor-fire-alarm/',
+  Ei3014: 'https://www.aico.co.uk/product/ei3014-heat-alarm/',
+  Ei3018: 'https://www.aico.co.uk/product/ei3018-carbon-monoxide-alarm/',
+  Ei3028: 'https://www.aico.co.uk/product/ei3028-multi-sensor-heat-co-alarm/',
+  Ei1020: 'https://www.aico.co.uk/homelink/products/ei1020-environmental-sensor/',
+  Ei1025: 'https://www.aico.co.uk/homelink/products/ei1025-environmental-sensor/',
+};
+
+/** Aico product models per HomeLINK device category. */
+export const DEVICE_MODELS: Record<DeviceType, DeviceModelOption[]> = {
+  'smoke-alarm': [
+    { value: 'Ei3016', label: 'Ei3016 Optical Smoke Alarm' },
+    { value: 'Ei3024', label: 'Ei3024 Multi-Sensor Fire Alarm' },
+  ],
+  'heat-alarm': [{ value: 'Ei3014', label: 'Ei3014 Heat Alarm' }],
+  'carbon-monoxide-alarm': [
+    { value: 'Ei3018', label: 'Ei3018 Carbon Monoxide Alarm' },
+    { value: 'Ei3028', label: 'Ei3028 Heat & CO Alarm' },
+  ],
+  'environmental-sensor': [
+    { value: 'Ei1020', label: 'Ei1020 Temperature & Humidity Sensor' },
+    { value: 'Ei1025', label: 'Ei1025 Temperature, Humidity & CO₂ Sensor' },
+  ],
+};
 
 export const DEVICE_STATUSES = [
   { value: 'ONLINE', label: 'Online' },
@@ -17,80 +52,222 @@ export const DEVICE_STATUSES = [
 const dummyTimestamp = '2026-07-10T14:22:10.000Z';
 
 /**
- * Sample home devices aligned with the interview task:
- * lights, thermostats, and security cameras.
+ * One sample device per Aico HomeLINK category (via Ei1000G Gateway).
  */
 export const DUMMY_DEVICES: Device[] = [
   {
-    deviceId: 'dummy-living-room-camera',
-    name: 'Living Room Camera',
-    type: 'security-camera',
-    location: 'Living Room',
+    deviceId: 'dummy-hallway-smoke-alarm',
+    name: 'Hallway Smoke Alarm',
+    type: 'smoke-alarm',
+    location: 'Hallway',
     status: 'ONLINE',
     configuration: JSON.stringify({
-      motionDetection: true,
-      captureEnabled: true,
-      captureIntervalSeconds: 30,
+      model: 'Ei3016',
+      series: '3000',
+      interconnect: 'RadioLINK+',
+      opticalSensor: true,
+      testIntervalDays: 30,
     }),
     lastSeenAt: dummyTimestamp,
     createdAt: dummyTimestamp,
     updatedAt: dummyTimestamp,
   },
   {
-    deviceId: 'dummy-hallway-light',
-    name: 'Hallway Smart Light',
-    type: 'smart-light',
-    location: 'Hallway',
+    deviceId: 'dummy-kitchen-heat-alarm',
+    name: 'Kitchen Heat Alarm',
+    type: 'heat-alarm',
+    location: 'Kitchen',
     status: 'ONLINE',
-    configuration: JSON.stringify({ power: 'on', brightness: 72 }),
+    configuration: JSON.stringify({
+      model: 'Ei3014',
+      series: '3000',
+      fixedTemperatureC: 58,
+      rateOfRise: true,
+    }),
     lastSeenAt: '2026-07-10T14:18:00.000Z',
     createdAt: dummyTimestamp,
     updatedAt: dummyTimestamp,
   },
   {
-    deviceId: 'dummy-bedroom-thermostat',
-    name: 'Bedroom Thermostat',
-    type: 'thermostat',
-    location: 'Bedroom',
-    status: 'OFFLINE',
-    configuration: JSON.stringify({ targetTemperature: 21, mode: 'heat' }),
-    lastSeenAt: '2026-07-09T22:41:00.000Z',
+    deviceId: 'dummy-landing-co-alarm',
+    name: 'Landing CO Alarm',
+    type: 'carbon-monoxide-alarm',
+    location: 'Landing',
+    status: 'ONLINE',
+    configuration: JSON.stringify({
+      model: 'Ei3018',
+      series: '3000',
+      coThresholdPpm: 50,
+      sensorLifeYears: 10,
+    }),
+    lastSeenAt: '2026-07-10T14:15:00.000Z',
     createdAt: dummyTimestamp,
     updatedAt: dummyTimestamp,
   },
   {
-    deviceId: 'dummy-front-door-camera',
-    name: 'Front Door Camera',
-    type: 'security-camera',
-    location: 'Entrance',
-    status: 'UNKNOWN',
-    configuration: JSON.stringify({ motionDetection: false, captureEnabled: true }),
-    lastSeenAt: null,
+    deviceId: 'dummy-bedroom-env-sensor',
+    name: 'Bedroom Environmental Sensor',
+    type: 'environmental-sensor',
+    location: 'Bedroom',
+    status: 'ONLINE',
+    configuration: JSON.stringify({
+      model: 'Ei1020',
+      series: '1000',
+      reportingIntervalSeconds: 300,
+      temperatureAlertThreshold: 28,
+      humidityAlertThreshold: 70,
+    }),
+    lastSeenAt: '2026-07-10T14:10:00.000Z',
     createdAt: dummyTimestamp,
     updatedAt: dummyTimestamp,
   },
 ];
 
-export function isDummyDevice(deviceId: string): boolean {
-  return deviceId.startsWith('dummy-');
+export function getDeviceModelsForType(type: string): DeviceModelOption[] {
+  return DEVICE_MODELS[type as DeviceType] ?? [];
 }
 
-export function getDummyDevice(deviceId: string): Device | null {
-  return DUMMY_DEVICES.find((device) => device.deviceId === deviceId) ?? null;
+export function getDefaultModelForType(type: string): string {
+  return getDeviceModelsForType(type)[0]?.value ?? '';
 }
 
+export function getDeviceModelLabel(type: string, model: string): string {
+  return getDeviceModelsForType(type).find((item) => item.value === model)?.label ?? model;
+}
+
+export function getDeviceModelUrl(model: string): string | null {
+  return DEVICE_MODEL_URLS[model] ?? null;
+}
+
+export function parseModelFromConfiguration(
+  configuration: string | null | undefined,
+  deviceType: string
+): string {
+  if (!configuration) return getDefaultModelForType(deviceType);
+  try {
+    const parsed = JSON.parse(configuration) as { model?: string };
+    if (parsed.model && getDeviceModelsForType(deviceType).some((m) => m.value === parsed.model)) {
+      return parsed.model;
+    }
+  } catch {
+    // fall through
+  }
+  return getDefaultModelForType(deviceType);
+}
+
+export function applyModelToConfiguration(
+  configuration: string | null | undefined,
+  deviceType: string,
+  model: string
+): string {
+  const defaults = getDefaultConfiguration(deviceType, model);
+  if (!configuration?.trim()) {
+    return JSON.stringify(defaults);
+  }
+  try {
+    const parsed = JSON.parse(configuration) as Record<string, unknown>;
+    return JSON.stringify({ ...defaults, ...parsed, model });
+  } catch {
+    return JSON.stringify(defaults);
+  }
+}
+
+export function getDefaultConfiguration(
+  deviceType: string,
+  model = getDefaultModelForType(deviceType)
+): Record<string, unknown> {
+  if (deviceType === 'smoke-alarm') {
+    return {
+      model,
+      series: '3000',
+      interconnect: 'RadioLINK+',
+      opticalSensor: model !== 'Ei3024',
+      multiSensor: model === 'Ei3024',
+      testIntervalDays: 30,
+    };
+  }
+  if (deviceType === 'heat-alarm') {
+    return {
+      model,
+      series: '3000',
+      fixedTemperatureC: 58,
+      rateOfRise: true,
+    };
+  }
+  if (deviceType === 'carbon-monoxide-alarm') {
+    return {
+      model,
+      series: '3000',
+      coThresholdPpm: 50,
+      sensorLifeYears: 10,
+      dualHeatSensor: model === 'Ei3028',
+    };
+  }
+  if (deviceType === 'environmental-sensor') {
+    return {
+      model,
+      series: '1000',
+      reportingIntervalSeconds: 300,
+      temperatureAlertThreshold: 28,
+      humidityAlertThreshold: 70,
+      co2Monitoring: model === 'Ei1025',
+    };
+  }
+  return { model, reportingIntervalSeconds: 300 };
+}
+
+/** HomeLINK-style remote actions (test, silence, status). */
 export const COMMAND_OPTIONS = [
-  { value: 'capture-image', label: 'Capture image' },
+  { value: 'button-test', label: 'Button test' },
+  { value: 'silence-alarm', label: 'Silence alarm' },
   { value: 'report-status', label: 'Report status' },
-  { value: 'restart', label: 'Restart' },
+  { value: 'restart', label: 'Restart device' },
 ] as const;
 
-export function formatDeviceType(type: string): string {
-  return DEVICE_TYPES.find((t) => t.value === type)?.label ?? type;
+export function isEnvironmentalSensor(type: string): boolean {
+  return type === 'environmental-sensor';
+}
+
+export function isSmokeAlarm(type: string): boolean {
+  return type === 'smoke-alarm';
+}
+
+export function isHeatAlarm(type: string): boolean {
+  return type === 'heat-alarm';
+}
+
+export function isCarbonMonoxideAlarm(type: string): boolean {
+  return type === 'carbon-monoxide-alarm';
+}
+
+export function supportsReadings(type: string): boolean {
+  return (
+    isEnvironmentalSensor(type) ||
+    isSmokeAlarm(type) ||
+    isHeatAlarm(type) ||
+    isCarbonMonoxideAlarm(type)
+  );
+}
+
+export function formatDeviceType(type: string, configuration?: string | null): string {
+  const category = DEVICE_TYPES.find((t) => t.value === type)?.label ?? type;
+  if (!configuration) return category;
+  const model = parseModelFromConfiguration(configuration, type);
+  if (model) {
+    return getDeviceModelLabel(type, model);
+  }
+  return category;
 }
 
 export function formatStatus(status: string): string {
   return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+/** Text color for device status — green Online, red Offline. */
+export function statusColorClass(status: string): string {
+  if (status === 'ONLINE') return 'text-emerald-600 dark:text-emerald-400';
+  if (status === 'OFFLINE') return 'text-red-600 dark:text-red-400';
+  return 'text-muted-foreground';
 }
 
 export function formatWhen(iso: string | null | undefined): string {
@@ -107,15 +284,32 @@ export function formatConfigurationSummary(configuration: string | null | undefi
   try {
     const parsed = JSON.parse(configuration) as Record<string, unknown>;
     const parts: string[] = [];
-    if (parsed.power != null) parts.push(`Power ${String(parsed.power)}`);
-    if (parsed.brightness != null) parts.push(`Brightness ${String(parsed.brightness)}%`);
-    if (parsed.targetTemperature != null) parts.push(`${String(parsed.targetTemperature)}°C`);
-    if (parsed.mode != null) parts.push(String(parsed.mode));
-    if (parsed.motionDetection != null) {
-      parts.push(parsed.motionDetection ? 'Motion on' : 'Motion off');
+    if (parsed.model != null) parts.push(String(parsed.model));
+    if (parsed.multiSensor === true) parts.push('Multi-sensor');
+    if (parsed.dualHeatSensor === true) parts.push('Heat + CO');
+    if (parsed.co2Monitoring === true) parts.push('CO₂ monitoring');
+    if (parsed.series != null) parts.push(`${String(parsed.series)} Series`);
+    if (parsed.interconnect != null) parts.push(String(parsed.interconnect));
+    if (parsed.opticalSensor != null) {
+      parts.push(parsed.opticalSensor ? 'Optical sensor' : 'No optical sensor');
     }
-    if (parsed.captureEnabled != null) {
-      parts.push(parsed.captureEnabled ? 'Capture on' : 'Capture off');
+    if (parsed.fixedTemperatureC != null) {
+      parts.push(`Fixed temp ${String(parsed.fixedTemperatureC)}°C`);
+    }
+    if (parsed.rateOfRise != null) {
+      parts.push(parsed.rateOfRise ? 'Rate-of-rise on' : 'Rate-of-rise off');
+    }
+    if (parsed.coThresholdPpm != null) {
+      parts.push(`CO threshold ${String(parsed.coThresholdPpm)} ppm`);
+    }
+    if (parsed.reportingIntervalSeconds != null) {
+      parts.push(`Reports every ${String(parsed.reportingIntervalSeconds)}s`);
+    }
+    if (parsed.temperatureAlertThreshold != null) {
+      parts.push(`Temp alert ${String(parsed.temperatureAlertThreshold)}°C`);
+    }
+    if (parsed.humidityAlertThreshold != null) {
+      parts.push(`Humidity alert ${String(parsed.humidityAlertThreshold)}%`);
     }
     return parts.length ? parts.join(' · ') : 'Configured';
   } catch {
