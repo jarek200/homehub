@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   pull_request:
-    types: [labeled]
+    types: [labeled, synchronize]
 
 concurrency:
   group: deploy-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
@@ -25,8 +25,92 @@ jobs:
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
           echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
 
-  deploy:
+  invalidate-int-stamp:
+    if: github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Clear int deploy stamp after new commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deployed:int" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+
+  gate:
     needs: setup
+    if: needs.setup.outputs.env_name == 'prod'
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: read
+      pull-requests: write
+    steps:
+      - name: Require successful int deploy for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${SHA:0:7}"
+
+          mapfile -t DEPLOYMENT_IDS < <(
+            gh api \
+              "/repos/${GITHUB_REPOSITORY}/deployments?environment=int&sha=${SHA}&per_page=100" \
+              --jq '.[].id'
+          )
+
+          if [ "${#DEPLOYMENT_IDS[@]}" -eq 0 ]; then
+            echo "::error::Prod deploy blocked: commit ${SHORT_SHA} has not been deployed to int. Label this PR with deploy:int first."
+            gh pr comment "$PR_NUMBER" \
+              --body "Prod deploy blocked: commit \`${SHORT_SHA}\` has not been deployed to **int**. Add the \`deploy:int\` label and wait for it to succeed, then retry \`deploy:prod\`." \
+              --repo "$GITHUB_REPOSITORY"
+            gh label create "deploy-blocked:prod" \
+              --color "fbca04" \
+              --description "Prod deploy blocked — int deploy required first" \
+              --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+            gh pr edit "$PR_NUMBER" \
+              --remove-label "deploy:prod" \
+              --add-label "deploy-blocked:prod" \
+              --repo "$GITHUB_REPOSITORY"
+            exit 1
+          fi
+
+          for id in "${DEPLOYMENT_IDS[@]}"; do
+            STATE=$(gh api \
+              "/repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" \
+              --jq '.[0].state')
+            if [ "$STATE" = "success" ]; then
+              echo "Found successful int deployment (deployment id ${id}) for commit ${SHORT_SHA}."
+              exit 0
+            fi
+          done
+
+          echo "::error::Prod deploy blocked: int deployment for commit ${SHORT_SHA} did not succeed."
+          gh pr comment "$PR_NUMBER" \
+            --body "Prod deploy blocked: the latest int deployment for commit \`${SHORT_SHA}\` did not succeed. Re-run \`deploy:int\`, then retry \`deploy:prod\`." \
+            --repo "$GITHUB_REPOSITORY"
+          gh label create "deploy-blocked:prod" \
+            --color "fbca04" \
+            --description "Prod deploy blocked — int deploy required first" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deploy:prod" \
+            --add-label "deploy-blocked:prod" \
+            --repo "$GITHUB_REPOSITORY"
+          exit 1
+
+  deploy:
+    needs:
+      - setup
+      - gate
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.setup.outputs.env_name == 'int' || needs.gate.result == 'success')
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.env_name }}
     permissions:
@@ -68,6 +152,20 @@ jobs:
           echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
       - run: pnpm exec sst unlock --stage ${{ needs.setup.outputs.env_name }}
       - run: pnpm exec sst deploy --stage ${{ needs.setup.outputs.env_name }}
+      - name: Mark int deploy complete
+        if: success() && needs.setup.outputs.env_name == 'int'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh label create "deployed:int" \
+            --color "0e8a16" \
+            --description "This commit was successfully deployed to int" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deploy:int" \
+            --add-label "deployed:int" \
+            --repo "$GITHUB_REPOSITORY"
       - name: Swap label to error on failure
         if: failure()
         env:
@@ -108,4 +206,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
           gh pr edit "$PR_NUMBER" \
             --remove-label "deploy:prod" \
+            --remove-label "deploy-blocked:prod" \
             --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
