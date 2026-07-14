@@ -3,7 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".svelte-kit/**", "build/**", "generated/**"]
+      "outputs": ["dist/**", ".svelte-kit/**", "build/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"],
@@ -13,9 +13,6 @@
     "test": {
       "inputs": ["src/**/*.ts", "**/*.test.ts", "**/*.spec.ts", "vitest.config.ts"],
       "outputs": ["coverage/**"]
-    },
-    "codegen": {
-      "outputs": ["generated/**"]
     },
     "dev": {
       "cache": false,

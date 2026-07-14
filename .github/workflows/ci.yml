@@ -13,9 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-env
-      - run: pnpm codegen
-      - name: Check for codegen drift
-        run: git diff --exit-code packages/graphql/generated
       - run: pnpm lint
       - run: pnpm typecheck
 
@@ -25,6 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-env
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
       - run: pnpm test
 
   build:

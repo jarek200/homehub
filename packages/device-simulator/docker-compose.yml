@@ -1,0 +1,11 @@
+services:
+  simulator:
+    build: .
+    restart: unless-stopped
+    environment:
+      TABLE_NAME: ${TABLE_NAME}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+      AWS_REGION: ${AWS_REGION:-eu-west-2}
+      IOT_ENDPOINT: ${IOT_ENDPOINT}
+      CERT_DIR: /tmp/certs
+    network_mode: host

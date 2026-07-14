@@ -1,8 +1,8 @@
 <svelte:head>
-  <title>Sign in — SST Monorepo Starter</title>
+  <title>Sign in — HomeHub</title>
   <meta
     name="description"
-    content="Sign in or create an account. Authentication powered by AWS Cognito."
+    content="Sign in or create a HomeHub account. Authentication powered by AWS Cognito."
   />
 </svelte:head>
 
@@ -22,7 +22,7 @@ import { page as pageStore } from '$app/stores';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
-import { getMyProfile } from '$lib/services/graphql';
+import { getMyProfile } from '$lib/services/rest-api';
 import { auth } from '$lib/stores/auth';
 
 let email = $state('');
@@ -48,7 +48,7 @@ $effect(() => {
       const session = await fetchAuthSession();
 
       if (user && session.tokens) {
-        const redirect = $pageStore.url.searchParams.get('redirect') || '/dashboard';
+        const redirect = $pageStore.url.searchParams.get('redirect') || '/devices';
         goto(redirect, { replaceState: true });
       }
     } catch {
@@ -97,7 +97,7 @@ async function handleSubmit() {
           );
 
           await tick();
-          const redirect = $pageStore.url.searchParams.get('redirect') || '/dashboard';
+          const redirect = $pageStore.url.searchParams.get('redirect') || '/devices';
           goto(redirect, { replaceState: true });
           return;
         }
@@ -144,7 +144,7 @@ async function handleSubmit() {
         );
 
         await tick();
-        const redirect = $pageStore.url.searchParams.get('redirect') || '/dashboard';
+        const redirect = $pageStore.url.searchParams.get('redirect') || '/devices';
         goto(redirect, { replaceState: true });
       }
     } else {
@@ -199,7 +199,7 @@ async function handleSubmit() {
           );
 
           await tick();
-          const redirect = $pageStore.url.searchParams.get('redirect') || '/dashboard';
+          const redirect = $pageStore.url.searchParams.get('redirect') || '/devices';
           goto(redirect, { replaceState: true });
         } catch {
           isLogin = true;
@@ -258,13 +258,7 @@ function toggleMode() {
     }}
   >
     <div>
-      <button
-        type="button"
-        class="text-muted-foreground text-xs underline decoration-muted-foreground/60 underline-offset-4 hover:text-foreground"
-        onclick={() => goto('/')}
-      >
-        ← Back
-      </button>
+      <p class="font-display font-semibold text-base tracking-tight">HomeHub</p>
     </div>
 
     {#if needsConfirmation}

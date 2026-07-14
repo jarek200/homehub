@@ -13,15 +13,17 @@
  *
  * You can also override per-stage profiles via env vars without touching
  * this file:
- *   AWS_PROFILE_DEV=my-dev-profile pnpm exec sst deploy --stage dev
+ *   AWS_PROFILE_INT=homehub-int pnpm exec sst deploy --stage int
  *
- * Default `dev` uses profile **default** — typical when keys live only in
- * ~/.aws/credentials under [default]. Use AWS_PROFILE_DEV=dev (etc.) for named profiles.
+ * Accounts:
+ *   int  (and personal sst dev stages) → homehub-int  (800309353529)
+ *   prod                               → homehub-prod (570064632535)
+ *
+ * Log in first: pnpm sso
  */
 const STAGE_PROFILES: Record<string, string> = {
-  dev: process.env.AWS_PROFILE_DEV ?? 'default',
-  stage: process.env.AWS_PROFILE_STAGE ?? 'stage',
-  prod: process.env.AWS_PROFILE_PROD ?? 'prod',
+  int: process.env.AWS_PROFILE_INT ?? 'homehub-int',
+  prod: process.env.AWS_PROFILE_PROD ?? 'homehub-prod',
 };
 
 export default $config({
@@ -29,7 +31,7 @@ export default $config({
     const stage = input?.stage ?? 'dev';
 
     return {
-      name: 'sst-monorepo-starter',
+      name: 'homehub',
       /**
        * Retain all resources in prod to prevent accidental data loss.
        * All other stages (dev, stage, feature branches) are cleaned up on remove.
@@ -49,7 +51,7 @@ export default $config({
            * Remove any AWS_PROFILE from your shell / .env if you want this
            * mapping to be effective locally.
            */
-          profile: process.env.CI ? undefined : (STAGE_PROFILES[stage] ?? STAGE_PROFILES.dev),
+          profile: process.env.CI ? undefined : (STAGE_PROFILES[stage] ?? STAGE_PROFILES.int),
         },
       },
     };
@@ -59,17 +61,19 @@ export default $config({
     const { createStorage } = await import('./infra/storage');
     const { createUserProfile } = await import('./infra/functions');
     const { createAuth } = await import('./infra/auth');
-    const { createApi, createDataSource } = await import('./infra/api/api-setup');
-    const { addAllResolvers } = await import('./infra/api/resolvers');
+    const { createRestApi } = await import('./infra/rest-api');
+    const { createIotProvisioning } = await import('./infra/iot-provisioning');
+    const { createIotTelemetry } = await import('./infra/iot-telemetry');
+    const { createDeviceSimulator } = await import('./infra/device-simulator');
     const { stageConfig } = await import('./infra/stage-config');
 
     const { table } = createStorage();
     const createUserProfileFunction = createUserProfile(table);
     const { auth, authClient } = createAuth(createUserProfileFunction);
-    const api = createApi(auth);
-    const dynamoDataSource = createDataSource(api, table);
-
-    addAllResolvers(api, dynamoDataSource, String(table.name));
+    const iotProvisioning = createIotProvisioning(table);
+    const deviceSimulator = createDeviceSimulator(table, iotProvisioning);
+    const iotTelemetry = createIotTelemetry(table);
+    const restApi = createRestApi(table, auth, iotProvisioning);
 
     const webAppUrl = getWebAppUrl();
     const webDomain = getWebDomainConfig();
@@ -95,14 +99,14 @@ export default $config({
       VITE_AWS_REGION: aws.getRegionOutput().name,
       VITE_USER_POOL_ID: auth.id,
       VITE_USER_POOL_CLIENT_ID: authClient.id,
-      VITE_GRAPHQL_ENDPOINT: api.url,
+      VITE_REST_API_URL: restApi.url,
       VITE_STAGE: $app.stage,
       VITE_APP_URL: webAppUrl,
     };
 
     const web = new sst.aws.SvelteKit('Web', {
       path: 'apps/web',
-      link: [table, auth, authClient, api],
+      link: [table, auth, authClient, restApi],
       transform: svelteKitTransform,
       environment: sharedEnv,
       ...(webDomain ? { domain: webDomain } : {}),
@@ -112,9 +116,19 @@ export default $config({
       table: table.name,
       userPoolId: auth.id,
       userPoolClientId: authClient.id,
-      apiUrl: api.url,
+      restApiUrl: restApi.url,
       webUrl: web.url,
       webAppUrl: webAppUrl ?? web.url,
+      simulatorQueueUrl: iotProvisioning.simulatorQueue.url,
+      iotEndpoint: iotProvisioning.iotEndpoint.endpointAddress,
+      provisionStateMachineArn: iotProvisioning.stateMachine.arn,
+      telemetryBucket: iotTelemetry.telemetryBucket.bucket,
+      ...(deviceSimulator
+        ? {
+            deviceSimulatorServiceName: deviceSimulator.serviceName,
+            deviceSimulatorEcrUrl: deviceSimulator.imageUri,
+          }
+        : {}),
     };
   },
 });

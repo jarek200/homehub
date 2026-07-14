@@ -1,7 +1,6 @@
 import { derived, writable } from 'svelte/store';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
-import { resetGraphQLClient } from '../services/graphql';
 
 export interface User {
   id: string;
@@ -58,8 +57,6 @@ const createAuthStore = () => {
         } catch (_e) {
           // Ignore
         }
-        // Reset GraphQL client to prevent cache leaks when switching accounts
-        resetGraphQLClient();
         goto('/login');
       }
     },

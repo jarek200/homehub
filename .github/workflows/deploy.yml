@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   pull_request:
-    types: [labeled]
+    types: [labeled, synchronize]
 
 concurrency:
   group: deploy-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
@@ -25,14 +25,121 @@ jobs:
           echo "env_name=$ENV_NAME" >> $GITHUB_OUTPUT
           echo "env_upper=$ENV_UPPER" >> $GITHUB_OUTPUT
 
-  deploy:
+  invalidate-int-stamp:
+    if: github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Clear int deploy stamp after new commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deployed:int" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          mapfile -t STALE_LABELS < <(
+            gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --json labels --jq '.labels[].name | select(startswith("int-deployed-"))'
+          )
+          for label in "${STALE_LABELS[@]}"; do
+            gh pr edit "$PR_NUMBER" \
+              --remove-label "$label" \
+              --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          done
+
+  gate:
     needs: setup
+    if: needs.setup.outputs.env_name == 'prod'
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: read
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Require successful int deploy for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          SHORT_HEAD="${HEAD_SHA:0:7}"
+          STAMP_LABEL="int-deployed-${SHORT_HEAD}"
+
+          has_successful_deployment() {
+            local sha="$1"
+            mapfile -t ids < <(
+              gh api \
+                "/repos/${GITHUB_REPOSITORY}/deployments?environment=int&sha=${sha}&per_page=100" \
+                --jq '.[].id'
+            )
+            for id in "${ids[@]}"; do
+              local state
+              state=$(gh api \
+                "/repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses" \
+                --jq '.[0].state')
+              if [ "$state" = "success" ]; then
+                echo "Found successful int deployment (id ${id}) for ${sha:0:7}."
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          if gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json labels --jq -e --arg l "$STAMP_LABEL" '.labels[].name | select(. == $l)' >/dev/null; then
+            echo "PR has ${STAMP_LABEL} — int deploy verified."
+            exit 0
+          fi
+
+          if has_successful_deployment "$HEAD_SHA" || has_successful_deployment "$MERGE_SHA"; then
+            exit 0
+          fi
+
+          if gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json labels --jq -e '.labels[].name | select(. == "deployed:int")' >/dev/null; then
+            RUN_ID=$(gh api \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?branch=${HEAD_REF}&event=pull_request&status=success&per_page=20" \
+              --jq "[.workflow_runs[] | select(.head_sha == \"${HEAD_SHA}\")][0].id // empty")
+            if [ -n "$RUN_ID" ]; then
+              echo "Found successful int deploy workflow run ${RUN_ID} for head ${SHORT_HEAD}."
+              exit 0
+            fi
+          fi
+
+          echo "::error::Prod deploy blocked: commit ${SHORT_HEAD} has not been deployed to int. Label this PR with deploy:int first."
+          gh pr comment "$PR_NUMBER" \
+            --body "Prod deploy blocked: commit \`${SHORT_HEAD}\` has not been deployed to **int**. Add the \`deploy:int\` label and wait for it to succeed, then retry \`deploy:prod\`." \
+            --repo "$GITHUB_REPOSITORY"
+          gh label create "deploy-blocked:prod" \
+            --color "fbca04" \
+            --description "Prod deploy blocked — int deploy required first" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deploy:prod" \
+            --add-label "deploy-blocked:prod" \
+            --repo "$GITHUB_REPOSITORY"
+          exit 1
+
+  deploy:
+    needs:
+      - setup
+      - gate
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      (needs.setup.outputs.env_name == 'int' || needs.gate.result == 'success')
     runs-on: ubuntu-latest
     environment: ${{ needs.setup.outputs.env_name }}
     permissions:
       id-token: write
       contents: read
       pull-requests: write
+      deployments: write
     env:
       APP_URL: ${{ vars[format('APP_URL_{0}', needs.setup.outputs.env_upper)] || secrets[format('APP_URL_{0}', needs.setup.outputs.env_upper)] }}
       APPS_HOSTED_ZONE_ID: ${{ vars.APPS_HOSTED_ZONE_ID || secrets.APPS_HOSTED_ZONE_ID }}
@@ -43,13 +150,18 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets[format('AWS_ROLE_ARN_{0}', needs.setup.outputs.env_upper)] }}
-          aws-region: us-east-1
+          aws-region: eu-west-1
       - uses: pnpm/action-setup@v5.0.0
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'pnpm'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
       - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages
       - name: Assume cross-account DNS role
         if: env.DNS_ROLE_ARN != ''
         run: |
@@ -63,6 +175,54 @@ jobs:
           echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
       - run: pnpm exec sst unlock --stage ${{ needs.setup.outputs.env_name }}
       - run: pnpm exec sst deploy --stage ${{ needs.setup.outputs.env_name }}
+      - name: Mark int deploy complete
+        if: success() && needs.setup.outputs.env_name == 'int'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          SHORT_HEAD="${HEAD_SHA:0:7}"
+          STAMP_LABEL="int-deployed-${SHORT_HEAD}"
+
+          mapfile -t STALE_LABELS < <(
+            gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --json labels --jq '.labels[].name | select(startswith("int-deployed-"))'
+          )
+          for label in "${STALE_LABELS[@]}"; do
+            gh pr edit "$PR_NUMBER" \
+              --remove-label "$label" \
+              --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          done
+
+          gh label create "$STAMP_LABEL" \
+            --color "0e8a16" \
+            --description "This commit was successfully deployed to int" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh label create "deployed:int" \
+            --color "0e8a16" \
+            --description "Latest commit on this PR was deployed to int" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deploy:int" \
+            --add-label "$STAMP_LABEL" \
+            --add-label "deployed:int" \
+            --repo "$GITHUB_REPOSITORY"
+
+          for sha in "$HEAD_SHA" "$MERGE_SHA"; do
+            DEPLOYMENT_ID=$(gh api --method POST \
+              "/repos/${GITHUB_REPOSITORY}/deployments" \
+              -f ref="$sha" \
+              -f environment="int" \
+              -F auto_merge=false \
+              -f description="Int deploy from PR #${PR_NUMBER}" \
+              --jq '.id') || continue
+            gh api --method POST \
+              "/repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
+              -f state=success \
+              -f description="SST deploy succeeded" || true
+          done
       - name: Swap label to error on failure
         if: failure()
         env:
@@ -78,3 +238,30 @@ jobs:
             --remove-label "deploy:${ENV_NAME}" \
             --add-label "deploy-failed:${ENV_NAME}" \
             --repo "$GITHUB_REPOSITORY"
+
+  merge-to-main:
+    name: Merge to main
+    needs: [setup, deploy]
+    if: needs.setup.outputs.env_name == 'prod' && needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge PR into main after successful prod deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          BASE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
+          if [ "$BASE" != "main" ]; then
+            echo "PR #$PR_NUMBER targets '$BASE', not main — skipping auto-merge."
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" \
+            --merge \
+            --repo "$GITHUB_REPOSITORY"
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deploy:prod" \
+            --remove-label "deploy-blocked:prod" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true

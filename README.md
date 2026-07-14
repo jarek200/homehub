@@ -1,325 +1,340 @@
-# SST Monorepo Starter
+# HomeHub — Smart Home IoT Hub
 
-> Template Repository — click "Use this template" to create a new project from this starter
+HomeHub is a smart-home device management platform built for a technical interview task: a **RESTful IoT API**, persistent state, error handling, infrastructure-as-code, and a **stretch frontend** for managing devices remotely.
 
-A modern, production-ready platform template for building full-stack serverless applications on AWS with multi-environment support.
+It also includes a lightweight **home issues** layer (inspired by housing IoT case workflows) where high humidity readings can automatically raise actionable issues.
 
-- **Frontend**: SvelteKit 2 + TypeScript + Tailwind CSS
-- **Backend**: AWS AppSync (GraphQL) with JavaScript resolvers
-- **Database**: DynamoDB (single-table design)
-- **Authentication**: AWS Cognito User Pools
-- **Infrastructure**: SST v4 with Pulumi
-- **Monorepo**: pnpm workspaces + Turborepo (task caching)
-- **Agents (optional)**: `packages/agent-core` — Python + Strands + **Bedrock AgentCore** starter toolkit (`pnpm agent:python`, then `agentcore` CLI — see `packages/agent-core/README.md`) + Cursor rule **Python AgentCore**
+## What this delivers
 
-## Architecture overview
+| Interview requirement | Implementation |
+|---|---|
+| Register a device | `POST /devices` |
+| List all devices | `GET /devices` |
+| Get device details | `GET /devices/{deviceId}` |
+| Update device status/config | `PATCH /devices/{deviceId}` |
+| Delete a device | `DELETE /devices/{deviceId}` |
+| State + history storage | DynamoDB single-table design |
+| Error handling | `400` validation errors, `404` not found, consistent JSON error shape |
+| Stretch frontend | SvelteKit console (Cognito auth + REST API) |
+| IaC deployment | SST v4 (Lambda + API Gateway + DynamoDB + Cognito) |
+
+## Architecture
 
 ```
-pnpm workspace (root)
-├── apps/web          SvelteKit web app — landing, login, dashboard (SST SvelteKit component)
-├── packages/         Shared code (core, graphql, functions, agent-core)
-├── infra/            SST infrastructure modules (AppSync, Cognito, DynamoDB)
-├── platform/webiny   Optional Webiny CMS — Yarn toolchain; not part of pnpm (see platform/webiny/README.md)
-└── sst.config.ts     SST v4 config — stage-aware, multi-account
+Reviewers / curl                HomeHub web app (SvelteKit)
+       |                                  |
+       | X-Api-Key                        | Cognito JWT
+       v                                  v
+              REST API (API Gateway HTTP)
+                         |
+                         v
+                 DynamoDB (single table)
 ```
 
-## Environments
+- **REST API** — the only backend surface. Device/issue data is scoped per user hub (`HUB#{cognitoSub}`). Reviewers can `curl` with `X-Api-Key` (demo tenant); the signed-in UI sends a Cognito ID token.
+- **Cognito** — sign up / sign in for the web app. User profiles live under `USER#...`.
+- **DynamoDB** — shared storage using composite `PK` / `SK` keys. Devices start empty until registered via `POST /devices`.
+- **SST v4** — infrastructure in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
 
-Three first-class stages, each targeting an isolated AWS account:
+## Tech stack
 
-| Stage   | Purpose                     | AWS account  | Removal policy |
-|---------|-----------------------------|--------------|----------------|
-| `dev`   | Daily development work      | dev account  | `remove`       |
-| `stage` | Pre-production validation   | stage account| `remove`       |
-| `prod`  | Live production             | prod account | `retain`       |
-
-Any other stage name (e.g. `jarek`, `feature-x`) falls back to the `dev` AWS profile and
-uses the `remove` policy — safe for short-lived personal stacks.
+- **Frontend**: SvelteKit 2, TypeScript, Tailwind CSS, Amplify Auth (Cognito only)
+- **REST API**: FastAPI on AWS Lambda (Python 3.13) via API Gateway HTTP API
+- **Database**: DynamoDB
+- **Monorepo**: pnpm workspaces + Turborepo
+- **Validation / tests**: Pydantic + pytest (REST), Vitest (shared TS types)
 
 ## Prerequisites
 
-- **Node.js 24** (`nvm install 24`)
-- **pnpm** (`npm install -g pnpm`)
-- **AWS CLI** and SSO configured (see [Local AWS setup](#local-aws-setup))
+- Node.js 24
+- pnpm
+- Python 3.13 + [uv](https://docs.astral.sh/uv/) (for the FastAPI REST API)
+- AWS CLI with SSO (for deploy / `sst dev`)
 
-## Quick Start
-
-### 1. Install dependencies
+## Quick start
 
 ```bash
 nvm use
 pnpm install
+uv sync --all-packages   # install Python deps for the REST API Lambda (required for sst dev)
+pnpm sso          # AWS SSO login
+pnpm dev          # SST dev (int stack + web hot reload + Lightsail simulator auto-deploy)
 ```
 
-### 2. Local AWS setup
+Register a device in the UI → Step Functions provisions cert/Thing → Lightsail simulator picks up `DEVICE_READY` → readings appear.
 
-Follow [SST's AWS accounts guide](https://sst.dev/docs/aws-accounts) to set up AWS Organizations
-with SSO. Then configure `~/.aws/config`:
-
-```ini
-[sso-session acme]
-sso_start_url  = https://acme.awsapps.com/start
-sso_region     = us-east-1
-
-[profile acme-dev]
-sso_session    = acme
-sso_account_id = 111111111111
-sso_role_name  = AdministratorAccess
-region         = us-east-1
-
-[profile acme-stage]
-sso_session    = acme
-sso_account_id = 222222222222
-sso_role_name  = AdministratorAccess
-region         = us-east-1
-
-[profile acme-prod]
-sso_session    = acme
-sso_account_id = 333333333333
-sso_role_name  = AdministratorAccess
-region         = us-east-1
-```
-
-Log in:
+**Optional local simulator** (instead of Lightsail):
 
 ```bash
-pnpm sso
-# Or: aws sso login --sso-session=acme
+HOMEHUB_SKIP_SIMULATOR=true pnpm dev   # terminal 1
+pnpm dev:simulator                     # terminal 2
 ```
 
-Rename the profile keys in `sst.config.ts` (`STAGE_PROFILES` map at the top) to match your
-actual profile names.
-
-### 3. Start development
+To stub IoT (READY without cert/Thing) for faster UI-only work:
 
 ```bash
-pnpm dev   # SST dev multiplexer: deploys infra + starts SvelteKit with hot reload
+HOMEHUB_SKIP_IOT_PROVISIONING=true pnpm dev
 ```
 
-`pnpm dev` automatically injects environment variables — no `.env` file needed.
-
-### 4. Deploy per environment
+Force rebuild/redeploy the Lightsail simulator image:
 
 ```bash
-pnpm deploy:dev    # deploy to dev account
-pnpm deploy:stage  # deploy to stage account
-pnpm deploy:prod   # deploy to prod account
+HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
 ```
 
-Or with the SST CLI directly:
+For frontend-only local work against an already-deployed backend:
 
 ```bash
-pnpm exec sst deploy --stage dev
-pnpm exec sst deploy --stage stage
-pnpm exec sst deploy --stage prod
+pnpm dev:local
 ```
 
-## New project checklist
+## REST API
 
-After creating a repository from this template, do these before shipping:
+After `pnpm dev` or `pnpm deploy:int`, SST prints `restApiUrl`. Signed-in device endpoints use the caller's hub (`HUB#{sub}`).
 
-- Rename project metadata in root and app `package.json` files.
-- Update AWS account IDs, profile names, and role ARNs in `sst.config.ts` and GitHub Environments.
-- If you use delegated app domains, set `APP_URL`, `APPS_HOSTED_ZONE_ID`, and `DNS_ROLE_ARN` in each GitHub Environment.
-- Create the required PR labels (`deploy:dev`, `deploy:stage`, `deploy:prod`).
-- Enable **branch protection rules** on `main` (see [Branch protection](#branch-protection) below).
-- Review defaults in `infra/` (domain names, auth settings, table names, retention policy).
-- Run `pnpm verify` and make sure CI passes before first deployment.
+Set the base URL once:
+
+```bash
+export REST_API_URL="https://your-api-id.execute-api.region.amazonaws.com"
+```
+
+### Register a device
+
+```bash
+curl -s -X POST "$REST_API_URL/devices" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Living Room Camera","type":"security-camera","location":"Living Room","configuration":"{\"motionDetection\":true}"}'
+```
+
+Returns the full device including a server-generated ULID as `deviceId`.
+
+### List devices
+
+```bash
+curl -s "$REST_API_URL/devices"
+```
+
+### Get device details
+
+```bash
+curl -s "$REST_API_URL/devices/{deviceId}"
+```
+
+### Update device status / configuration
+
+```bash
+curl -s -X PATCH "$REST_API_URL/devices/{deviceId}" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"ONLINE","configuration":"{\"power\":\"on\",\"brightness\":80}"}'
+```
+
+### Delete a device
+
+```bash
+curl -s -X DELETE "$REST_API_URL/devices/{deviceId}"
+```
+
+### Record a sensor reading
+
+```bash
+curl -s -X POST "$REST_API_URL/devices/{deviceId}/readings" \
+  -H "Content-Type: application/json" \
+  -d '{"temperature":21.5,"humidity":74}'
+```
+
+Readings with humidity ≥ 70% automatically create an open home issue (if none exists for that device).
+
+### List readings
+
+```bash
+curl -s "$REST_API_URL/devices/{deviceId}/readings"
+```
+
+### Send a remote command
+
+```bash
+curl -s -X POST "$REST_API_URL/devices/{deviceId}/commands" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"capture-image"}'
+```
+
+### List commands
+
+```bash
+curl -s "$REST_API_URL/devices/{deviceId}/commands"
+```
+
+### Home issues (stretch)
+
+```bash
+curl -s "$REST_API_URL/issues"
+curl -s -X POST "$REST_API_URL/issues" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Condensation in bedroom","severity":"HIGH","status":"OPEN"}'
+```
+
+### User profile (web app)
+
+```bash
+# Requires Cognito ID token from a signed-in session
+curl -s "$REST_API_URL/me" -H "Authorization: Bearer $ID_TOKEN"
+curl -s -X PATCH "$REST_API_URL/me" \
+  -H "Authorization: Bearer $ID_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Jarek","bio":"HomeHub demo"}'
+```
+
+### Authentication
+
+| Client | Header |
+|---|---|
+| Reviewer curl | `X-Api-Key: your-review-key` (when `REST_API_KEY` is set at deploy) |
+| Web app | `Authorization: Bearer <Cognito ID token>` |
+
+Set `REST_API_KEY` before deploy to require the key for curl:
+
+```bash
+REST_API_KEY=your-review-key pnpm deploy:int
+curl -s "$REST_API_URL/devices" -H "X-Api-Key: your-review-key"
+```
+
+## Web app (stretch frontend)
+
+1. Open the deployed web URL (or local dev URL from SST).
+2. Sign up / sign in with Cognito.
+3. Use **Devices** to register, view, update, toggle on/off, and delete IoT devices.
+4. Use **Issues** to track home problems raised from sensor data.
+5. Use **Account** to edit your profile.
 
 ## Project structure
 
 ```
-sst-monorepo/
-├── apps/
-│   └── web/                      SvelteKit UI
-│       ├── src/
-│       │   ├── lib/
-│       │   │   ├── components/ui/  UI components
-│       │   │   ├── services/       GraphQL service
-│       │   │   └── stores/         Auth store
-│       │   └── routes/
-│       │       ├── +page.svelte    Landing
-│       │       ├── login/          Sign in / sign up
-│       │       └── (protected)/dashboard/  Post-login dashboard
-│       └── package.json
-├── packages/
-│   ├── core/                     Shared types and utilities
-│   ├── functions/                Lambda functions
-│   │   └── auth/                 User profile creation trigger
-│   └── graphql/                  GraphQL schema + codegen output
-├── infra/                        SST infrastructure modules
-│   ├── storage.ts                DynamoDB table
-│   ├── functions.ts              Lambda function definitions
-│   ├── auth.ts                   Cognito User Pool
-│   └── api/
-│       ├── api-setup.ts          AppSync API and data sources
-│       └── resolvers/            GraphQL resolvers (JS, AppSync-native)
-│           ├── index.ts
-│           └── users.ts
-├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml                Quality gate (lint, typecheck, test, build)
-│   │   └── deploy.yml            Label-driven deploy pipeline
-│   └── dependabot.yml            Automated dependency updates
-├── sst.config.ts                 SST v4 config (stages, accounts, resources)
-├── turbo.json                    Turborepo task pipeline (build, typecheck, test, codegen)
-├── LICENSE
-└── package.json
+apps/web/                  SvelteKit console (devices, issues, account)
+packages/rest-api/         FastAPI REST API (Python, interview deliverable)
+packages/core/             Shared TypeScript domain types
+packages/functions/        Node.js Lambdas (Cognito post-confirmation)
+infra/                     SST modules (auth, storage, REST API)
+sst.config.ts              Infrastructure entry point
 ```
 
-## SST v4 migration notes
+## Assumptions
 
-This project uses **SST v4** (upgraded from v3/Ion).
+1. **REST is the only API surface** — matches the interview brief directly.
+2. **Per-user hubs** — Signup creates `HUB#{userId}`; devices/issues/readings are stored under that hub. API key access still uses `HUB#demo` for scripted testing.
+3. **Device IDs are ULIDs** — server-generated, time-sortable; `createdAt` / `updatedAt` remain explicit fields.
+4. **Device types are free-form strings** — e.g. `smoke-alarm`, `environmental-sensor`.
+5. **Configuration is JSON stored as a string** — flexible for different device models.
+6. **Commands are queued as `PENDING`** — no real device firmware integration in this task.
+7. **Home issues are a stretch feature** — simplified case tracking, not full housing compliance software.
 
-Key changes from v3:
-- Pulumi AWS provider bumped from v6 to v7 (already reflected in `package.json`)
-- No breaking changes to SST components used here (Dynamo, CognitoUserPool, AppSync, Function, SvelteKit)
-- `svelte-kit-sst` stays at `"2"` (the v3 package is experimental and built against SvelteKit v1)
+## Approach and challenges
 
-If you have existing stacks deployed under SST v3, migrate them before deploying with v4:
+**Approach**
+
+- Reused the existing SST monorepo to show production-style IaC thinking.
+- Implemented the graded REST surface in **Python + FastAPI**, deployed to Lambda with Mangum.
+- Kept **Cognito + Svelte** as the stretch frontend; the UI calls REST with JWT, reviewers use curl with API key.
+- Moved shared domain types to `@sst-monorepo/core`.
+
+**Challenges**
+
+- **Dual auth on one API** — JWT for the UI, API key for curl; both hit the same FastAPI routes.
+- **FastAPI on Lambda** — Mangum adapts API Gateway HTTP API events to ASGI; a single `$default` route lets FastAPI own all path routing.
+- **Profile vs hub** — `/me` is user-scoped; devices/issues use `HUB#{sub}` from the JWT (or `HUB#demo` for API key).
+
+## QA
 
 ```bash
-# 1. Review what will change
-pnpm exec sst diff --stage dev
-
-# 2. Migrate state (run once per stage, do NOT use --target)
-pnpm exec sst refresh --stage dev
-pnpm exec sst refresh --stage stage
-# For stages that only ever ran under sst dev:
-pnpm exec sst refresh --stage dev --dev
-
-# 3. Deploy as normal
-pnpm deploy:dev
+pnpm verify    # lint, typecheck, test, build
+pnpm test      # Vitest + pytest
 ```
 
-## GitHub Actions and label-driven deployment
+Tests cover:
 
-CI runs automatically on every PR and push to `main`/`develop`. Jobs: **lint**, **typecheck** (with codegen drift check), **test**, and **build** — build only runs when lint and tests pass.
+- FastAPI device CRUD (create, list, get, patch, delete) including 404/400 paths
+- Readings and commands (create, list) plus humidity-triggered issue creation
+- Issues CRUD and resolve flow
+- Humidity threshold helpers via Vitest
 
-Deployment is triggered by **adding labels to an open PR**:
-
-```
-Open PR
-  └─ add label "deploy:dev"   → deploys SST to dev account
-       └─ passes → add label "deploy:stage" → deploys to stage account
-            └─ passes → add label "deploy:prod"  → deploys to prod account
-                 └─ passes → merge PR
-```
-
-The `deploy:stage` job checks that `deploy:dev` is present on the PR before running.
-The `deploy:prod` job checks that both `deploy:dev` and `deploy:stage` are present.
-The `prod` GitHub Environment additionally requires a human reviewer to approve.
-
-### One-time GitHub setup
-
-1. Create three GitHub Environments: `dev`, `stage`, `prod`
-   - On `prod`: enable **Required reviewers**
-2. Add `AWS_ROLE_ARN` secret to each Environment:
-   - `dev` → `arn:aws:iam::111111111111:role/GHActions-Dev`
-   - `stage` → `arn:aws:iam::222222222222:role/GHActions-Stage`
-   - `prod` → `arn:aws:iam::333333333333:role/GHActions-Prod`
-3. If you want automated custom domains, also add:
-   - Variable `APP_URL`
-     - `dev` → deployed app URL for that environment
-     - `stage` → deployed app URL for that environment
-     - `prod` → deployed app URL for that environment
-   - Variable `APPS_HOSTED_ZONE_ID`
-     - delegated Route 53 hosted zone ID for your apps domain
-   - Secret `DNS_ROLE_ARN`
-     - cross-account role ARN that can manage DNS in that hosted zone
-4. Create IAM OIDC provider in each AWS account and a role with this trust condition:
-   ```json
-   "token.actions.githubusercontent.com:sub":
-     "repo:<org>/<repo>:environment:<env-name>"
-   ```
-
-No long-lived AWS credentials are stored in GitHub secrets.
-
-### Create the PR labels
-
-In your GitHub repo, create these labels (Settings → Labels):
-
-| Label           | Colour suggestion | Purpose                   |
-|-----------------|-------------------|---------------------------|
-| `deploy:dev`    | `#0075ca`         | Trigger dev deployment    |
-| `deploy:stage`  | `#e4e669`         | Trigger stage deployment  |
-| `deploy:prod`   | `#d93f0b`         | Trigger prod deployment   |
-
-### Branch protection
-
-Enable branch protection on `main` (Settings → Branches → Add rule):
-
-| Setting                                | Recommended value |
-|----------------------------------------|-------------------|
-| Require a pull request before merging  | Yes               |
-| Required approvals                     | 1+                |
-| Require status checks to pass          | `Lint & Type Check`, `Test`, `Build` |
-| Require branches to be up to date      | Yes               |
-| Restrict who can push                  | Admins only       |
-| Do not allow bypassing the above       | Yes (for teams)   |
-
-This prevents direct pushes to `main` and ensures every change goes through CI and code review.
-
-## GraphQL code generation
-
-After updating `packages/graphql/schema.graphql`:
+## Deploy (optional)
 
 ```bash
-pnpm codegen         # one-time
-pnpm codegen:watch   # watch mode during development
+pnpm sso
+pnpm deploy:int
 ```
 
-Generated types are imported as:
+SST outputs:
 
-```typescript
-import type { User, UpdateUserInput } from '@sst-monorepo/graphql';
+- `restApiUrl` — REST device API
+- `webUrl` — SvelteKit app
+- `userPoolId` / `userPoolClientId` — Cognito
+- `simulatorQueueUrl` — SQS queue for the device simulator
+- `iotEndpoint` — IoT Core data endpoint (ATS)
+- `deviceSimulatorServiceName` — Lightsail container service (int/prod)
+- `deviceSimulatorEcrUrl` — ECR image URI for the simulator
+- `telemetryBucket` — S3 bucket for raw Parquet telemetry
+
+## IoT provision PoC (stretch)
+
+The interview REST API and Svelte console work without Lightsail. The stretch path adds async provisioning and live MQTT telemetry.
+
+### Flow
+
+1. `POST /devices` writes `lifecycleStatus=PROVISIONING` to DynamoDB.
+2. **EventBridge Pipe** reads the DynamoDB stream and starts the **DeviceProvision** Step Functions execution.
+3. Step Functions (per device):
+   - Creates an IoT **certificate** (`CreateKeysAndCertificate`)
+   - Stores cert + private key in **SSM** (`/homehub/devices/{deviceId}/cert|key|ca`)
+   - Attaches IoT policy, creates **Thing**, attaches cert, initializes **Shadow**
+   - Writes `SIMULATOR` registry, marks device `READY`, sends `DEVICE_READY` to SQS
+4. The **device simulator** on Lightsail (managed by SST) long-polls SQS, fetches per-device certs from SSM, and starts MQTT.
+5. Telemetry on `homehub/devices/{deviceId}/telemetry` fans out:
+   - **Hot path:** IoT Rule → Lambda → DynamoDB readings + `status=ONLINE` (powers the UI).
+   - **Cold path:** IoT Rule → Firehose → S3 Parquet (analytics lake; 64 MB min buffer with Parquet conversion — files flush on the 60s interval or when 64 MB accumulates).
+
+Personal `sst dev` stages use the same full IoT pipeline as `int`/`prod`. Set `HOMEHUB_SKIP_IOT_PROVISIONING=true` only when you want to stub provisioning for UI-only work.
+
+### Demo script
+
+1. Deploy `int`: `pnpm deploy:int` (or `pnpm dev`)
+2. Register a device in the web console → detail page shows **Provisioning** then **Ready**.
+3. Simulator runs on Lightsail automatically (`pnpm dev` deploys it in the background; `pnpm simulator:deploy` for manual updates).
+4. Watch readings appear on the device detail page without manual “Record reading”.
+5. After ~60s, confirm Parquet objects under `s3://{telemetryBucket}/telemetry/hub={yourUserId}/` and query with Athena:
+
+```sql
+SELECT deviceid, temperature, humidity, recordedat
+FROM homehub_int_telemetry.device_telemetry
+WHERE hub = 'your-cognito-sub' AND year = '2026' AND month = '07' AND day = '12'
+LIMIT 20;
 ```
 
-## Environment variables
+### Per-device certs (SSM)
 
-`pnpm dev` (SST dev mode) injects all variables automatically — no `.env` needed.
+Provisioning creates real IoT certificates automatically. Private keys are stored as SSM `SecureString` parameters:
 
-For local-only frontend development (`pnpm dev:local`), set `VITE_*` variables the same way as in
-`sst.config.ts`’s `sharedEnv` (or use `pnpm dev` so SST injects them).
+- `/homehub/devices/{deviceId}/cert`
+- `/homehub/devices/{deviceId}/key`
+- `/homehub/devices/{deviceId}/ca`
 
-## Database schema (DynamoDB — single-table design)
+Never stored in DynamoDB or SQS. On device delete, the REST API revokes the cert and deletes SSM parameters.
 
-**Primary key**: `PK` (partition) + `SK` (sort)
+### Docker simulator
 
-**GSI1**: `GSI1PK` + `GSI1SK` — user-centric queries  
-**GSI2**: `GSI2PK` + `GSI2SK` — global queries
+SST provisions Lightsail Container Service + ECR. To redeploy the container image:
 
-Entity patterns:
-- `USER#${userId}` / `PROFILE` — user profiles
+```bash
+pnpm simulator:deploy
+```
 
-## Adding new features
+Local fallback:
 
-### New GraphQL type
+```bash
+pnpm dev:simulator
+```
 
-1. Update `packages/graphql/schema.graphql`
-2. Run `pnpm codegen`
-3. Add resolver in `infra/api/resolvers/`
-4. Add service method in `apps/web/src/lib/services/graphql.ts`
-
-### New Lambda function
-
-1. Create handler in `packages/functions/src/`
-2. Define function in `infra/functions.ts`
-3. Link it via `link:` in `sst.config.ts`
-
-## Cost estimate
-
-For a new app with fewer than 1,000 users:
-
-| Service    | Free tier                               | Estimated cost |
-|------------|-----------------------------------------|----------------|
-| DynamoDB   | 25 GB storage, 25 R/W units             | $0–5/month     |
-| AppSync    | 250K query/mutation operations          | $0–10/month    |
-| Cognito    | 50K MAU                                 | $0             |
-| Lambda     | 1M requests, 400K GB-seconds            | $0             |
-| CloudFront | 1 TB data transfer                      | $0–5/month     |
-| **Total**  |                                         | **$0–20/month**|
+See [`packages/device-simulator/README.md`](packages/device-simulator/README.md) for scaling notes.
 
 ## License
 
-[ISC](LICENSE)
+ISC

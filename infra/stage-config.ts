@@ -12,6 +12,8 @@
  *   new sst.aws.Function('Foo', { memory: stageConfig.lambda.memory, ... });
  */
 
+const skipIotProvisioning = process.env.HOMEHUB_SKIP_IOT_PROVISIONING === 'true';
+
 type StageConfig = {
   lambda: {
     memory: `${number} MB`;
@@ -20,21 +22,50 @@ type StageConfig = {
   sveltekit: {
     memory: `${number} MB`;
   };
+  iot: {
+    /** Set HOMEHUB_SKIP_IOT_PROVISIONING=true to stub provisioning (READY without IoT). */
+    skipProvisioning: boolean;
+  };
+  deviceSimulator: {
+    /** Lightsail container service for MQTT simulator (int/prod only). */
+    enabled: boolean;
+    power: 'nano' | 'micro' | 'small' | 'medium' | 'large' | 'xlarge';
+    scale: number;
+  };
 };
 
+const deviceSimulatorStages = new Set(['int', 'prod']);
+
 const configs: Record<string, StageConfig> = {
-  dev: {
-    lambda: { memory: '256 MB', timeout: '10 seconds' },
-    sveltekit: { memory: '512 MB' },
-  },
-  stage: {
+  int: {
     lambda: { memory: '512 MB', timeout: '15 seconds' },
     sveltekit: { memory: '1024 MB' },
+    iot: { skipProvisioning: skipIotProvisioning },
+    deviceSimulator: {
+      enabled: !skipIotProvisioning && deviceSimulatorStages.has('int'),
+      power: 'nano',
+      scale: 1,
+    },
   },
   prod: {
     lambda: { memory: '1024 MB', timeout: '30 seconds' },
     sveltekit: { memory: '1024 MB' },
+    iot: { skipProvisioning: skipIotProvisioning },
+    deviceSimulator: {
+      enabled: !skipIotProvisioning && deviceSimulatorStages.has('prod'),
+      power: 'nano',
+      scale: 1,
+    },
   },
 };
 
-export const stageConfig: StageConfig = configs[$app.stage] ?? configs.dev;
+/** All stages (including personal `sst dev`) use full IoT unless HOMEHUB_SKIP_IOT_PROVISIONING=true. */
+export const stageConfig: StageConfig = configs[$app.stage] ?? {
+  ...configs.int,
+  iot: { skipProvisioning: skipIotProvisioning },
+  deviceSimulator: {
+    enabled: false,
+    power: 'nano',
+    scale: 1,
+  },
+};

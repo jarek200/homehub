@@ -42,7 +42,7 @@ async function checkAuth() {
     let username = loginId.includes('@') ? loginId.split('@')[0] : user.username || user.userId;
 
     try {
-      const { getMyProfile } = await import('$lib/services/graphql');
+      const { getMyProfile } = await import('$lib/services/rest-api');
       const profile = await getMyProfile();
       if (profile?.username) {
         username = profile.username;
