@@ -83,3 +83,29 @@ jobs:
             --remove-label "deploy:${ENV_NAME}" \
             --add-label "deploy-failed:${ENV_NAME}" \
             --repo "$GITHUB_REPOSITORY"
+
+  merge-to-main:
+    name: Merge to main
+    needs: [setup, deploy]
+    if: needs.setup.outputs.env_name == 'prod' && needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge PR into main after successful prod deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          BASE=$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq '.baseRefName')
+          if [ "$BASE" != "main" ]; then
+            echo "PR #$PR_NUMBER targets '$BASE', not main — skipping auto-merge."
+            exit 0
+          fi
+          gh pr merge "$PR_NUMBER" \
+            --merge \
+            --repo "$GITHUB_REPOSITORY"
+          gh pr edit "$PR_NUMBER" \
+            --remove-label "deploy:prod" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true

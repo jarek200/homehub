@@ -52,10 +52,8 @@ const configs: Record<string, StageConfig> = {
     sveltekit: { memory: '1024 MB' },
     iot: { skipProvisioning: skipIotProvisioning },
     deviceSimulator: {
-      // Prod account Lightsail container quota is often 0 until increased in Service Quotas.
-      // int runs the shared PoC simulator; enable prod here after quota is raised.
-      enabled: false,
-      power: 'micro',
+      enabled: !skipIotProvisioning && deviceSimulatorStages.has('prod'),
+      power: 'nano',
       scale: 1,
     },
   },
