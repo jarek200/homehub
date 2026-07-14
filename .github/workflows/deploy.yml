@@ -49,7 +49,12 @@ jobs:
         with:
           node-version: '24'
           cache: 'pnpm'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
       - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-packages
       - name: Assume cross-account DNS role
         if: env.DNS_ROLE_ARN != ''
         run: |
