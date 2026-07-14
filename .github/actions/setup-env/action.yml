@@ -1,5 +1,5 @@
 name: 'Setup Environment'
-description: 'Sets up pnpm, Node.js, and installs dependencies'
+description: 'Sets up pnpm, Node.js, uv, Python, and installs dependencies'
 runs:
   using: 'composite'
   steps:
@@ -8,6 +8,10 @@ runs:
       with:
         node-version: '24'
         cache: 'pnpm'
+    - uses: astral-sh/setup-uv@v6
+      with:
+        python-version: '3.13'
+        enable-cache: true
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash
