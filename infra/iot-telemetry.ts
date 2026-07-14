@@ -69,7 +69,7 @@ export function createIotTelemetry(table: StorageTable) {
     }),
   });
 
-  new aws.iam.RolePolicy('TelemetryFirehoseRolePolicy', {
+  const firehoseRolePolicy = new aws.iam.RolePolicy('TelemetryFirehoseRolePolicy', {
     role: firehoseRole.id,
     policy: telemetryBucket.arn.apply((bucketArn) =>
       JSON.stringify({
@@ -97,60 +97,64 @@ export function createIotTelemetry(table: StorageTable) {
     ),
   });
 
-  const firehoseStream = new aws.kinesis.FirehoseDeliveryStream('TelemetryFirehose', {
-    name: `${$app.name}-${$app.stage}-telemetry`,
-    destination: 'extended_s3',
-    extendedS3Configuration: {
-      roleArn: firehoseRole.arn,
-      bucketArn: telemetryBucket.arn,
-      prefix:
-        'telemetry/hub=!{partitionKeyFromQuery:hubid}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-      errorOutputPrefix:
-        'errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
-      bufferingSize: 64,
-      bufferingInterval: 60,
-      dynamicPartitioningConfiguration: {
-        enabled: true,
-      },
-      processingConfiguration: {
-        enabled: true,
-        processors: [
-          {
-            type: 'MetadataExtraction',
-            parameters: [
-              {
-                parameterName: 'MetadataExtractionQuery',
-                parameterValue: '{hubid:.hubid}',
-              },
-              {
-                parameterName: 'JsonParsingEngine',
-                parameterValue: 'JQ-1.6',
-              },
-            ],
-          },
-        ],
-      },
-      dataFormatConversionConfiguration: {
-        enabled: true,
-        inputFormatConfiguration: {
-          deserializer: {
-            openXJsonSerDe: {},
-          },
+  const firehoseStream = new aws.kinesis.FirehoseDeliveryStream(
+    'TelemetryFirehose',
+    {
+      name: `${$app.name}-${$app.stage}-telemetry`,
+      destination: 'extended_s3',
+      extendedS3Configuration: {
+        roleArn: firehoseRole.arn,
+        bucketArn: telemetryBucket.arn,
+        prefix:
+          'telemetry/hub=!{partitionKeyFromQuery:hubid}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+        errorOutputPrefix:
+          'errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/',
+        bufferingSize: 64,
+        bufferingInterval: 60,
+        dynamicPartitioningConfiguration: {
+          enabled: true,
         },
-        outputFormatConfiguration: {
-          serializer: {
-            parquetSerDe: {},
-          },
+        processingConfiguration: {
+          enabled: true,
+          processors: [
+            {
+              type: 'MetadataExtraction',
+              parameters: [
+                {
+                  parameterName: 'MetadataExtractionQuery',
+                  parameterValue: '{hubid:.hubid}',
+                },
+                {
+                  parameterName: 'JsonParsingEngine',
+                  parameterValue: 'JQ-1.6',
+                },
+              ],
+            },
+          ],
         },
-        schemaConfiguration: {
-          roleArn: firehoseRole.arn,
-          databaseName: glueDatabase.name,
-          tableName: glueTable.name,
-          region: aws.getRegionOutput().name,
+        dataFormatConversionConfiguration: {
+          enabled: true,
+          inputFormatConfiguration: {
+            deserializer: {
+              openXJsonSerDe: {},
+            },
+          },
+          outputFormatConfiguration: {
+            serializer: {
+              parquetSerDe: {},
+            },
+          },
+          schemaConfiguration: {
+            roleArn: firehoseRole.arn,
+            databaseName: glueDatabase.name,
+            tableName: glueTable.name,
+            region: aws.getRegionOutput().name,
+          },
         },
       },
     },
-  });
+    { dependsOn: [firehoseRolePolicy, glueTable] }
+  );
 
   const telemetryWriter = new sst.aws.Function('TelemetryWriter', {
     handler: 'packages/rest-api/src/homehub_api/iot/telemetry.handler',
