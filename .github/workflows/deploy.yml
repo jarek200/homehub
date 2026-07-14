@@ -215,13 +215,13 @@ jobs:
               "/repos/${GITHUB_REPOSITORY}/deployments" \
               -f ref="$sha" \
               -f environment="int" \
-              -f auto_merge=false \
+              -F auto_merge=false \
               -f description="Int deploy from PR #${PR_NUMBER}" \
-              --jq '.id')
+              --jq '.id') || continue
             gh api --method POST \
               "/repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
               -f state=success \
-              -f description="SST deploy succeeded"
+              -f description="SST deploy succeeded" || true
           done
       - name: Swap label to error on failure
         if: failure()
