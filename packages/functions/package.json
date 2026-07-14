@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.1084.0",
-    "@aws-sdk/lib-dynamodb": "^3.1084.0",
+    "@aws-sdk/client-dynamodb": "^3.1087.0",
+    "@aws-sdk/lib-dynamodb": "^3.1087.0",
     "@sst-monorepo/core": "workspace:*"
   },
   "devDependencies": {
