@@ -43,7 +43,7 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets[format('AWS_ROLE_ARN_{0}', needs.setup.outputs.env_upper)] }}
-          aws-region: us-east-1
+          aws-region: eu-west-1
       - uses: pnpm/action-setup@v5.0.0
       - uses: actions/setup-node@v6
         with:
