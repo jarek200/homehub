@@ -6,16 +6,8 @@ export function createStorage() {
     fields: {
       PK: 'string',
       SK: 'string',
-      GSI1PK: 'string',
-      GSI1SK: 'string',
-      GSI2PK: 'string',
-      GSI2SK: 'string',
     },
     primaryIndex: { hashKey: 'PK', rangeKey: 'SK' },
-    globalIndexes: {
-      GSI1: { hashKey: 'GSI1PK', rangeKey: 'GSI1SK' },
-      GSI2: { hashKey: 'GSI2PK', rangeKey: 'GSI2SK' },
-    },
     deletionProtection: $app.stage === 'prod',
     stream: 'new-and-old-images',
   });

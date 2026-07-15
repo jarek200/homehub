@@ -10,8 +10,6 @@ export interface User {
   username: string;
   email: string;
   name?: string | null;
-  bio?: string | null;
-  avatar?: string | null;
   createdAt: string;
   updatedAt: string;
 }

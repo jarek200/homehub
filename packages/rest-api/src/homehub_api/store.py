@@ -131,8 +131,6 @@ class HubStore:
             "lifecycleStatus": "PROVISIONING",
             "createdAt": timestamp,
             "updatedAt": timestamp,
-            "GSI1PK": self.tenant_pk,
-            "GSI1SK": f"DEVICE#{timestamp}",
         }
         self._table.put_item(Item=item)
         return _to_device(item)

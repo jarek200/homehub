@@ -12,11 +12,6 @@ export default defineConfig({
       '**/.svelte-kit/**',
       '**/.sst/**',
     ],
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'dist/', '**/*.config.*', '**/*.d.ts', '**/types/**'],
-    },
   },
   resolve: {
     alias: {
