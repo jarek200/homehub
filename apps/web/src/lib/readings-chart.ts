@@ -1,11 +1,5 @@
 import type { Reading } from '@sst-monorepo/core';
-import {
-  chartMetricKeys,
-  formatMetricValue,
-  isBooleanMetric,
-  metricLabel,
-  readingMetrics,
-} from '$lib/telemetry';
+import { chartMetricKeys, isBooleanMetric, metricLabel, readingMetrics } from '$lib/telemetry';
 
 export type ChartPoint = {
   time: number;
@@ -68,8 +62,11 @@ export function downsamplePoints(
   if (points.length <= maxPoints || maxPoints < 2) return points;
 
   const sorted = [...points].sort((a, b) => a.time - b.time);
-  const start = sorted[0]!.time;
-  const end = sorted[sorted.length - 1]!.time;
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  if (!first || !last) return points;
+  const start = first.time;
+  const end = last.time;
   const span = Math.max(end - start, 1);
   const bucketMs = span / maxPoints;
 
@@ -83,22 +80,27 @@ export function downsamplePoints(
 
   return [...buckets.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([, group]) => {
-      const anchor = group[Math.floor(group.length / 2)]!;
+    .flatMap(([, group]) => {
+      const anchor = group[Math.floor(group.length / 2)];
+      if (!anchor) return [];
       if (booleanScale) {
-        return {
-          time: anchor.time,
-          label: anchor.label,
-          value: group.some((point) => point.value >= 1) ? 1 : 0,
-        };
+        return [
+          {
+            time: anchor.time,
+            label: anchor.label,
+            value: group.some((point) => point.value >= 1) ? 1 : 0,
+          },
+        ];
       }
       const sum = group.reduce((total, point) => total + point.value, 0);
       const average = sum / group.length;
-      return {
-        time: anchor.time,
-        label: anchor.label,
-        value: Math.round(average * 10) / 10,
-      };
+      return [
+        {
+          time: anchor.time,
+          label: anchor.label,
+          value: Math.round(average * 10) / 10,
+        },
+      ];
     });
 }
 
@@ -109,17 +111,18 @@ function metricSeries(
 ): ReadingSeries | null {
   const color = CHART_COLORS[key] ?? '#64748b';
   const booleanScale = isBooleanMetric(key);
-  let points = sortReadingsOldestFirst(readings)
-    .filter((reading) => readingMetrics(reading)[key] != null)
-    .map((reading) => {
-      const raw = readingMetrics(reading)[key]!;
-      const value = typeof raw === 'boolean' ? (raw ? 1 : 0) : Number(raw);
-      return {
+  let points = sortReadingsOldestFirst(readings).flatMap((reading) => {
+    const raw = readingMetrics(reading)[key];
+    if (raw == null) return [];
+    const value = typeof raw === 'boolean' ? (raw ? 1 : 0) : Number(raw);
+    return [
+      {
         time: readingTime(reading),
         label: formatAxisLabel(reading.recordedAt),
         value,
-      };
-    });
+      },
+    ];
+  });
 
   if (points.length === 0) return null;
 

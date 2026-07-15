@@ -1,5 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "APP_URL",
+    "APPS_HOSTED_ZONE_ID",
+    "DNS_AWS_ACCESS_KEY_ID",
+    "DNS_AWS_SECRET_ACCESS_KEY",
+    "DNS_AWS_SESSION_TOKEN",
+    "HOMEHUB_SKIP_IOT_PROVISIONING",
+    "REST_API_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

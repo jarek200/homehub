@@ -11,7 +11,10 @@ export function createRestApi(
   table: StorageTable,
   auth: ReturnType<typeof import('./auth').createAuth>['auth'],
   iotProvisioning?: Pick<IotProvisioning, 'simulatorQueue' | 'iotPolicy'>,
-  iotTelemetry?: Pick<IotTelemetry, 'telemetryBucket' | 'athenaResultsBucket' | 'glueDatabase' | 'glueTable'>
+  iotTelemetry?: Pick<
+    IotTelemetry,
+    'telemetryBucket' | 'athenaResultsBucket' | 'glueDatabase' | 'glueTable'
+  >
 ) {
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
     cors: {

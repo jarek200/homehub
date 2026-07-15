@@ -98,14 +98,12 @@ export function lastReadingCompactParts(
   const thresholds = parseThresholds(configuration, deviceType);
   const profile = profileForDeviceType(deviceType);
   const keys = profile?.summaryKeys ?? Object.keys(metrics);
-  const parts = keys
-    .filter((key) => {
-      const value = metrics[key];
-      if (value == null) return false;
-      if (typeof value === 'boolean' && !value) return false;
-      return true;
-    })
-    .map((key) => buildCompactReadingPart(key, metrics[key]!, thresholds));
+  const parts = keys.flatMap((key) => {
+    const value = metrics[key];
+    if (value == null) return [];
+    if (typeof value === 'boolean' && !value) return [];
+    return [buildCompactReadingPart(key, value, thresholds)];
+  });
 
   return parts.length > 0 ? parts : null;
 }
@@ -206,9 +204,11 @@ export function formatReadingSummary(reading: Reading, deviceType: string): stri
   const metrics = readingMetrics(reading, deviceType);
   const profile = profileForDeviceType(deviceType);
   const keys = profile?.summaryKeys ?? Object.keys(metrics);
-  const parts = keys
-    .filter((key) => metrics[key] != null)
-    .map((key) => `${metricLabel(key)}: ${formatMetricValue(key, metrics[key]!)}`);
+  const parts = keys.flatMap((key) => {
+    const value = metrics[key];
+    if (value == null) return [];
+    return [`${metricLabel(key)}: ${formatMetricValue(key, value)}`];
+  });
 
   if (parts.length > 0) return parts.join(' · ');
   if (reading.alarm || reading.state === 'warning') return 'Warning';
@@ -224,7 +224,10 @@ export function formatLastReadingPrimary(
   const profile = profileForDeviceType(deviceType);
   const primaryKey = profile?.summaryKeys.find((key) => metrics[key] != null);
   if (primaryKey) {
-    return `${metricLabel(primaryKey)}: ${formatMetricValue(primaryKey, metrics[primaryKey]!)}`;
+    const value = metrics[primaryKey];
+    if (value != null) {
+      return `${metricLabel(primaryKey)}: ${formatMetricValue(primaryKey, value)}`;
+    }
   }
   if (reading.alarm || reading.state === 'warning') return 'Warning';
   return 'Normal';
@@ -241,14 +244,12 @@ export function formatLastReadingCompact(
   const thresholds = parseThresholds(configuration, deviceType);
   const profile = profileForDeviceType(deviceType);
   const keys = profile?.summaryKeys ?? Object.keys(metrics);
-  const parts = keys
-    .filter((key) => {
-      const value = metrics[key];
-      if (value == null) return false;
-      if (typeof value === 'boolean' && !value) return false;
-      return true;
-    })
-    .map((key) => formatCompactMetricPart(key, metrics[key]!, thresholds));
+  const parts = keys.flatMap((key) => {
+    const value = metrics[key];
+    if (value == null) return [];
+    if (typeof value === 'boolean' && !value) return [];
+    return [formatCompactMetricPart(key, value, thresholds)];
+  });
 
   if (parts.length > 0) return parts.join(' · ');
   if (reading.alarm || reading.state === 'warning') return 'Warning';
