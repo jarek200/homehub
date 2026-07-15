@@ -139,8 +139,6 @@ class UserResponse(BaseModel):
     username: str
     email: str
     name: str | None = None
-    bio: str | None = None
-    avatar: str | None = None
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 

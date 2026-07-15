@@ -39,15 +39,6 @@ jobs:
           gh pr edit "$PR_NUMBER" \
             --remove-label "deployed:int" \
             --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-          mapfile -t STALE_LABELS < <(
-            gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --json labels --jq '.labels[].name | select(startswith("int-deployed-"))'
-          )
-          for label in "${STALE_LABELS[@]}"; do
-            gh pr edit "$PR_NUMBER" \
-              --remove-label "$label" \
-              --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-          done
 
   gate:
     needs: setup
@@ -68,7 +59,6 @@ jobs:
         run: |
           set -euo pipefail
           SHORT_HEAD="${HEAD_SHA:0:7}"
-          STAMP_LABEL="int-deployed-${SHORT_HEAD}"
 
           has_successful_deployment() {
             local sha="$1"
@@ -89,12 +79,6 @@ jobs:
             done
             return 1
           }
-
-          if gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --json labels --jq -e --arg l "$STAMP_LABEL" '.labels[].name | select(. == $l)' >/dev/null; then
-            echo "PR has ${STAMP_LABEL} — int deploy verified."
-            exit 0
-          fi
 
           if has_successful_deployment "$HEAD_SHA" || has_successful_deployment "$MERGE_SHA"; then
             exit 0
@@ -183,30 +167,12 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MERGE_SHA: ${{ github.sha }}
         run: |
-          SHORT_HEAD="${HEAD_SHA:0:7}"
-          STAMP_LABEL="int-deployed-${SHORT_HEAD}"
-
-          mapfile -t STALE_LABELS < <(
-            gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-              --json labels --jq '.labels[].name | select(startswith("int-deployed-"))'
-          )
-          for label in "${STALE_LABELS[@]}"; do
-            gh pr edit "$PR_NUMBER" \
-              --remove-label "$label" \
-              --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-          done
-
-          gh label create "$STAMP_LABEL" \
-            --color "0e8a16" \
-            --description "This commit was successfully deployed to int" \
-            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh label create "deployed:int" \
             --color "0e8a16" \
             --description "Latest commit on this PR was deployed to int" \
             --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           gh pr edit "$PR_NUMBER" \
             --remove-label "deploy:int" \
-            --add-label "$STAMP_LABEL" \
             --add-label "deployed:int" \
             --repo "$GITHUB_REPOSITORY"
 

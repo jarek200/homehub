@@ -8,8 +8,6 @@ INPUT_LIMITS = {
     "type": 64,
     "location": 100,
     "configuration": 4096,
-    "bio": 500,
-    "avatar": 2048,
 }
 
 

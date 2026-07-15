@@ -19,8 +19,6 @@ def _to_user(item: dict) -> UserResponse:
         username=username,
         email=email,
         name=item.get("name"),
-        bio=item.get("bio"),
-        avatar=item.get("avatar"),
         createdAt=str(item["createdAt"]),
         updatedAt=str(item["updatedAt"]),
     )

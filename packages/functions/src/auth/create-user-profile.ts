@@ -56,16 +56,8 @@ export const handler: PostConfirmationTriggerHandler = async (event) => {
           username,
           email,
           name: null,
-          bio: null,
-          avatar: null,
           createdAt,
           updatedAt: createdAt,
-          // GSI1: User-centric queries
-          GSI1PK: `USER#${userId}`,
-          GSI1SK: 'PROFILE',
-          // GSI2: Global queries (if needed)
-          GSI2PK: 'USER',
-          GSI2SK: createdAt,
         },
       })
     );

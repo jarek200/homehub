@@ -21,26 +21,9 @@
     "test": "vitest run && pnpm test:api",
     "test:api": "uv sync --all-packages --dev && uv run --directory packages/rest-api pytest",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
     "prepare": "husky",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
-  "lint-staged": {
-    "*.{js,ts,svelte,json,md,yml,yaml}": "biome check --write --no-errors-on-unmatched"
-  },
-  "keywords": [
-    "sst",
-    "svelte",
-    "sveltekit",
-    "aws",
-    "rest",
-    "dynamodb",
-    "cognito",
-    "turborepo",
-    "monorepo",
-    "starter",
-    "typescript"
-  ],
   "author": "",
   "license": "ISC",
   "description": "HomeHub — smart home IoT hub with REST API, DynamoDB, Cognito, and SST IaC",
@@ -49,7 +32,6 @@
     "@pulumi/aws": "^7.36.0",
     "@pulumi/pulumi": "^3.251.0",
     "@types/node": "^24.13.3",
-    "@vitest/coverage-v8": "^4.1.10",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "sst": "^4.17.0",

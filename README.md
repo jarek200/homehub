@@ -11,10 +11,10 @@ HomeHub is a smart-home device management platform built for a technical intervi
 | Get device details | `GET /devices/{deviceId}` |
 | Update device status/config | `PATCH /devices/{deviceId}` |
 | Delete a device | `DELETE /devices/{deviceId}` |
-| State + history storage | DynamoDB single-table design |
+| State + history storage | DynamoDB (state + recent readings); Athena for history (stretch) |
 | Error handling | `400` validation errors, `404` not found, consistent JSON error shape |
 | Stretch frontend | SvelteKit console (Cognito auth + REST API) |
-| IaC deployment | SST v4 (Lambda + API Gateway + DynamoDB + Cognito) |
+| IaC deployment | SST v4 (Lambda + API Gateway + DynamoDB + Cognito + IoT) |
 
 ## Architecture
 
@@ -27,11 +27,18 @@ Reviewers / curl                HomeHub web app (SvelteKit)
                          |
                          v
                  DynamoDB (single table)
+                         ^
+                         | hot readings
+              IoT Core ← MQTT ← device simulator
+                         |
+                         v cold path (optional)
+              Firehose → S3 Parquet → Athena
 ```
 
 - **REST API** — the only backend surface. Device data is scoped per user hub (`HUB#{cognitoSub}`). Reviewers can `curl` with `X-Api-Key` (demo tenant); the signed-in UI sends a Cognito ID token.
-- **Cognito** — sign up / sign in for the web app. User profiles live under `USER#...`.
-- **DynamoDB** — shared storage using composite `PK` / `SK` keys. Devices start empty until registered via `POST /devices`.
+- **Cognito** — sign up / sign in for the web app. Signup creates a user profile and per-user hub.
+- **DynamoDB** — single-table storage with composite `PK` / `SK` keys (no GSIs). Devices start empty until registered via `POST /devices`.
+- **IoT stretch** — Step Functions provisioning, MQTT simulator, live telemetry (Dynamo hot path) and Athena history (cold path).
 - **SST v4** — infrastructure in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
 
 ## Tech stack
@@ -48,6 +55,7 @@ Reviewers / curl                HomeHub web app (SvelteKit)
 - pnpm
 - Python 3.13 + [uv](https://docs.astral.sh/uv/) (for the FastAPI REST API)
 - AWS CLI with SSO (for deploy / `sst dev`)
+- Docker (only if you build/push the Lightsail simulator image or run the local simulator)
 
 ## Quick start
 
@@ -134,10 +142,16 @@ curl -s -X PATCH "$REST_API_URL/devices/{deviceId}" \
 curl -s -X DELETE "$REST_API_URL/devices/{deviceId}"
 ```
 
-### List readings
+### List readings (hot path)
 
 ```bash
 curl -s "$REST_API_URL/devices/{deviceId}/readings"
+```
+
+### Reading history (Athena cold path)
+
+```bash
+curl -s "$REST_API_URL/devices/{deviceId}/readings/history?hours=3"
 ```
 
 ### User profile (web app)
@@ -187,7 +201,8 @@ packages/rest-api/         FastAPI REST API (Python, interview deliverable)
 packages/core/             Shared TypeScript domain types
 packages/device-simulator/ MQTT device simulator (stretch)
 packages/functions/        Node.js Lambdas (Cognito post-confirmation)
-infra/                     SST modules (auth, storage, REST API, IoT)
+infra/                     SST modules (auth, storage, REST, IoT, simulator)
+scripts/                   Dev / deploy / simulator / stage reset helpers
 sst.config.ts              Infrastructure entry point
 ```
 
@@ -208,7 +223,7 @@ sst.config.ts              Infrastructure entry point
 - Implemented the graded REST surface in **Python + FastAPI**, deployed to Lambda with Mangum.
 - Kept **Cognito + Svelte** as the stretch frontend; the UI calls REST with JWT, reviewers use curl with API key.
 - Added an optional IoT stretch: async Thing/cert provisioning, MQTT simulator, and telemetry hot/cold paths.
-- Moved shared domain types to `@sst-monorepo/core`.
+- Shared domain types live in `@sst-monorepo/core`.
 
 **Challenges**
 
@@ -230,11 +245,21 @@ Tests cover:
 - Telemetry normalization, thresholds, and IoT shadow helpers
 - Athena history SQL builders and row mapping (mocked client)
 
-## Deploy (optional)
+## Deploy
 
 ```bash
 pnpm sso
-pnpm deploy:int
+pnpm deploy:int              # stack + Lightsail simulator image
+# pnpm deploy:prod
+```
+
+Useful ops scripts:
+
+```bash
+pnpm deploy:int:recover      # clean simulator IAM/SSM orphans, then redeploy
+pnpm reset:int               # sst remove + orphan cleanup (int only)
+pnpm remove:int              # sst remove only
+pnpm simulator:deploy        # rebuild/push/redeploy Lightsail simulator
 ```
 
 SST outputs:
