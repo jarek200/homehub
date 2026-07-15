@@ -16,6 +16,8 @@ from homehub_api.telemetry_model import (
     normalize_telemetry_event,
 )
 
+RECENT_READINGS_LIMIT = 10
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
@@ -43,6 +45,40 @@ def _tenant_pk_for_device(table: Any, device_id: str, event: dict[str, Any]) -> 
 
 def _device_record(table: Any, tenant_pk: str, device_id: str) -> dict[str, Any] | None:
     return table.get_item(Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"}).get("Item")
+
+
+def _reading_snapshot(
+    *,
+    reading_id: str,
+    device_id: str,
+    recorded_at: str,
+    created_at: str,
+    alarm: bool,
+    state: str,
+    metrics: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "readingId": reading_id,
+        "deviceId": device_id,
+        "recordedAt": recorded_at,
+        "createdAt": created_at,
+        "alarm": alarm,
+        "state": state,
+        "metrics": metrics,
+    }
+
+
+def _next_recent_readings(
+    device_item: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> list[dict[str, Any]]:
+    existing = device_item.get("recentReadings")
+    prior: list[dict[str, Any]] = []
+    if isinstance(existing, list):
+        prior = [item for item in existing if isinstance(item, dict)]
+    elif isinstance(device_item.get("lastReading"), dict):
+        prior = [device_item["lastReading"]]
+    return [snapshot, *prior][:RECENT_READINGS_LIMIT]
 
 
 def write_telemetry(event: dict[str, Any]) -> None:
@@ -74,6 +110,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
         device_type=device_type,
     )
 
+    metrics = metrics_to_dynamo(normalized["metrics"])
     item: dict[str, Any] = {
         "PK": tenant_pk,
         "SK": f"READING#{device_id}#{recorded_at}#{reading_id}",
@@ -83,7 +120,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
         "createdAt": timestamp,
         "alarm": normalized["alarm"],
         "state": normalized["state"],
-        "metrics": metrics_to_dynamo(normalized["metrics"]),
+        "metrics": metrics,
     }
 
     table.put_item(Item=item)
@@ -91,28 +128,46 @@ def write_telemetry(event: dict[str, Any]) -> None:
     if not device_item:
         return
 
+    snapshot = _reading_snapshot(
+        reading_id=reading_id,
+        device_id=device_id,
+        recorded_at=recorded_at,
+        created_at=timestamp,
+        alarm=bool(normalized["alarm"]),
+        state=str(normalized["state"]),
+        metrics=metrics,
+    )
+    recent_readings = _next_recent_readings(device_item, snapshot)
     device_status = str(device_item.get("status") or "UNKNOWN")
 
-    if device_status == "OFFLINE":
-        table.update_item(
-            Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"},
-            UpdateExpression="SET lastSeenAt = :lastSeenAt, updatedAt = :updatedAt",
-            ExpressionAttributeValues={
-                ":lastSeenAt": recorded_at,
-                ":updatedAt": timestamp,
-            },
-        )
-    else:
-        table.update_item(
-            Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"},
-            UpdateExpression="SET #status = :online, lastSeenAt = :lastSeenAt, updatedAt = :updatedAt",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":online": "ONLINE",
-                ":lastSeenAt": recorded_at,
-                ":updatedAt": timestamp,
-            },
-        )
+    expression_values: dict[str, Any] = {
+        ":lastSeenAt": recorded_at,
+        ":updatedAt": timestamp,
+        ":lastReading": snapshot,
+        ":recentReadings": recent_readings,
+    }
+    update_parts = [
+        "lastSeenAt = :lastSeenAt",
+        "updatedAt = :updatedAt",
+        "lastReading = :lastReading",
+        "recentReadings = :recentReadings",
+    ]
+    expression_names: dict[str, str] | None = None
+
+    if device_status != "OFFLINE":
+        expression_names = {"#status": "status"}
+        expression_values[":online"] = "ONLINE"
+        update_parts.insert(0, "#status = :online")
+
+    update_kwargs: dict[str, Any] = {
+        "Key": {"PK": tenant_pk, "SK": f"DEVICE#{device_id}"},
+        "UpdateExpression": "SET " + ", ".join(update_parts),
+        "ExpressionAttributeValues": expression_values,
+    }
+    if expression_names is not None:
+        update_kwargs["ExpressionAttributeNames"] = expression_names
+
+    table.update_item(**update_kwargs)
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:

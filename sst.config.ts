@@ -19,6 +19,11 @@
  *   int  (and personal sst dev stages) → homehub-int  (800309353529)
  *   prod                               → homehub-prod (570064632535)
  *
+ * Stages:
+ *   pnpm dev        → personal stage (OS username); never int/prod
+ *   pnpm deploy:int → shared int demo (CloudFront + Lightsail)
+ *   pnpm deploy:prod → production
+ *
  * Log in first: pnpm sso
  */
 const STAGE_PROFILES: Record<string, string> = {

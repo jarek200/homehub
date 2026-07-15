@@ -4,7 +4,7 @@
 </svelte:head>
 
 <script lang="ts">
-import type { Device, Reading } from '@sst-monorepo/core';
+import type { Device } from '@sst-monorepo/core';
 import { onDestroy, onMount } from 'svelte';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
@@ -26,12 +26,7 @@ import {
   formatStatus,
   inputMinimal,
 } from '$lib/devices';
-import {
-  createDevice,
-  deleteDevice,
-  listDeviceReadings,
-  listDevices,
-} from '$lib/services/rest-api';
+import { createDevice, deleteDevice, listDevices } from '$lib/services/rest-api';
 import {
   formatLastReadingCompact,
   formatLastReadingPrimary,
@@ -39,7 +34,6 @@ import {
 } from '$lib/telemetry';
 
 let devices = $state<Device[]>([]);
-let recentReadings = $state<Record<string, Reading[]>>({});
 let loading = $state(true);
 let error = $state('');
 let showCreate = $state(false);
@@ -67,7 +61,7 @@ const filteredDevices = $derived.by(() => {
   if (!q) return devices;
 
   return devices.filter((device) => {
-    const reading = recentReadings[device.deviceId]?.[0] ?? null;
+    const reading = device.lastReading ?? device.recentReadings?.[0] ?? null;
     const haystack = [
       device.name,
       device.location ?? '',
@@ -122,12 +116,11 @@ const READINGS_POLL_MS = 10_000;
 onMount(() => {
   void loadDevices();
   pollTimer = setInterval(() => {
-    if (devices.some((device) => device.lifecycleStatus === 'PROVISIONING')) {
+    if (
+      devices.some((device) => device.lifecycleStatus === 'PROVISIONING') ||
+      devices.some((device) => device.status === 'ONLINE')
+    ) {
       void refreshDevices().catch(console.error);
-      return;
-    }
-    if (devices.some((device) => device.status === 'ONLINE')) {
-      void refreshLastReadings().catch(console.error);
     }
   }, READINGS_POLL_MS);
 });
@@ -137,29 +130,7 @@ onDestroy(() => {
 });
 
 async function refreshDevices() {
-  const nextDevices = await listDevices();
-  devices = nextDevices;
-
-  const readingEntries = await Promise.all(
-    nextDevices.map(async (device) => {
-      const readings = await listDeviceReadings(device.deviceId);
-      return [device.deviceId, readings.slice(0, 10)] as const;
-    })
-  );
-  recentReadings = Object.fromEntries(readingEntries);
-}
-
-async function refreshLastReadings() {
-  const onlineDevices = devices.filter((device) => device.status === 'ONLINE');
-  if (onlineDevices.length === 0) return;
-
-  const readingEntries = await Promise.all(
-    onlineDevices.map(async (device) => {
-      const readings = await listDeviceReadings(device.deviceId);
-      return [device.deviceId, readings.slice(0, 10)] as const;
-    })
-  );
-  recentReadings = { ...recentReadings, ...Object.fromEntries(readingEntries) };
+  devices = await listDevices();
 }
 
 async function loadDevices() {
@@ -515,7 +486,6 @@ $effect(() => {
             <DeviceAccordionRow
               {device}
               selected={isSelected(device.deviceId)}
-              recentReadings={recentReadings[device.deviceId] ?? []}
               deleting={deletingId === device.deviceId}
               onToggleSelect={() => toggleSelected(device.deviceId)}
               onDelete={() => requestDelete(device)}

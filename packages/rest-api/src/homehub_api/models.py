@@ -91,6 +91,18 @@ class UpdateDeviceRequest(BaseModel):
         return self
 
 
+class ReadingResponse(BaseModel):
+    reading_id: str = Field(alias="readingId")
+    device_id: str = Field(alias="deviceId")
+    alarm: bool = False
+    state: ReadingState = "normal"
+    metrics: dict[str, float | bool] = Field(default_factory=dict)
+    recorded_at: str = Field(alias="recordedAt")
+    created_at: str = Field(alias="createdAt")
+
+    model_config = {"populate_by_name": True}
+
+
 class DeviceResponse(BaseModel):
     device_id: str = Field(alias="deviceId")
     name: str
@@ -103,6 +115,8 @@ class DeviceResponse(BaseModel):
     failure_reason: str | None = Field(default=None, alias="failureReason")
     configuration: DeviceConfiguration | None = None
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")
+    last_reading: ReadingResponse | None = Field(default=None, alias="lastReading")
+    recent_readings: list[ReadingResponse] = Field(default_factory=list, alias="recentReadings")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
@@ -112,18 +126,6 @@ class DeviceResponse(BaseModel):
     @classmethod
     def parse_configuration(cls, value: Any) -> DeviceConfiguration | None:
         return configuration_from_storage(value)
-
-
-class ReadingResponse(BaseModel):
-    reading_id: str = Field(alias="readingId")
-    device_id: str = Field(alias="deviceId")
-    alarm: bool = False
-    state: ReadingState = "normal"
-    metrics: dict[str, float | bool] = Field(default_factory=dict)
-    recorded_at: str = Field(alias="recordedAt")
-    created_at: str = Field(alias="createdAt")
-
-    model_config = {"populate_by_name": True}
 
 
 class DeviceListResponse(BaseModel):

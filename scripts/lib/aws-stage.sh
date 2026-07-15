@@ -1,12 +1,28 @@
 #!/usr/bin/env bash
 # Resolve AWS profile + region to match sst.config.ts stage mapping.
+
+# Personal sst dev stage (never int/prod). Prefer SST_STAGE; else sanitize OS username.
+homehub_personal_stage() {
+  local stage="${SST_STAGE:-}"
+  if [[ -z "$stage" ]]; then
+    stage="$(whoami 2>/dev/null || true)"
+    stage="${stage:-${USER:-dev}}"
+    stage="$(printf '%s' "$stage" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')"
+    stage="${stage#-}"
+    stage="${stage%-}"
+    stage="${stage:-dev}"
+  fi
+  printf '%s' "$stage"
+}
+
+# Resolve AWS_PROFILE / AWS_REGION for a stage (personal stages → int account).
 homehub_aws_stage_env() {
   local stage="${1:-int}"
 
   if [[ -z "${AWS_PROFILE:-}" ]]; then
     case "$stage" in
-      int) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
       prod) export AWS_PROFILE="${AWS_PROFILE_PROD:-homehub-prod}" ;;
+      *) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
     esac
   fi
 

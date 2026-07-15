@@ -5,7 +5,10 @@ services:
     environment:
       TABLE_NAME: ${TABLE_NAME}
       SQS_QUEUE_URL: ${SQS_QUEUE_URL}
-      AWS_REGION: ${AWS_REGION:-eu-west-2}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
       IOT_ENDPOINT: ${IOT_ENDPOINT}
       CERT_DIR: /tmp/certs
-    network_mode: host
