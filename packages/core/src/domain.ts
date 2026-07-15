@@ -1,19 +1,9 @@
-/** Frontend / REST domain aliases (replaces former GraphQL codegen types). */
+/** Frontend / REST domain aliases. */
 
-import type { CommandRecord, DeviceRecord, ReadingRecord } from './devices';
-import type { CreateIssueInput, IssueRecord, UpdateIssueInput } from './issues';
+import type { DeviceRecord, ReadingRecord } from './devices';
 
 export type Device = DeviceRecord;
 export type Reading = ReadingRecord;
-export type Command = CommandRecord;
-export type HomeIssue = IssueRecord;
-
-export type CreateHomeIssueInput = CreateIssueInput;
-export type UpdateHomeIssueInput = UpdateIssueInput;
-
-export interface SendCommandInput {
-  command: string;
-}
 
 export interface User {
   userId: string;
@@ -24,10 +14,4 @@ export interface User {
   avatar?: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface UpdateUserInput {
-  name?: string | null;
-  bio?: string | null;
-  avatar?: string | null;
 }

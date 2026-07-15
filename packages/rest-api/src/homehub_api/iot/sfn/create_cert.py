@@ -8,7 +8,7 @@ from typing import Any
 
 import boto3
 
-from homehub_api.iot.sfn.common import ssm_prefix_for
+from homehub_api.iot.sfn.common import resolve_provision_context, ssm_prefix_for
 
 AMAZON_ROOT_CA_1_URL = "https://www.amazontrust.com/repository/AmazonRootCA1.pem"
 
@@ -22,8 +22,9 @@ def _amazon_root_ca_pem() -> str:
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
-    device_id = event["deviceId"]
-    prefix = event.get("ssmCertPrefix") or ssm_prefix_for(device_id)
+    context = resolve_provision_context(event)
+    device_id = context["deviceId"]
+    prefix = context.get("ssmCertPrefix") or ssm_prefix_for(device_id)
     policy_name = os.environ["IOT_POLICY_NAME"]
 
     iot = boto3.client("iot")
@@ -56,7 +57,6 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     iot.attach_policy(policyName=policy_name, target=cert_arn)
 
     return {
-        **event,
         "certificateArn": cert_arn,
         "certificateId": cert_id,
         "ssmCertPrefix": prefix,

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from homehub_api.auth import require_user
 from homehub_api.dependencies import get_store
 from homehub_api.errors import ApiError
-from homehub_api.models import UpdateUserRequest, UserResponse
+from homehub_api.models import UserResponse
 from homehub_api.store import HubStore
 
 router = APIRouter(prefix="/me", tags=["profile"])
@@ -34,17 +34,4 @@ def get_profile(
     item = store.get_profile(user_id)
     if not item:
         raise ApiError("User profile not found", 404, "NotFound")
-    return _to_user(item)
-
-
-@router.patch("", response_model=UserResponse)
-def update_profile(
-    payload: UpdateUserRequest,
-    user_id: str = Depends(require_user),
-    store: HubStore = Depends(get_store),
-) -> UserResponse:
-    updates = payload.model_dump(exclude_none=True, by_alias=True)
-    if not updates:
-        raise ApiError("At least one field is required", 400, "ValidationError")
-    item = store.update_profile(user_id, updates)
     return _to_user(item)

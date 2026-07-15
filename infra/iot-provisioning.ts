@@ -20,7 +20,11 @@ function createProvisionTask(
     handler,
     runtime: 'python3.13',
     memory: stageConfig.lambda.memory,
-    timeout: '60 seconds',
+    timeout: '120 seconds',
+    // Provisioning is triggered by DynamoDB → Pipe → Step Functions. Live/dev
+    // mode often hangs these invocations (CreateCert/Finalize timeout at 120s).
+    // Run them in AWS so device create works even when the Live bridge is flaky.
+    dev: false,
     link: [table, simulatorQueue],
     environment: {
       TABLE_NAME: table.name,
@@ -181,13 +185,8 @@ export function createIotProvisioning(table: StorageTable) {
     ([parseArn, certArn, thingArn, finalizeArn, failedArn]) =>
       JSON.stringify({
         Comment: 'Provision HomeHub IoT device with per-device certificate',
-        StartAt: 'NormalizeInput',
+        StartAt: 'ParseInput',
         States: {
-          NormalizeInput: {
-            Type: 'Pass',
-            InputPath: '$[0]',
-            Next: 'ParseInput',
-          },
           ParseInput: {
             Type: 'Task',
             Resource: parseArn,
@@ -202,12 +201,14 @@ export function createIotProvisioning(table: StorageTable) {
           CreateCert: {
             Type: 'Task',
             Resource: certArn,
+            ResultPath: '$.cert',
             Next: 'CreateThing',
             Catch: [{ ErrorEquals: ['States.ALL'], ResultPath: '$.error', Next: 'MarkFailed' }],
           },
           CreateThing: {
             Type: 'Task',
             Resource: thingArn,
+            ResultPath: '$.thing',
             Next: 'Finalize',
             Catch: [{ ErrorEquals: ['States.ALL'], ResultPath: '$.error', Next: 'MarkFailed' }],
           },

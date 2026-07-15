@@ -5,35 +5,41 @@
 
 <script lang="ts">
 import type { Device, Reading } from '@sst-monorepo/core';
-import { onMount } from 'svelte';
+import { onDestroy, onMount } from 'svelte';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
 import DeviceAccordionRow from '$lib/components/device-accordion-row.svelte';
-import DeviceModelLink from '$lib/components/device-model-link.svelte';
+import DeviceThresholdsFields from '$lib/components/device-thresholds-fields.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import {
+  buildConfiguration,
+  type DeviceThresholds,
+  defaultThresholdsForType,
+} from '$lib/device-thresholds';
+import {
   DEVICE_TYPES,
   formatDeviceType,
   formatLifecycleStatus,
   formatStatus,
-  getDefaultConfiguration,
-  getDefaultModelForType,
-  getDeviceModelsForType,
   inputMinimal,
 } from '$lib/devices';
-import { formatLastReadingPrimary } from '$lib/issues';
 import {
   createDevice,
   deleteDevice,
   listDeviceReadings,
   listDevices,
 } from '$lib/services/rest-api';
+import {
+  formatLastReadingCompact,
+  formatLastReadingPrimary,
+  formatTelemetryPreview,
+} from '$lib/telemetry';
 
 let devices = $state<Device[]>([]);
-let lastReadings = $state<Record<string, Reading | null>>({});
+let recentReadings = $state<Record<string, Reading[]>>({});
 let loading = $state(true);
 let error = $state('');
 let showCreate = $state(false);
@@ -46,18 +52,22 @@ let selectedIds = $state<string[]>([]);
 let bulkDeleting = $state(false);
 
 let name = $state('');
-let type = $state('smoke-alarm');
-let model = $state(getDefaultModelForType('smoke-alarm'));
+let type = $state('heat-alarm');
 let location = $state('');
+let thresholds = $state<DeviceThresholds>(defaultThresholdsForType('heat-alarm'));
 
-const availableModels = $derived(getDeviceModelsForType(type));
+const telemetryPreview = $derived(formatTelemetryPreview(type, thresholds));
+
+$effect(() => {
+  thresholds = defaultThresholdsForType(type);
+});
 
 const filteredDevices = $derived.by(() => {
   const q = query.trim().toLowerCase();
   if (!q) return devices;
 
   return devices.filter((device) => {
-    const reading = lastReadings[device.deviceId];
+    const reading = recentReadings[device.deviceId]?.[0] ?? null;
     const haystack = [
       device.name,
       device.location ?? '',
@@ -66,9 +76,10 @@ const filteredDevices = $derived.by(() => {
       device.lifecycleStatus,
       formatLifecycleStatus(device.lifecycleStatus),
       device.type,
-      formatDeviceType(device.type, device.configuration),
+      formatDeviceType(device.type),
       device.deviceId,
       formatLastReadingPrimary(device.type, reading),
+      formatLastReadingCompact(device.type, reading, device.configuration),
     ]
       .join(' ')
       .toLowerCase();
@@ -105,31 +116,57 @@ function toggleSelectAll() {
   }
 }
 
-$effect(() => {
-  const models = getDeviceModelsForType(type);
-  if (!models.some((item) => item.value === model)) {
-    model = getDefaultModelForType(type);
-  }
-});
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+const READINGS_POLL_MS = 10_000;
 
 onMount(() => {
-  loadDevices();
+  void loadDevices();
+  pollTimer = setInterval(() => {
+    if (devices.some((device) => device.lifecycleStatus === 'PROVISIONING')) {
+      void refreshDevices().catch(console.error);
+      return;
+    }
+    if (devices.some((device) => device.status === 'ONLINE')) {
+      void refreshLastReadings().catch(console.error);
+    }
+  }, READINGS_POLL_MS);
 });
+
+onDestroy(() => {
+  if (pollTimer) clearInterval(pollTimer);
+});
+
+async function refreshDevices() {
+  const nextDevices = await listDevices();
+  devices = nextDevices;
+
+  const readingEntries = await Promise.all(
+    nextDevices.map(async (device) => {
+      const readings = await listDeviceReadings(device.deviceId);
+      return [device.deviceId, readings.slice(0, 10)] as const;
+    })
+  );
+  recentReadings = Object.fromEntries(readingEntries);
+}
+
+async function refreshLastReadings() {
+  const onlineDevices = devices.filter((device) => device.status === 'ONLINE');
+  if (onlineDevices.length === 0) return;
+
+  const readingEntries = await Promise.all(
+    onlineDevices.map(async (device) => {
+      const readings = await listDeviceReadings(device.deviceId);
+      return [device.deviceId, readings.slice(0, 10)] as const;
+    })
+  );
+  recentReadings = { ...recentReadings, ...Object.fromEntries(readingEntries) };
+}
 
 async function loadDevices() {
   loading = true;
   error = '';
   try {
-    const nextDevices = await listDevices();
-    devices = nextDevices;
-
-    const readingEntries = await Promise.all(
-      nextDevices.map(async (device) => {
-        const readings = await listDeviceReadings(device.deviceId);
-        return [device.deviceId, readings[0] ?? null] as const;
-      })
-    );
-    lastReadings = Object.fromEntries(readingEntries);
+    await refreshDevices();
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to list devices';
@@ -145,16 +182,14 @@ async function handleCreate() {
     const created = await createDevice({
       name: name.trim(),
       type,
-      location: location.trim() || null,
-      configuration: JSON.stringify(getDefaultConfiguration(type, model)),
+      location: location.trim(),
+      configuration: buildConfiguration(type, thresholds),
     });
     name = '';
     location = '';
-    type = 'smoke-alarm';
-    model = getDefaultModelForType('smoke-alarm');
+    type = 'heat-alarm';
     showCreate = false;
-    devices = [created, ...devices];
-    lastReadings = { ...lastReadings, [created.deviceId]: null };
+    await refreshDevices();
   } catch (err) {
     console.error(err);
     error = err instanceof Error ? err.message : 'Failed to register device';
@@ -255,7 +290,7 @@ $effect(() => {
           id="device-search"
           type="search"
           bind:value={query}
-          placeholder="Filter by name, location, status, model…"
+          placeholder="Filter by name, location, status, type…"
           aria-label="Filter devices"
           class="rounded-none border-x-0 border-t-0 border-b border-border bg-transparent py-2 pr-0 pl-6 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-foreground placeholder:text-muted-foreground"
         />
@@ -352,7 +387,7 @@ $effect(() => {
           Register device
         </h2>
         <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
-          Add a smoke alarm, heat alarm, CO alarm, or environmental sensor to your home (Aico HomeLINK).
+          Add a heat alarm, CO alarm, or humidity sensor to your home.
         </p>
       </div>
 
@@ -361,7 +396,7 @@ $effect(() => {
         <Input
           id="name"
           bind:value={name}
-          placeholder="Hallway Smoke Alarm"
+          placeholder="Hallway Heat Alarm"
           required
           class={inputMinimal}
         />
@@ -378,21 +413,33 @@ $effect(() => {
             <option value={option.value}>{option.label}</option>
           {/each}
         </select>
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <Label for="model" class="text-muted-foreground text-xs font-normal">Model</Label>
-        <div class="flex items-center gap-2">
-          <select
-            id="model"
-            bind:value={model}
-            class="h-9 min-w-0 flex-1 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
-          >
-            {#each availableModels as option}
-              <option value={option.value}>{option.label}</option>
-            {/each}
-          </select>
-          <DeviceModelLink {model} />
+        <div class="mt-4 space-y-4">
+          <div>
+            <p class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
+              Alert thresholds
+            </p>
+            <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
+              Readings above these values move the device into a warning state.
+            </p>
+          </div>
+          <DeviceThresholdsFields
+            deviceType={type}
+            {thresholds}
+            onchange={(next) => {
+              thresholds = next;
+            }}
+          />
+        </div>
+        <div class="mt-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
+          <p class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
+            Telemetry sent
+          </p>
+          <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
+            Example payload reported every 10 seconds once the device is online.
+          </p>
+          <pre
+            class="mt-3 overflow-x-auto rounded-sm border border-border bg-background px-3 py-2 font-mono text-[0.7rem] text-foreground leading-relaxed"
+          >{telemetryPreview}</pre>
         </div>
       </div>
 
@@ -402,11 +449,12 @@ $effect(() => {
           id="location"
           bind:value={location}
           placeholder="Living Room"
+          required
           class={inputMinimal}
         />
       </div>
 
-      <Button type="submit" class="rounded-sm" disabled={creating || !name.trim()}>
+      <Button type="submit" class="rounded-sm" disabled={creating || !name.trim() || !location.trim()}>
         {creating ? 'Registering…' : 'Register'}
       </Button>
     </form>
@@ -455,8 +503,10 @@ $effect(() => {
             <th class={thClass}>Device</th>
             <th class={thClass}>Location</th>
             <th class={thClass}>Lifecycle</th>
-            <th class={thClass}>Last reading</th>
-            <th class={thClass}>Status</th>
+            <th class={thClass} title="Current reading, then warn threshold">
+              Reading
+            </th>
+            <th class={thClass}>Power</th>
             <th class="{thClass} text-right">Actions</th>
           </tr>
         </thead>
@@ -465,7 +515,7 @@ $effect(() => {
             <DeviceAccordionRow
               {device}
               selected={isSelected(device.deviceId)}
-              lastReading={lastReadings[device.deviceId] ?? null}
+              recentReadings={recentReadings[device.deviceId] ?? []}
               deleting={deletingId === device.deviceId}
               onToggleSelect={() => toggleSelected(device.deviceId)}
               onDelete={() => requestDelete(device)}

@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 import boto3
+from boto3.dynamodb.conditions import Key
 
 from simulator.device import VirtualDevice, resolve_iot_endpoint
 
@@ -21,6 +22,40 @@ class Reconciler:
         self._table = boto3.resource("dynamodb").Table(table_name)
         self._devices: dict[str, VirtualDevice] = {}
         self._iot_endpoint = resolve_iot_endpoint()
+
+    def bootstrap_online_devices(self) -> None:
+        """Restart virtual devices after a container deploy.
+
+        SQS only delivers new events, so a fresh simulator process would otherwise
+        sit idle until something toggles power or a device is provisioned again.
+        """
+        query_kwargs: dict[str, Any] = {
+            "KeyConditionExpression": Key("PK").eq("SIMULATOR") & Key("SK").begins_with("DEVICE#"),
+        }
+        while True:
+            response = self._table.query(**query_kwargs)
+            for item in response.get("Items", []):
+                if not item.get("enabled", True):
+                    continue
+
+                device_id = str(item.get("deviceId") or str(item["SK"]).removeprefix("DEVICE#"))
+                tenant_pk = str(item.get("tenantPk", "HUB#demo"))
+                device = self._table.get_item(
+                    Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"}
+                ).get("Item")
+                if not device:
+                    continue
+                if device.get("lifecycleStatus") != "READY":
+                    continue
+                if device.get("status") != "ONLINE":
+                    continue
+
+                self._start_device(device_id)
+
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            query_kwargs["ExclusiveStartKey"] = last_key
 
     def poll_once(self) -> None:
         response = self._sqs.receive_message(
@@ -66,11 +101,13 @@ class Reconciler:
             logger.info("Device %s already running", device_id)
             return
 
+        from simulator.telemetry import simulator_device_type
+
         virtual = VirtualDevice(
             device_id=device_id,
             hub_id=hub_id,
             thing_name=str(registry.get("thingName") or device.get("thingName") or f"homehub-{device_id}"),
-            device_type=str(device.get("type", "environmental-sensor")),
+            device_type=simulator_device_type(str(device.get("type", "humidity-sensor"))),
             configuration=device.get("configuration"),
             iot_endpoint=self._iot_endpoint,
             ssm_cert_prefix=registry.get("ssmCertPrefix"),

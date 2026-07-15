@@ -10,7 +10,7 @@ Python Docker container that long-polls the simulator SQS queue and runs one MQT
 - Loads **per-device** X.509 certs from SSM (`/homehub/devices/{deviceId}/cert|key|ca`)
 - Loads device config from DynamoDB (`SIMULATOR` registry + `DEVICE#` item)
 - Connects to AWS IoT Core with the device-specific certificate
-- Publishes telemetry to `homehub/devices/{deviceId}/telemetry` (~60s interval)
+- Publishes telemetry to `homehub/devices/{deviceId}/telemetry` (~10s interval)
 - Subscribes to Device Shadow deltas and reports state
 
 Certs are created automatically by the **DeviceProvision** Step Functions workflow when a device is registered.

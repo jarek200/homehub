@@ -38,7 +38,7 @@ const deviceSimulatorStages = new Set(['int', 'prod']);
 
 const configs: Record<string, StageConfig> = {
   int: {
-    lambda: { memory: '512 MB', timeout: '15 seconds' },
+    lambda: { memory: '512 MB', timeout: '30 seconds' },
     sveltekit: { memory: '1024 MB' },
     iot: { skipProvisioning: skipIotProvisioning },
     deviceSimulator: {

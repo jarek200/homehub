@@ -73,7 +73,7 @@ export default $config({
     const iotProvisioning = createIotProvisioning(table);
     const deviceSimulator = createDeviceSimulator(table, iotProvisioning);
     const iotTelemetry = createIotTelemetry(table);
-    const restApi = createRestApi(table, auth, iotProvisioning);
+    const restApi = createRestApi(table, auth, iotProvisioning, iotTelemetry);
 
     const webAppUrl = getWebAppUrl();
     const webDomain = getWebDomainConfig();
@@ -123,6 +123,7 @@ export default $config({
       iotEndpoint: iotProvisioning.iotEndpoint.endpointAddress,
       provisionStateMachineArn: iotProvisioning.stateMachine.arn,
       telemetryBucket: iotTelemetry.telemetryBucket.bucket,
+      athenaResultsBucket: iotTelemetry.athenaResultsBucket.bucket,
       ...(deviceSimulator
         ? {
             deviceSimulatorServiceName: deviceSimulator.serviceName,

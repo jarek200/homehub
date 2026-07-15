@@ -61,8 +61,8 @@ def _verify_bearer_token(token: str) -> str:
 
 
 def verify_api_key_or_jwt(
-    authorization: str | None = Header(default=None),
-    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+    authorization: str | None = Header(default=None, include_in_schema=False),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key", include_in_schema=False),
 ) -> AuthContext:
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()

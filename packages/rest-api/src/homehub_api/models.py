@@ -1,93 +1,91 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from homehub_api.config import INPUT_LIMITS
+from homehub_api.device_configuration import (
+    DeviceConfiguration,
+    coerce_configuration,
+    configuration_from_storage,
+)
 
 DeviceStatus = Literal["ONLINE", "OFFLINE", "UNKNOWN"]
 LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
-CommandStatus = Literal["PENDING", "SENT", "ACKNOWLEDGED", "FAILED"]
-IssueStatus = Literal["OPEN", "MONITORING", "RESOLVED"]
-IssueSeverity = Literal["LOW", "MEDIUM", "HIGH"]
+ReadingState = Literal["normal", "warning"]
+DeviceType = Literal["heat-alarm", "carbon-monoxide-alarm", "humidity-sensor"]
+
+DEVICE_TYPE_ALIASES = {
+    "environmental-sensor": "humidity-sensor",
+}
+
+
+def _normalize_device_type(value: str) -> str:
+    stripped = value.strip()
+    return DEVICE_TYPE_ALIASES.get(stripped, stripped)
 
 
 class CreateDeviceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=INPUT_LIMITS["name"])
-    type: str = Field(min_length=1, max_length=INPUT_LIMITS["type"])
-    location: str | None = Field(default=None, max_length=INPUT_LIMITS["location"])
-    configuration: str | None = Field(default=None, max_length=INPUT_LIMITS["configuration"])
+    type: DeviceType = Field(
+        description=(
+            "Device kind. One of: heat-alarm, carbon-monoxide-alarm, humidity-sensor."
+        ),
+    )
+    location: str = Field(min_length=1, max_length=INPUT_LIMITS["location"])
+    configuration: DeviceConfiguration | None = None
 
-    @field_validator("name", "type", mode="before")
+    @field_validator("name", "location", mode="before")
     @classmethod
     def strip_required(cls, value: str) -> str:
         return value.strip()
 
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type(cls, value: str) -> str:
+        if not isinstance(value, str):
+            return value
+        return _normalize_device_type(value)
+
+    @field_validator("configuration", mode="before")
+    @classmethod
+    def parse_configuration(cls, value: Any) -> DeviceConfiguration | None:
+        return coerce_configuration(value)
+
 
 class UpdateDeviceRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=INPUT_LIMITS["name"])
-    type: str | None = Field(default=None, max_length=INPUT_LIMITS["type"])
-    location: str | None = Field(default=None, max_length=INPUT_LIMITS["location"])
+    type: DeviceType | None = Field(
+        default=None,
+        description="Cannot be changed after registration.",
+    )
+    location: str | None = Field(default=None, min_length=1, max_length=INPUT_LIMITS["location"])
     status: DeviceStatus | None = None
-    configuration: str | None = Field(default=None, max_length=INPUT_LIMITS["configuration"])
+    configuration: DeviceConfiguration | None = None
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")
+
+    @field_validator("name", "location", mode="before")
+    @classmethod
+    def strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        return _normalize_device_type(value)
+
+    @field_validator("configuration", mode="before")
+    @classmethod
+    def parse_configuration(cls, value: Any) -> DeviceConfiguration | None:
+        return coerce_configuration(value)
 
     @model_validator(mode="after")
     def require_one_field(self) -> "UpdateDeviceRequest":
-        if not self.model_dump(exclude_none=True, by_alias=True):
-            raise ValueError("At least one field is required")
-        return self
-
-
-class CreateReadingRequest(BaseModel):
-    temperature: float | None = None
-    humidity: float | None = Field(default=None, ge=0, le=100)
-    motion_detected: bool | None = Field(default=None, alias="motionDetected")
-    camera_online: bool | None = Field(default=None, alias="cameraOnline")
-    recorded_at: str | None = Field(default=None, alias="recordedAt")
-
-    @model_validator(mode="after")
-    def require_one_value(self) -> "CreateReadingRequest":
-        if (
-            self.temperature is None
-            and self.humidity is None
-            and self.motion_detected is None
-            and self.camera_online is None
-        ):
-            raise ValueError("At least one reading value is required")
-        return self
-
-
-class CreateCommandRequest(BaseModel):
-    command: str = Field(min_length=1, max_length=INPUT_LIMITS["command"])
-
-    @field_validator("command", mode="before")
-    @classmethod
-    def strip_command(cls, value: str) -> str:
-        return value.strip()
-
-
-class CreateIssueRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=INPUT_LIMITS["issue_title"])
-    device_id: str | None = Field(default=None, alias="deviceId")
-    severity: IssueSeverity = "MEDIUM"
-    status: IssueStatus = "OPEN"
-    notes: str | None = Field(default=None, max_length=INPUT_LIMITS["issue_notes"])
-
-    @field_validator("title", mode="before")
-    @classmethod
-    def strip_title(cls, value: str) -> str:
-        return value.strip()
-
-
-class UpdateIssueRequest(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=INPUT_LIMITS["issue_title"])
-    device_id: str | None = Field(default=None, alias="deviceId")
-    severity: IssueSeverity | None = None
-    status: IssueStatus | None = None
-    notes: str | None = Field(default=None, max_length=INPUT_LIMITS["issue_notes"])
-
-    @model_validator(mode="after")
-    def require_one_field(self) -> "UpdateIssueRequest":
         if not self.model_dump(exclude_none=True, by_alias=True):
             raise ValueError("At least one field is required")
         return self
@@ -103,48 +101,27 @@ class DeviceResponse(BaseModel):
     thing_name: str | None = Field(default=None, alias="thingName")
     certificate_id: str | None = Field(default=None, alias="certificateId")
     failure_reason: str | None = Field(default=None, alias="failureReason")
-    configuration: str | None = None
+    configuration: DeviceConfiguration | None = None
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
 
     model_config = {"populate_by_name": True}
 
+    @field_validator("configuration", mode="before")
+    @classmethod
+    def parse_configuration(cls, value: Any) -> DeviceConfiguration | None:
+        return configuration_from_storage(value)
+
 
 class ReadingResponse(BaseModel):
     reading_id: str = Field(alias="readingId")
     device_id: str = Field(alias="deviceId")
-    temperature: float | None = None
-    humidity: float | None = None
-    motion_detected: bool | None = Field(default=None, alias="motionDetected")
-    camera_online: bool | None = Field(default=None, alias="cameraOnline")
+    alarm: bool = False
+    state: ReadingState = "normal"
+    metrics: dict[str, float | bool] = Field(default_factory=dict)
     recorded_at: str = Field(alias="recordedAt")
     created_at: str = Field(alias="createdAt")
-
-    model_config = {"populate_by_name": True}
-
-
-class CommandResponse(BaseModel):
-    command_id: str = Field(alias="commandId")
-    device_id: str = Field(alias="deviceId")
-    command: str
-    status: CommandStatus
-    result: str | None = None
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-
-    model_config = {"populate_by_name": True}
-
-
-class IssueResponse(BaseModel):
-    issue_id: str = Field(alias="issueId")
-    title: str
-    device_id: str | None = Field(default=None, alias="deviceId")
-    severity: IssueSeverity
-    status: IssueStatus
-    notes: str | None = None
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
 
     model_config = {"populate_by_name": True}
 
@@ -155,20 +132,6 @@ class DeviceListResponse(BaseModel):
 
 class ReadingListResponse(BaseModel):
     items: list[ReadingResponse]
-
-
-class CommandListResponse(BaseModel):
-    items: list[CommandResponse]
-
-
-class IssueListResponse(BaseModel):
-    items: list[IssueResponse]
-
-
-class UpdateUserRequest(BaseModel):
-    name: str | None = Field(default=None, max_length=INPUT_LIMITS["name"])
-    bio: str | None = Field(default=None, max_length=INPUT_LIMITS["bio"])
-    avatar: str | None = Field(default=None, max_length=INPUT_LIMITS["avatar"])
 
 
 class UserResponse(BaseModel):
@@ -189,11 +152,6 @@ class DeleteDeviceResponse(BaseModel):
     device_id: str = Field(alias="deviceId")
 
     model_config = {"populate_by_name": True}
-
-
-class CreateReadingResponse(BaseModel):
-    reading: ReadingResponse
-    issue: IssueResponse | None = None
 
 
 class ServiceInfoResponse(BaseModel):

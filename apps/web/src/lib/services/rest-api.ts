@@ -1,15 +1,8 @@
 import type {
-  Command,
   CreateDeviceInput,
-  CreateHomeIssueInput,
-  CreateReadingInput,
   Device,
-  HomeIssue,
   Reading,
-  SendCommandInput,
   UpdateDeviceInput,
-  UpdateHomeIssueInput,
-  UpdateUserInput,
   User,
 } from '@sst-monorepo/core';
 import { RestApiError, restRequest } from './rest';
@@ -60,52 +53,11 @@ export async function listDeviceReadings(deviceId: string): Promise<Reading[]> {
   return result.items ?? [];
 }
 
-export async function createDeviceReading(
-  deviceId: string,
-  input: CreateReadingInput
-): Promise<{ reading: Reading; issue: HomeIssue | null }> {
-  return restRequest<{ reading: Reading; issue: HomeIssue | null }>(
-    `/devices/${encodeURIComponent(deviceId)}/readings`,
-    { method: 'POST', body: input }
-  );
-}
-
-export async function listDeviceCommands(deviceId: string): Promise<Command[]> {
-  const result = await restRequest<ListResponse<Command>>(
-    `/devices/${encodeURIComponent(deviceId)}/commands`
+export async function listDeviceReadingHistory(deviceId: string, hours = 3): Promise<Reading[]> {
+  const result = await restRequest<ListResponse<Reading>>(
+    `/devices/${encodeURIComponent(deviceId)}/readings/history?hours=${hours}`
   );
   return result.items ?? [];
-}
-
-export async function sendCommand(deviceId: string, input: SendCommandInput): Promise<Command> {
-  return restRequest<Command>(`/devices/${encodeURIComponent(deviceId)}/commands`, {
-    method: 'POST',
-    body: input,
-  });
-}
-
-export async function listIssues(): Promise<HomeIssue[]> {
-  const result = await restRequest<ListResponse<HomeIssue>>('/issues');
-  return result.items ?? [];
-}
-
-export async function createIssue(input: CreateHomeIssueInput): Promise<HomeIssue> {
-  return restRequest<HomeIssue>('/issues', { method: 'POST', body: input });
-}
-
-export async function updateIssue(
-  issueId: string,
-  input: UpdateHomeIssueInput
-): Promise<HomeIssue> {
-  return restRequest<HomeIssue>(`/issues/${encodeURIComponent(issueId)}`, {
-    method: 'PATCH',
-    body: input,
-  });
-}
-
-export async function listDeviceIssues(deviceId: string): Promise<HomeIssue[]> {
-  const issues = await listIssues();
-  return issues.filter((issue) => issue.deviceId === deviceId);
 }
 
 export async function getMyProfile(): Promise<User | null> {
@@ -117,8 +69,4 @@ export async function getMyProfile(): Promise<User | null> {
     }
     throw err;
   }
-}
-
-export async function updateUserProfile(input: UpdateUserInput): Promise<User> {
-  return restRequest<User>('/me', { method: 'PATCH', body: input });
 }

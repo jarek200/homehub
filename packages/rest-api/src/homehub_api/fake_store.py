@@ -7,22 +7,13 @@ from typing import Any
 
 from ulid import new as new_ulid
 
-from homehub_api.config import HUMIDITY_ISSUE_THRESHOLD
 from homehub_api.errors import ApiError
 from homehub_api.models import (
-    CommandResponse,
-    CreateCommandRequest,
     CreateDeviceRequest,
-    CreateIssueRequest,
-    CreateReadingRequest,
-    CreateReadingResponse,
     DeviceResponse,
-    IssueResponse,
     ReadingResponse,
     UpdateDeviceRequest,
-    UpdateIssueRequest,
 )
-from homehub_api.store import humidity_issue_title
 
 
 def _now_iso() -> str:
@@ -37,8 +28,6 @@ class FakeHubStore:
     def __init__(self) -> None:
         self.devices: dict[str, DeviceResponse] = {}
         self.readings: dict[str, list[ReadingResponse]] = {}
-        self.commands: dict[str, list[CommandResponse]] = {}
-        self.issues: dict[str, IssueResponse] = {}
 
     def list_devices(self, limit: int = 50) -> list[DeviceResponse]:
         return list(self.devices.values())[:limit]
@@ -68,8 +57,20 @@ class FakeHubStore:
         if not existing:
             raise ApiError("Device not found", 404, "NotFound")
 
+        updates = payload.model_dump(exclude_none=True, by_alias=True)
+        if not updates:
+            raise ApiError("At least one field is required", 400, "ValidationError")
+
+        if payload.type is not None and payload.type != existing.type:
+            raise ApiError(
+                "Device type cannot be changed after registration",
+                400,
+                "ValidationError",
+            )
+        updates.pop("type", None)
+
         data = existing.model_dump(by_alias=True)
-        data.update(payload.model_dump(exclude_none=True, by_alias=True))
+        data.update(updates)
         data["updatedAt"] = _now_iso()
         updated = DeviceResponse.model_validate(data)
         self.devices[device_id] = updated
@@ -84,103 +85,6 @@ class FakeHubStore:
     def list_readings(self, device_id: str, limit: int = 50) -> list[ReadingResponse]:
         self._require_device(device_id)
         return (self.readings.get(device_id) or [])[:limit]
-
-    def create_reading(
-        self, device_id: str, payload: CreateReadingRequest
-    ) -> CreateReadingResponse:
-        self._require_device(device_id)
-        reading_id = _new_id()
-        timestamp = _now_iso()
-        reading = ReadingResponse(
-            readingId=reading_id,
-            deviceId=device_id,
-            temperature=payload.temperature,
-            humidity=payload.humidity,
-            motionDetected=payload.motion_detected,
-            cameraOnline=payload.camera_online,
-            recordedAt=payload.recorded_at or timestamp,
-            createdAt=timestamp,
-        )
-        self.readings.setdefault(device_id, []).insert(0, reading)
-        issue: IssueResponse | None = None
-
-        if payload.humidity is not None and payload.humidity >= HUMIDITY_ISSUE_THRESHOLD:
-            open_issues = [
-                existing
-                for existing in self.issues.values()
-                if existing.device_id == device_id and existing.status == "OPEN"
-            ]
-            if not open_issues:
-                issue = self.create_issue(
-                    CreateIssueRequest(
-                        title=humidity_issue_title(payload.humidity),
-                        deviceId=device_id,
-                        severity="HIGH",
-                        status="OPEN",
-                        notes="Automatically raised from a high humidity sensor reading.",
-                    )
-                )
-
-        return CreateReadingResponse(reading=reading, issue=issue)
-
-    def list_commands(self, device_id: str, limit: int = 50) -> list[CommandResponse]:
-        self._require_device(device_id)
-        return (self.commands.get(device_id) or [])[:limit]
-
-    def create_command(self, device_id: str, payload: CreateCommandRequest) -> CommandResponse:
-        self._require_device(device_id)
-        command_id = _new_id()
-        timestamp = _now_iso()
-        command = CommandResponse(
-            commandId=command_id,
-            deviceId=device_id,
-            command=payload.command,
-            status="PENDING",
-            createdAt=timestamp,
-            updatedAt=timestamp,
-        )
-        self.commands.setdefault(device_id, []).insert(0, command)
-        return command
-
-    def list_issues(self, limit: int = 50) -> list[IssueResponse]:
-        return list(self.issues.values())[:limit]
-
-    def get_issue(self, issue_id: str) -> IssueResponse | None:
-        return self.issues.get(issue_id)
-
-    def create_issue(self, payload: CreateIssueRequest) -> IssueResponse:
-        if payload.device_id:
-            self._require_device(payload.device_id)
-
-        issue_id = _new_id()
-        timestamp = _now_iso()
-        issue = IssueResponse(
-            issueId=issue_id,
-            title=payload.title,
-            deviceId=payload.device_id,
-            severity=payload.severity,
-            status=payload.status,
-            notes=payload.notes,
-            createdAt=timestamp,
-            updatedAt=timestamp,
-        )
-        self.issues[issue_id] = issue
-        return issue
-
-    def update_issue(self, issue_id: str, payload: UpdateIssueRequest) -> IssueResponse:
-        existing = self.get_issue(issue_id)
-        if not existing:
-            raise ApiError("Issue not found", 404, "NotFound")
-
-        if payload.device_id:
-            self._require_device(payload.device_id)
-
-        data = existing.model_dump(by_alias=True)
-        data.update(payload.model_dump(exclude_none=True, by_alias=True))
-        data["updatedAt"] = _now_iso()
-        updated = IssueResponse.model_validate(data)
-        self.issues[issue_id] = updated
-        return updated
 
     def _require_device(self, device_id: str) -> DeviceResponse:
         device = self.get_device(device_id)

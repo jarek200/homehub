@@ -1,16 +1,5 @@
 // Shared types and utilities
 
 export * from './devices';
-export type {
-  Command,
-  CreateHomeIssueInput,
-  Device,
-  HomeIssue,
-  Reading,
-  SendCommandInput,
-  UpdateHomeIssueInput,
-  UpdateUserInput,
-  User,
-} from './domain';
+export type { Device, Reading, User } from './domain';
 export * from './env';
-export * from './issues';

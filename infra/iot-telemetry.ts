@@ -27,9 +27,21 @@ export function createIotTelemetry(table: StorageTable) {
     databaseName: glueDatabase.name,
     name: 'device_telemetry',
     tableType: 'EXTERNAL_TABLE',
-    parameters: {
+    parameters: telemetryBucket.bucket.apply((name) => ({
       classification: 'parquet',
-    },
+      'projection.enabled': 'true',
+      'projection.hub.type': 'injected',
+      'projection.year.type': 'integer',
+      'projection.year.range': '2024,2035',
+      'projection.year.digits': '4',
+      'projection.month.type': 'integer',
+      'projection.month.range': '1,12',
+      'projection.month.digits': '2',
+      'projection.day.type': 'integer',
+      'projection.day.range': '1,31',
+      'projection.day.digits': '2',
+      'storage.location.template': `s3://${name}/telemetry/hub=\${hub}/year=\${year}/month=\${month}/day=\${day}`,
+    })),
     storageDescriptor: {
       location: telemetryBucket.bucket.apply((name) => `s3://${name}/telemetry/`),
       inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
@@ -41,10 +53,9 @@ export function createIotTelemetry(table: StorageTable) {
         { name: 'hubid', type: 'string' },
         { name: 'deviceid', type: 'string' },
         { name: 'thingname', type: 'string' },
-        { name: 'temperature', type: 'double' },
-        { name: 'humidity', type: 'double' },
-        { name: 'motiondetected', type: 'boolean' },
-        { name: 'cameraonline', type: 'boolean' },
+        { name: 'alarm', type: 'boolean' },
+        { name: 'state', type: 'string' },
+        { name: 'metrics', type: 'string' },
         { name: 'recordedat', type: 'string' },
       ],
     },
@@ -54,6 +65,19 @@ export function createIotTelemetry(table: StorageTable) {
       { name: 'month', type: 'string' },
       { name: 'day', type: 'string' },
     ],
+  });
+
+  const athenaResultsBucket = new aws.s3.Bucket('AthenaResults', {
+    bucket: `${$app.name}-athena-results-${$app.stage}`,
+    forceDestroy: $app.stage !== 'prod',
+  });
+
+  new aws.s3.BucketPublicAccessBlock('AthenaResultsPublicAccessBlock', {
+    bucket: athenaResultsBucket.id,
+    blockPublicAcls: true,
+    blockPublicPolicy: true,
+    ignorePublicAcls: true,
+    restrictPublicBuckets: true,
   });
 
   const firehoseRole = new aws.iam.Role('TelemetryFirehoseRole', {
@@ -224,7 +248,7 @@ export function createIotTelemetry(table: StorageTable) {
   const coldRule = new aws.iot.TopicRule('TelemetryColdRule', {
     name: `${$app.name}_${$app.stage}_telemetry_cold`,
     enabled: true,
-    sql: "SELECT topic(3) AS deviceid, hubId AS hubid, thingName AS thingname, timestamp() AS recordedat, temperature, humidity, motionDetected AS motiondetected, cameraOnline AS cameraonline FROM 'homehub/devices/+/telemetry'",
+    sql: "SELECT topic(3) AS deviceid, hubId AS hubid, thingName AS thingname, timestamp() AS recordedat, alarm, state, metrics FROM 'homehub/devices/+/telemetry'",
     sqlVersion: '2016-03-23',
     firehoses: [
       {
@@ -237,6 +261,7 @@ export function createIotTelemetry(table: StorageTable) {
 
   return {
     telemetryBucket,
+    athenaResultsBucket,
     glueDatabase,
     glueTable,
     firehoseStream,

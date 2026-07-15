@@ -3,9 +3,6 @@ export const INPUT_LIMITS = {
   type: 64,
   location: 100,
   configuration: 4096,
-  command: 64,
-  issueTitle: 200,
-  issueNotes: 2000,
 } as const;
 
 export const DEMO_TENANT_ID = 'demo';
@@ -25,36 +22,33 @@ export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 export const LIFECYCLE_STATUSES = ['PROVISIONING', 'READY', 'FAILED', 'DECOMMISSIONED'] as const;
 export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 
-export const COMMAND_STATUSES = ['PENDING', 'SENT', 'ACKNOWLEDGED', 'FAILED'] as const;
-export type CommandStatus = (typeof COMMAND_STATUSES)[number];
+/** Device settings exposed by the REST API (object, not a JSON string). */
+export interface DeviceConfiguration {
+  reportingIntervalSeconds?: number;
+  thresholds?: Record<string, number>;
+  [key: string]: unknown;
+}
 
 export interface CreateDeviceInput {
   name: string;
   type: string;
-  location?: string | null;
-  configuration?: string | null;
+  location: string;
+  configuration?: DeviceConfiguration | null;
 }
 
 export interface UpdateDeviceInput {
   name?: string;
   type?: string;
-  location?: string | null;
+  location?: string;
   status?: DeviceStatus;
-  configuration?: string | null;
+  configuration?: DeviceConfiguration | null;
   lastSeenAt?: string | null;
 }
 
-export interface CreateReadingInput {
-  temperature?: number | null;
-  humidity?: number | null;
-  motionDetected?: boolean | null;
-  cameraOnline?: boolean | null;
-  recordedAt?: string | null;
-}
+export const READING_STATES = ['normal', 'warning'] as const;
+export type ReadingState = (typeof READING_STATES)[number];
 
-export interface CreateCommandInput {
-  command: string;
-}
+export type ReadingMetrics = Record<string, number | boolean>;
 
 export interface DeviceRecord {
   deviceId: string;
@@ -66,7 +60,7 @@ export interface DeviceRecord {
   thingName?: string | null;
   certificateId?: string | null;
   failureReason?: string | null;
-  configuration?: string | null;
+  configuration?: DeviceConfiguration | null;
   lastSeenAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -75,20 +69,9 @@ export interface DeviceRecord {
 export interface ReadingRecord {
   readingId: string;
   deviceId: string;
-  temperature?: number | null;
-  humidity?: number | null;
-  motionDetected?: boolean | null;
-  cameraOnline?: boolean | null;
+  alarm: boolean;
+  state: ReadingState;
+  metrics: ReadingMetrics;
   recordedAt: string;
   createdAt: string;
-}
-
-export interface CommandRecord {
-  commandId: string;
-  deviceId: string;
-  command: string;
-  status: CommandStatus;
-  result?: string | null;
-  createdAt: string;
-  updatedAt: string;
 }

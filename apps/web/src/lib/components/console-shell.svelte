@@ -24,8 +24,7 @@ $effect(() => {
 
 const user = $derived(authState.user);
 const isDevices = $derived($page.url.pathname.startsWith('/devices'));
-const isIssues = $derived($page.url.pathname.startsWith('/issues'));
-const isAccount = $derived($page.url.pathname.startsWith('/dashboard'));
+const isApiDocs = $derived($page.url.pathname.startsWith('/api-docs'));
 
 const navLink = 'text-xs uppercase tracking-widest transition-colors';
 const navActive = 'text-foreground';
@@ -60,20 +59,9 @@ async function handleLogout() {
           >
             Devices
           </button>
-          <button
-            type="button"
-            class="{navLink} {isIssues ? navActive : navInactive}"
-            onclick={() => goto('/issues')}
-          >
-            Issues
-          </button>
-          <button
-            type="button"
-            class="{navLink} {isAccount ? navActive : navInactive}"
-            onclick={() => goto('/dashboard')}
-          >
-            Account
-          </button>
+          <a href="/api-docs" class="{navLink} {isApiDocs ? navActive : navInactive}">
+            API docs
+          </a>
         </nav>
       </div>
       <div class="flex shrink-0 items-center gap-4">

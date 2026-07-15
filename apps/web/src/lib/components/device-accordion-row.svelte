@@ -1,31 +1,32 @@
 <script lang="ts">
 import type { Device, DeviceStatus, Reading } from '@sst-monorepo/core';
-import DeviceModelLink from '$lib/components/device-model-link.svelte';
+import { goto } from '$app/navigation';
+import CompactReadingLine from '$lib/components/compact-reading-line.svelte';
+import DeviceThresholdsFields from '$lib/components/device-thresholds-fields.svelte';
+import ReadingStateDots from '$lib/components/reading-state-dots.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
+import { buildConfiguration, type DeviceThresholds } from '$lib/device-thresholds';
 import {
-  applyModelToConfiguration,
-  DEVICE_TYPES,
   formatDeviceType,
   formatLifecycleStatus,
+  formatOperatingStatus,
+  formatThresholdSummary,
   formatWhen,
-  getDefaultConfiguration,
-  getDefaultModelForType,
-  getDeviceModelsForType,
-  getDeviceModelUrl,
   inputMinimal,
+  isDeviceOn,
   lifecycleColorClass,
-  parseModelFromConfiguration,
+  operatingStatusAriaLabel,
+  parseThresholds,
   statusColorClass,
 } from '$lib/devices';
-import { formatLastReadingPrimary } from '$lib/issues';
 import { updateDevice } from '$lib/services/rest-api';
 
 interface Props {
   device: Device;
   selected: boolean;
-  lastReading: Reading | null;
+  recentReadings: Reading[];
   deleting?: boolean;
   onToggleSelect: () => void;
   onDelete: () => void;
@@ -35,7 +36,7 @@ interface Props {
 let {
   device,
   selected,
-  lastReading,
+  recentReadings,
   deleting = false,
   onToggleSelect,
   onDelete,
@@ -49,16 +50,15 @@ let saving = $state(false);
 let statusToggling = $state(false);
 
 let name = $state('');
-let type = $state('');
-let model = $state('');
 let location = $state('');
-let configuration = $state('');
+let thresholds = $state<DeviceThresholds>({});
 
-const availableModels = $derived(getDeviceModelsForType(type));
-const displayModel = $derived(parseModelFromConfiguration(device.configuration, device.type));
-const modelUrl = $derived(getDeviceModelUrl(displayModel));
-const isOnline = $derived(device.status === 'ONLINE');
+const lastReading = $derived(recentReadings[0] ?? null);
 
+const isOn = $derived(isDeviceOn(device.status));
+
+const detailGridClass = 'grid w-full grid-cols-[4%_4%_22%_12%_12%_22%_8%_16%]';
+const detailCellClass = 'px-4 py-4 align-top';
 const iconButton = 'rounded-sm border-border';
 const checkboxClass = 'device-checkbox';
 const tdClass = 'px-4 py-5 text-left align-middle';
@@ -69,19 +69,8 @@ function fieldId(suffix: string) {
 
 function syncForm(next: Device) {
   name = next.name;
-  type = next.type;
-  model = parseModelFromConfiguration(next.configuration, next.type);
   location = next.location ?? '';
-  configuration = next.configuration ?? '';
-}
-
-function handleTypeChange() {
-  model = getDefaultModelForType(type);
-  configuration = JSON.stringify(getDefaultConfiguration(type, model));
-}
-
-function handleModelChange() {
-  configuration = applyModelToConfiguration(configuration, type, model);
+  thresholds = parseThresholds(next.configuration, next.type);
 }
 
 function toggleExpanded() {
@@ -130,9 +119,8 @@ async function handleUpdate() {
   try {
     const updated = await updateDevice(device.deviceId, {
       name: name.trim(),
-      type,
-      location: location.trim() || null,
-      configuration: applyModelToConfiguration(configuration, type, model),
+      location: location.trim(),
+      configuration: buildConfiguration(device.type, thresholds, device.configuration),
     });
     syncForm(updated);
     editing = false;
@@ -189,25 +177,13 @@ $effect(() => {
     <button
       type="button"
       class="block w-full truncate text-left font-medium text-sm hover:underline"
-      onclick={toggleExpanded}
+      onclick={() => goto(`/devices/${device.deviceId}`)}
     >
       {device.name}
     </button>
-    {#if modelUrl}
-      <a
-        href={modelUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="mt-1 inline-block text-[0.7rem] text-muted-foreground underline decoration-muted-foreground/40 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground"
-        title="View product details on Aico"
-      >
-        {formatDeviceType(device.type, device.configuration)}
-      </a>
-    {:else}
-      <p class="mt-1 text-[0.7rem] text-muted-foreground">
-        {formatDeviceType(device.type, device.configuration)}
-      </p>
-    {/if}
+    <p class="mt-1 text-[0.7rem] text-muted-foreground">
+      {formatDeviceType(device.type)}
+    </p>
   </td>
   <td class="{tdClass} text-[0.75rem] text-muted-foreground md:text-sm">
     {device.location || '—'}
@@ -216,11 +192,25 @@ $effect(() => {
     <span class="text-sm font-medium {lifecycleColorClass(device.lifecycleStatus)}">
       {formatLifecycleStatus(device.lifecycleStatus)}
     </span>
+    {#if device.lifecycleStatus === 'FAILED' && device.failureReason}
+      <p class="mt-1 text-[0.65rem] text-destructive leading-relaxed">
+        {device.failureReason}
+      </p>
+    {/if}
   </td>
   <td class={tdClass}>
-    <p class="text-sm text-foreground">
-      {formatLastReadingPrimary(device.type, lastReading)}
-    </p>
+    <CompactReadingLine
+      deviceType={device.type}
+      reading={lastReading}
+      configuration={device.configuration}
+    />
+    <div class="mt-2">
+      <ReadingStateDots
+        readings={recentReadings}
+        deviceType={device.type}
+        configuration={device.configuration}
+      />
+    </div>
     <p class="mt-1 text-[0.65rem] text-muted-foreground">
       {formatWhen(lastReading?.recordedAt ?? device.lastSeenAt)}
     </p>
@@ -231,13 +221,13 @@ $effect(() => {
         type="button"
         role="switch"
         class="device-status-switch"
-        aria-checked={isOnline}
-        aria-label="{isOnline ? 'Turn off' : 'Turn on'} {device.name}"
+        aria-checked={isOn}
+        aria-label={operatingStatusAriaLabel(isOn, device.name)}
         disabled={statusToggling || deleting}
         onclick={toggleStatus}
       ></button>
       <span class="text-sm font-medium {statusColorClass(device.status)}">
-        {isOnline ? 'On' : 'Off'}
+        {formatOperatingStatus(device.status)}
       </span>
     </div>
   </td>
@@ -301,38 +291,112 @@ $effect(() => {
 
 {#if expanded}
   <tr class={selected ? 'bg-muted/30' : ''}>
-    <td colspan="8" class="border-border border-b px-4 pb-8 pt-0">
-      <div class="ml-2 space-y-4 border-border border-l pl-6 sm:ml-4">
-        {#if actionError}
-          <p class="text-[0.75rem] text-destructive">{actionError}</p>
-        {/if}
+    <td colspan="8" class="border-border border-b p-0">
+      {#if actionError}
+        <p class="px-4 pt-4 text-[0.75rem] text-destructive">{actionError}</p>
+      {/if}
 
-        {#if editing}
-          <div class="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              class="rounded-sm border-border"
-              aria-label="Save changes"
-              disabled={saving || !name.trim()}
-              onclick={handleUpdate}
-            >
-              {#if saving}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="size-4 animate-spin"
-                  aria-hidden="true"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-              {:else}
+      <div class={detailGridClass}>
+        <div class="px-2 py-4"></div>
+        <div class="px-3 py-4"></div>
+
+        <div class="{detailCellClass} space-y-4">
+          <div class="flex flex-col gap-2">
+            <Label for={fieldId('name')} class="text-muted-foreground text-xs font-normal">Name</Label>
+            {#if editing}
+              <Input id={fieldId('name')} bind:value={name} required class={inputMinimal} />
+            {:else}
+              <p class="text-sm text-foreground">{device.name}</p>
+            {/if}
+          </div>
+          <div class="flex flex-col gap-2">
+            <Label for={fieldId('type')} class="text-muted-foreground text-xs font-normal">Type</Label>
+            <p class="text-sm text-foreground">{formatDeviceType(device.type)}</p>
+          </div>
+        </div>
+
+        <div class="{detailCellClass} col-span-2">
+          <div class="flex flex-col gap-2">
+            <Label for={fieldId('location')} class="text-muted-foreground text-xs font-normal">Location</Label>
+            {#if editing}
+              <Input id={fieldId('location')} bind:value={location} required class={inputMinimal} />
+            {:else}
+              <p class="text-sm text-foreground">{device.location || '—'}</p>
+            {/if}
+          </div>
+        </div>
+
+        <div class="{detailCellClass} col-span-2">
+          <div class="flex flex-col gap-2">
+            <Label class="text-muted-foreground text-xs font-normal">Alert thresholds</Label>
+            {#if editing}
+              <DeviceThresholdsFields
+                deviceType={device.type}
+                idPrefix="{device.deviceId}-"
+                {thresholds}
+                onchange={(next) => {
+                  thresholds = next;
+                }}
+              />
+            {:else}
+              <p class="text-sm text-foreground">
+                {formatThresholdSummary(device.configuration, device.type)}
+              </p>
+            {/if}
+          </div>
+        </div>
+
+        <div class={detailCellClass}>
+          {#if editing}
+            <div class="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                class="rounded-sm border-border"
+                aria-label="Save changes"
+                disabled={saving || !name.trim() || !location.trim()}
+                onclick={handleUpdate}
+              >
+                {#if saving}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="size-4 animate-spin"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                {:else}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="size-4"
+                    aria-hidden="true"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                {/if}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                class="rounded-sm border-border"
+                aria-label="Cancel"
+                disabled={saving}
+                onclick={cancelEdit}
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -344,101 +408,12 @@ $effect(() => {
                   class="size-4"
                   aria-hidden="true"
                 >
-                  <polyline points="20 6 9 17 4 12" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
-              {/if}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              class="rounded-sm border-border"
-              aria-label="Cancel"
-              disabled={saving}
-              onclick={cancelEdit}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-4"
-                aria-hidden="true"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </Button>
-          </div>
-        {/if}
-
-        <div class="grid gap-6 lg:grid-cols-2">
-          <div class="flex flex-col gap-2">
-            <Label for={fieldId('name')} class="text-muted-foreground text-xs font-normal">Name</Label>
-            {#if editing}
-              <Input id={fieldId('name')} bind:value={name} required class={inputMinimal} />
-            {:else}
-              <p class="py-2 text-sm text-foreground">{device.name}</p>
-            {/if}
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <Label for={fieldId('type')} class="text-muted-foreground text-xs font-normal">Type</Label>
-            {#if editing}
-              <select
-                id={fieldId('type')}
-                bind:value={type}
-                onchange={handleTypeChange}
-                class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
-              >
-                {#each DEVICE_TYPES as option}
-                  <option value={option.value}>{option.label}</option>
-                {/each}
-              </select>
-            {:else}
-              <p class="py-2 text-sm text-foreground">
-                {DEVICE_TYPES.find((option) => option.value === device.type)?.label ?? device.type}
-              </p>
-            {/if}
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <Label for={fieldId('model')} class="text-muted-foreground text-xs font-normal">Model</Label>
-            {#if editing}
-              <div class="flex items-center gap-2">
-                <select
-                  id={fieldId('model')}
-                  bind:value={model}
-                  onchange={handleModelChange}
-                  class="h-9 min-w-0 flex-1 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
-                >
-                  {#each availableModels as option}
-                    <option value={option.value}>{option.label}</option>
-                  {/each}
-                </select>
-                <DeviceModelLink {model} />
-              </div>
-            {:else}
-              <div class="flex items-center gap-2 py-2">
-                <p class="text-sm text-foreground">
-                  {formatDeviceType(device.type, device.configuration)}
-                </p>
-                <DeviceModelLink model={displayModel} />
-              </div>
-            {/if}
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <Label for={fieldId('location')} class="text-muted-foreground text-xs font-normal">Location</Label>
-            {#if editing}
-              <Input id={fieldId('location')} bind:value={location} class={inputMinimal} />
-            {:else}
-              <p class="py-2 text-sm text-foreground">{device.location || '—'}</p>
-            {/if}
-          </div>
+              </Button>
+            </div>
+          {/if}
         </div>
       </div>
     </td>

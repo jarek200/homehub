@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -11,7 +12,7 @@ from homehub_api.config import table_name
 from homehub_api.errors import ApiError
 from homehub_api.models import ServiceInfoResponse
 from homehub_api.observability import logger
-from homehub_api.routers import devices, issues, profile
+from homehub_api.routers import devices, profile
 from homehub_api.store import HubStore
 
 
@@ -106,21 +107,42 @@ def create_app(store: HubStore | None = None) -> FastAPI:
                 "PATCH /devices/{deviceId}",
                 "DELETE /devices/{deviceId}",
                 "GET /devices/{deviceId}/readings",
-                "POST /devices/{deviceId}/readings",
-                "GET /devices/{deviceId}/commands",
-                "POST /devices/{deviceId}/commands",
-                "GET /issues",
-                "POST /issues",
-                "GET /issues/{issueId}",
-                "PATCH /issues/{issueId}",
+                "GET /devices/{deviceId}/readings/history",
                 "GET /me",
-                "PATCH /me",
             ],
         )
 
     app.include_router(devices.router)
-    app.include_router(issues.router)
     app.include_router(profile.router)
+
+    def custom_openapi() -> dict[str, Any]:
+        if app.openapi_schema:
+            return app.openapi_schema
+        schema = get_openapi(
+            title=app.title,
+            version=app.version,
+            description=app.description,
+            routes=app.routes,
+        )
+        components = schema.setdefault("components", {})
+        schemes = components.setdefault("securitySchemes", {})
+        schemes["ApiKeyAuth"] = {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-Api-Key",
+            "description": "Reviewer / curl API key (when REST_API_KEY is set at deploy).",
+        }
+        schemes["BearerAuth"] = {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Cognito ID token from a signed-in HomeHub session.",
+        }
+        schema["security"] = [{"ApiKeyAuth": []}, {"BearerAuth": []}]
+        app.openapi_schema = schema
+        return app.openapi_schema
+
+    app.openapi = custom_openapi  # type: ignore[method-assign]
 
     return app
 
