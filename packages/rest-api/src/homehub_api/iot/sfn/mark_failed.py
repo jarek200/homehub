@@ -7,7 +7,7 @@ from typing import Any
 
 import boto3
 
-from homehub_api.iot.sfn.common import _now_iso, ssm_prefix_for
+from homehub_api.iot.sfn.common import _now_iso, resolve_provision_context, ssm_prefix_for
 
 
 def _delete_ssm_prefix(prefix: str) -> None:
@@ -46,13 +46,16 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     if isinstance(cause, str) and len(cause) > 500:
         cause = cause[:500]
 
-    device_id = event.get("deviceId")
-    tenant_pk = event.get("tenantPk")
-    if not device_id or not tenant_pk:
+    try:
+        context = resolve_provision_context(event)
+    except KeyError:
         return {"markedFailed": False, "reason": "Missing device context"}
 
-    _deactivate_cert(event.get("certificateId"))
-    prefix = event.get("ssmCertPrefix") or (ssm_prefix_for(device_id) if device_id else "")
+    device_id = context["deviceId"]
+    tenant_pk = context["tenantPk"]
+
+    _deactivate_cert(context.get("certificateId"))
+    prefix = context.get("ssmCertPrefix") or ssm_prefix_for(device_id)
     if prefix:
         _delete_ssm_prefix(prefix)
 

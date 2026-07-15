@@ -31,24 +31,28 @@ export type CommandStatus = (typeof COMMAND_STATUSES)[number];
 export interface CreateDeviceInput {
   name: string;
   type: string;
-  location?: string | null;
+  location: string;
   configuration?: string | null;
 }
 
 export interface UpdateDeviceInput {
   name?: string;
   type?: string;
-  location?: string | null;
+  location?: string;
   status?: DeviceStatus;
   configuration?: string | null;
   lastSeenAt?: string | null;
 }
 
+export const READING_STATES = ['normal', 'warning'] as const;
+export type ReadingState = (typeof READING_STATES)[number];
+
+export type ReadingMetrics = Record<string, number | boolean>;
+
 export interface CreateReadingInput {
-  temperature?: number | null;
-  humidity?: number | null;
-  motionDetected?: boolean | null;
-  cameraOnline?: boolean | null;
+  alarm?: boolean | null;
+  state?: ReadingState | null;
+  metrics?: ReadingMetrics | null;
   recordedAt?: string | null;
 }
 
@@ -75,10 +79,9 @@ export interface DeviceRecord {
 export interface ReadingRecord {
   readingId: string;
   deviceId: string;
-  temperature?: number | null;
-  humidity?: number | null;
-  motionDetected?: boolean | null;
-  cameraOnline?: boolean | null;
+  alarm: boolean;
+  state: ReadingState;
+  metrics: ReadingMetrics;
   recordedAt: string;
   createdAt: string;
 }

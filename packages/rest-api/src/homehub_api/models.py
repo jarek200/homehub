@@ -9,15 +9,16 @@ LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
 CommandStatus = Literal["PENDING", "SENT", "ACKNOWLEDGED", "FAILED"]
 IssueStatus = Literal["OPEN", "MONITORING", "RESOLVED"]
 IssueSeverity = Literal["LOW", "MEDIUM", "HIGH"]
+ReadingState = Literal["normal", "warning"]
 
 
 class CreateDeviceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=INPUT_LIMITS["name"])
     type: str = Field(min_length=1, max_length=INPUT_LIMITS["type"])
-    location: str | None = Field(default=None, max_length=INPUT_LIMITS["location"])
+    location: str = Field(min_length=1, max_length=INPUT_LIMITS["location"])
     configuration: str | None = Field(default=None, max_length=INPUT_LIMITS["configuration"])
 
-    @field_validator("name", "type", mode="before")
+    @field_validator("name", "type", "location", mode="before")
     @classmethod
     def strip_required(cls, value: str) -> str:
         return value.strip()
@@ -26,10 +27,17 @@ class CreateDeviceRequest(BaseModel):
 class UpdateDeviceRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=INPUT_LIMITS["name"])
     type: str | None = Field(default=None, max_length=INPUT_LIMITS["type"])
-    location: str | None = Field(default=None, max_length=INPUT_LIMITS["location"])
+    location: str | None = Field(default=None, min_length=1, max_length=INPUT_LIMITS["location"])
     status: DeviceStatus | None = None
     configuration: str | None = Field(default=None, max_length=INPUT_LIMITS["configuration"])
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")
+
+    @field_validator("name", "location", mode="before")
+    @classmethod
+    def strip_optional(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return value.strip()
 
     @model_validator(mode="after")
     def require_one_field(self) -> "UpdateDeviceRequest":
@@ -39,19 +47,24 @@ class UpdateDeviceRequest(BaseModel):
 
 
 class CreateReadingRequest(BaseModel):
+    alarm: bool | None = None
+    state: ReadingState | None = None
+    metrics: dict[str, float | bool] | None = None
     temperature: float | None = None
     humidity: float | None = Field(default=None, ge=0, le=100)
     motion_detected: bool | None = Field(default=None, alias="motionDetected")
-    camera_online: bool | None = Field(default=None, alias="cameraOnline")
     recorded_at: str | None = Field(default=None, alias="recordedAt")
 
     @model_validator(mode="after")
     def require_one_value(self) -> "CreateReadingRequest":
+        if self.metrics:
+            return self
+        if self.alarm is not None or self.state is not None:
+            return self
         if (
             self.temperature is None
             and self.humidity is None
             and self.motion_detected is None
-            and self.camera_online is None
         ):
             raise ValueError("At least one reading value is required")
         return self
@@ -114,10 +127,9 @@ class DeviceResponse(BaseModel):
 class ReadingResponse(BaseModel):
     reading_id: str = Field(alias="readingId")
     device_id: str = Field(alias="deviceId")
-    temperature: float | None = None
-    humidity: float | None = None
-    motion_detected: bool | None = Field(default=None, alias="motionDetected")
-    camera_online: bool | None = Field(default=None, alias="cameraOnline")
+    alarm: bool = False
+    state: ReadingState = "normal"
+    metrics: dict[str, float | bool] = Field(default_factory=dict)
     recorded_at: str = Field(alias="recordedAt")
     created_at: str = Field(alias="createdAt")
 

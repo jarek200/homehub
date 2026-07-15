@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 import threading
 import time
 from datetime import UTC, datetime
@@ -135,31 +134,21 @@ class VirtualDevice:
         logger.info("Published telemetry for %s", self.device_id)
 
     def _build_telemetry(self) -> dict[str, Any]:
+        from simulator.telemetry import derive_alarm_state, parse_thresholds, sample_metrics
+
         recorded_at = _now_iso()
-        base = {
+        metrics = sample_metrics(self.device_type, self.configuration)
+        thresholds = parse_thresholds(self.configuration)
+        alarm, state = derive_alarm_state(metrics, thresholds, self.device_type)
+        return {
             "deviceId": self.device_id,
             "hubId": self.hub_id,
             "thingName": self.thing_name,
             "recordedAt": recorded_at,
+            "alarm": alarm,
+            "state": state,
+            "metrics": metrics,
         }
-        if self.device_type == "environmental-sensor":
-            return {
-                **base,
-                "temperature": round(random.uniform(18.0, 26.0), 1),
-                "humidity": round(random.uniform(40.0, 65.0), 1),
-            }
-        if self.device_type == "smoke-alarm":
-            return {
-                **base,
-                "motionDetected": False,
-                "cameraOnline": True,
-            }
-        if self.device_type in {"heat-alarm", "carbon-monoxide-alarm"}:
-            return {
-                **base,
-                "temperature": round(random.uniform(20.0, 28.0), 1),
-            }
-        return base
 
     def _on_shadow_delta(
         self,
@@ -173,14 +162,32 @@ class VirtualDevice:
         if not self._connection:
             return
         try:
+            from simulator.shadow_config import apply_shadow_state
+
             delta = json.loads(payload.decode())
+            state = delta.get("state")
+            if not isinstance(state, dict):
+                state = delta if isinstance(delta, dict) else {}
+
+            configuration, reported_state = apply_shadow_state(
+                configuration=self.configuration,
+                device_type=self.device_type,
+                state=state,
+            )
+            if configuration is not None:
+                self.configuration = configuration
+
+            if not reported_state:
+                return
+
             reported_topic = f"$aws/things/{self.thing_name}/shadow/update"
-            response = {"state": {"reported": delta.get("state", delta)}}
+            response = {"state": {"reported": reported_state}}
             self._connection.publish(
                 topic=reported_topic,
                 payload=json.dumps(response),
                 qos=mqtt.QoS.AT_LEAST_ONCE,
             )
+            logger.info("Applied shadow delta for %s", self.device_id)
         except Exception:
             logger.exception("Failed to apply shadow delta for %s", self.device_id)
 

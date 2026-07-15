@@ -7,7 +7,6 @@ from typing import Any
 
 from ulid import new as new_ulid
 
-from homehub_api.config import HUMIDITY_ISSUE_THRESHOLD
 from homehub_api.errors import ApiError
 from homehub_api.models import (
     CommandResponse,
@@ -23,6 +22,8 @@ from homehub_api.models import (
     UpdateIssueRequest,
 )
 from homehub_api.store import humidity_issue_title
+from homehub_api.telemetry_model import metrics_humidity, normalize_telemetry_event
+from homehub_api.thresholds import humidity_issue_threshold
 
 
 def _now_iso() -> str:
@@ -68,8 +69,20 @@ class FakeHubStore:
         if not existing:
             raise ApiError("Device not found", 404, "NotFound")
 
+        updates = payload.model_dump(exclude_none=True, by_alias=True)
+        if not updates:
+            raise ApiError("At least one field is required", 400, "ValidationError")
+
+        if payload.type is not None and payload.type != existing.type:
+            raise ApiError(
+                "Device type cannot be changed after registration",
+                400,
+                "ValidationError",
+            )
+        updates.pop("type", None)
+
         data = existing.model_dump(by_alias=True)
-        data.update(payload.model_dump(exclude_none=True, by_alias=True))
+        data.update(updates)
         data["updatedAt"] = _now_iso()
         updated = DeviceResponse.model_validate(data)
         self.devices[device_id] = updated
@@ -88,23 +101,29 @@ class FakeHubStore:
     def create_reading(
         self, device_id: str, payload: CreateReadingRequest
     ) -> CreateReadingResponse:
-        self._require_device(device_id)
+        device = self._require_device(device_id)
         reading_id = _new_id()
         timestamp = _now_iso()
+        normalized = normalize_telemetry_event(
+            payload.model_dump(by_alias=True, exclude_none=True),
+            configuration=device.configuration,
+            device_type=device.type,
+        )
         reading = ReadingResponse(
             readingId=reading_id,
             deviceId=device_id,
-            temperature=payload.temperature,
-            humidity=payload.humidity,
-            motionDetected=payload.motion_detected,
-            cameraOnline=payload.camera_online,
+            alarm=normalized["alarm"],
+            state=normalized["state"],
+            metrics=normalized["metrics"],
             recordedAt=payload.recorded_at or timestamp,
             createdAt=timestamp,
         )
         self.readings.setdefault(device_id, []).insert(0, reading)
         issue: IssueResponse | None = None
 
-        if payload.humidity is not None and payload.humidity >= HUMIDITY_ISSUE_THRESHOLD:
+        humidity = metrics_humidity(normalized["metrics"])
+        humidity_limit = humidity_issue_threshold(device.configuration)
+        if humidity is not None and humidity >= humidity_limit:
             open_issues = [
                 existing
                 for existing in self.issues.values()
@@ -113,7 +132,7 @@ class FakeHubStore:
             if not open_issues:
                 issue = self.create_issue(
                     CreateIssueRequest(
-                        title=humidity_issue_title(payload.humidity),
+                        title=humidity_issue_title(humidity),
                         deviceId=device_id,
                         severity="HIGH",
                         status="OPEN",

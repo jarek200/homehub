@@ -9,7 +9,7 @@ from typing import Any
 import boto3
 
 from homehub_api.config import hub_id_from_pk
-from homehub_api.iot.sfn.common import _now_iso, ssm_prefix_for, thing_name_for
+from homehub_api.iot.sfn.common import _now_iso, resolve_provision_context, ssm_prefix_for, thing_name_for
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
@@ -17,10 +17,11 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     queue_url = os.environ.get("SIMULATOR_QUEUE_URL", "")
     table = boto3.resource("dynamodb").Table(table_name)
 
-    device_id = event["deviceId"]
-    tenant_pk = event["tenantPk"]
-    thing = event.get("thingName") or thing_name_for(device_id)
-    prefix = event.get("ssmCertPrefix") or ssm_prefix_for(device_id)
+    context = resolve_provision_context(event)
+    device_id = context["deviceId"]
+    tenant_pk = context["tenantPk"]
+    thing = context.get("thingName") or thing_name_for(device_id)
+    prefix = context.get("ssmCertPrefix") or ssm_prefix_for(device_id)
     timestamp = _now_iso()
 
     registry_item: dict[str, Any] = {
@@ -35,8 +36,8 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         "ssmCertPrefix": prefix,
         "updatedAt": timestamp,
     }
-    if event.get("certificateId"):
-        registry_item["certificateId"] = event["certificateId"]
+    if context.get("certificateId"):
+        registry_item["certificateId"] = context["certificateId"]
 
     table.put_item(Item=registry_item)
 
@@ -48,12 +49,12 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     update_expression = (
         "SET lifecycleStatus = :ready, thingName = :thing, updatedAt = :updatedAt REMOVE failureReason"
     )
-    if event.get("certificateId"):
+    if context.get("certificateId"):
         update_expression = (
             "SET lifecycleStatus = :ready, thingName = :thing, certificateId = :certId, "
             "updatedAt = :updatedAt REMOVE failureReason"
         )
-        update_values[":certId"] = event["certificateId"]
+        update_values[":certId"] = context["certificateId"]
 
     table.update_item(
         Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"},

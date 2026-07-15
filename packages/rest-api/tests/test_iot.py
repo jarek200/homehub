@@ -1,8 +1,12 @@
 """Tests for IoT Step Functions provisioning helpers."""
 
+import json
+
 from homehub_api.iot.sfn.common import (
     _unwrap_pipe_input,
+    merge_provision_context,
     parse_stream_record,
+    resolve_provision_context,
     ssm_prefix_for,
     thing_name_for,
 )
@@ -44,7 +48,7 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
                 "name": {"S": "Hallway"},
                 "type": {"S": "environmental-sensor"},
                 "lifecycleStatus": {"S": "PROVISIONING"},
-                "configuration": {"S": '{"model":"Ei1020"}'},
+                "configuration": {"S": '{"reportingIntervalSeconds":60}'},
             },
         },
     }
@@ -83,3 +87,95 @@ def test_parse_stream_record_ignores_ready_devices() -> None:
         },
     }
     assert parse_stream_record(record) is None
+
+
+def test_resolve_provision_context_from_step_output() -> None:
+    context = resolve_provision_context(
+        {
+            "tenantPk": "HUB#demo",
+            "deviceId": "dev-co",
+            "type": "carbon-monoxide-alarm",
+            "thingName": "homehub-dev-co",
+        }
+    )
+    assert context["deviceId"] == "dev-co"
+    assert context["type"] == "carbon-monoxide-alarm"
+
+
+def test_resolve_provision_context_unwraps_lambda_payload() -> None:
+    context = resolve_provision_context(
+        {
+            "StatusCode": 200,
+            "Payload": json.dumps(
+                {
+                    "tenantPk": "HUB#demo",
+                    "deviceId": "dev-co",
+                    "certificateId": "cert-1",
+                }
+            ),
+        }
+    )
+    assert context["deviceId"] == "dev-co"
+    assert context["certificateId"] == "cert-1"
+
+
+def test_resolve_provision_context_merges_nested_cert_and_thing_results() -> None:
+    context = resolve_provision_context(
+        {
+            "tenantPk": "HUB#demo",
+            "deviceId": "dev-co",
+            "type": "carbon-monoxide-alarm",
+            "cert": {
+                "certificateArn": "arn:aws:iot:eu-west-1:123:cert/abc",
+                "certificateId": "cert-1",
+                "ssmCertPrefix": "/homehub/devices/dev-co",
+            },
+            "thing": {"thingName": "homehub-dev-co"},
+        }
+    )
+    assert context["deviceId"] == "dev-co"
+    assert context["certificateArn"] == "arn:aws:iot:eu-west-1:123:cert/abc"
+    assert context["thingName"] == "homehub-dev-co"
+
+
+def test_resolve_provision_context_infers_device_id_from_cert_prefix() -> None:
+    context = resolve_provision_context(
+        {
+            "tenantPk": "HUB#demo",
+            "certificateArn": "arn:aws:iot:eu-west-1:123:cert/abc",
+            "ssmCertPrefix": "/homehub/devices/dev-co",
+        }
+    )
+    assert context["deviceId"] == "dev-co"
+
+
+def test_merge_provision_context_preserves_fields_across_tasks() -> None:
+    merged = merge_provision_context(
+        {"tenantPk": "HUB#demo", "deviceId": "dev-co", "type": "carbon-monoxide-alarm"},
+        certificateId="cert-1",
+        thingName="homehub-dev-co",
+    )
+    assert merged["deviceId"] == "dev-co"
+    assert merged["certificateId"] == "cert-1"
+    assert merged["thingName"] == "homehub-dev-co"
+
+
+def test_resolve_provision_context_from_stream_record() -> None:
+    record = {
+        "eventName": "INSERT",
+        "dynamodb": {
+            "Keys": {"PK": {"S": "HUB#demo"}, "SK": {"S": "DEVICE#dev-co"}},
+            "NewImage": {
+                "PK": {"S": "HUB#demo"},
+                "SK": {"S": "DEVICE#dev-co"},
+                "deviceId": {"S": "dev-co"},
+                "name": {"S": "Kitchen CO"},
+                "type": {"S": "carbon-monoxide-alarm"},
+                "lifecycleStatus": {"S": "PROVISIONING"},
+                "configuration": {"S": '{"reportingIntervalSeconds":60,"thresholds":{"coAlarm":50}}'},
+            },
+        },
+    }
+    context = resolve_provision_context(record)
+    assert context["deviceId"] == "dev-co"
+    assert context["type"] == "carbon-monoxide-alarm"

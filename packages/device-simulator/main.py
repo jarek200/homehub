@@ -26,6 +26,7 @@ def main() -> None:
         sys.exit(1)
 
     reconciler = Reconciler(table_name=table_name, queue_url=queue_url)
+    reconciler.bootstrap_online_devices()
     stop_event = threading.Event()
 
     def shutdown(_signum: int, _frame: object) -> None:

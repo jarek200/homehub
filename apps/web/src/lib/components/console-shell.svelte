@@ -24,8 +24,6 @@ $effect(() => {
 
 const user = $derived(authState.user);
 const isDevices = $derived($page.url.pathname.startsWith('/devices'));
-const isIssues = $derived($page.url.pathname.startsWith('/issues'));
-const isAccount = $derived($page.url.pathname.startsWith('/dashboard'));
 
 const navLink = 'text-xs uppercase tracking-widest transition-colors';
 const navActive = 'text-foreground';
@@ -59,20 +57,6 @@ async function handleLogout() {
             onclick={() => goto('/devices')}
           >
             Devices
-          </button>
-          <button
-            type="button"
-            class="{navLink} {isIssues ? navActive : navInactive}"
-            onclick={() => goto('/issues')}
-          >
-            Issues
-          </button>
-          <button
-            type="button"
-            class="{navLink} {isAccount ? navActive : navInactive}"
-            onclick={() => goto('/dashboard')}
-          >
-            Account
           </button>
         </nav>
       </div>

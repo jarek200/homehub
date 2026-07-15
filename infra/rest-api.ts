@@ -36,6 +36,9 @@ export function createRestApi(
         ? {
             SIMULATOR_QUEUE_URL: iotProvisioning.simulatorQueue.url,
             IOT_POLICY_NAME: iotProvisioning.iotPolicy.name,
+            IOT_DATA_ENDPOINT: iotProvisioning.iotEndpoint.endpointAddress.apply(
+              (host) => `https://${host}`
+            ),
           }
         : {}),
     },
@@ -55,6 +58,10 @@ export function createRestApi(
             {
               actions: ['sqs:SendMessage'],
               resources: [iotProvisioning.simulatorQueue.arn],
+            },
+            {
+              actions: ['iot:UpdateThingShadow'],
+              resources: ['*'],
             },
             {
               actions: [

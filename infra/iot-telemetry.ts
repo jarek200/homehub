@@ -41,10 +41,9 @@ export function createIotTelemetry(table: StorageTable) {
         { name: 'hubid', type: 'string' },
         { name: 'deviceid', type: 'string' },
         { name: 'thingname', type: 'string' },
-        { name: 'temperature', type: 'double' },
-        { name: 'humidity', type: 'double' },
-        { name: 'motiondetected', type: 'boolean' },
-        { name: 'cameraonline', type: 'boolean' },
+        { name: 'alarm', type: 'boolean' },
+        { name: 'state', type: 'string' },
+        { name: 'metrics', type: 'string' },
         { name: 'recordedat', type: 'string' },
       ],
     },
@@ -224,7 +223,7 @@ export function createIotTelemetry(table: StorageTable) {
   const coldRule = new aws.iot.TopicRule('TelemetryColdRule', {
     name: `${$app.name}_${$app.stage}_telemetry_cold`,
     enabled: true,
-    sql: "SELECT topic(3) AS deviceid, hubId AS hubid, thingName AS thingname, timestamp() AS recordedat, temperature, humidity, motionDetected AS motiondetected, cameraOnline AS cameraonline FROM 'homehub/devices/+/telemetry'",
+    sql: "SELECT topic(3) AS deviceid, hubId AS hubid, thingName AS thingname, timestamp() AS recordedat, alarm, state, metrics FROM 'homehub/devices/+/telemetry'",
     sqlVersion: '2016-03-23',
     firehoses: [
       {
