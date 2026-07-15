@@ -2,16 +2,12 @@ import os
 
 DEMO_TENANT_ID = "demo"
 DEMO_TENANT_PK = f"HUB#{DEMO_TENANT_ID}"
-HUMIDITY_ISSUE_THRESHOLD = 70
 
 INPUT_LIMITS = {
     "name": 100,
     "type": 64,
     "location": 100,
     "configuration": 4096,
-    "command": 64,
-    "issue_title": 200,
-    "issue_notes": 2000,
     "bio": 500,
     "avatar": 2048,
 }

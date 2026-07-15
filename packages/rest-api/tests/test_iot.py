@@ -48,7 +48,7 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
                 "name": {"S": "Hallway"},
                 "type": {"S": "environmental-sensor"},
                 "lifecycleStatus": {"S": "PROVISIONING"},
-                "configuration": {"S": '{"reportingIntervalSeconds":60}'},
+                "configuration": {"S": '{"reportingIntervalSeconds":10}'},
             },
         },
     }
@@ -172,7 +172,7 @@ def test_resolve_provision_context_from_stream_record() -> None:
                 "name": {"S": "Kitchen CO"},
                 "type": {"S": "carbon-monoxide-alarm"},
                 "lifecycleStatus": {"S": "PROVISIONING"},
-                "configuration": {"S": '{"reportingIntervalSeconds":60,"thresholds":{"coAlarm":50}}'},
+                "configuration": {"S": '{"reportingIntervalSeconds":10,"thresholds":{"coAlarm":50}}'},
             },
         },
     }

@@ -21,6 +21,11 @@ export type ReadingSeries = {
   points: ChartPoint[];
 };
 
+export type BuildSeriesOptions = {
+  /** Cap rendered points by averaging into time buckets (helps Athena 3h density). */
+  maxPoints?: number;
+};
+
 const CHART_COLORS: Record<string, string> = {
   temperature: '#f97316',
   humidity: '#3b82f6',
@@ -53,10 +58,58 @@ export function sortReadingsOldestFirst(readings: Reading[]): Reading[] {
   return [...readings].sort((a, b) => readingTime(a) - readingTime(b));
 }
 
-function metricSeries(readings: Reading[], key: string): ReadingSeries | null {
+/** Average (or max for boolean) points into ~maxPoints time buckets. */
+export function downsamplePoints(
+  points: ChartPoint[],
+  maxPoints: number,
+  options: { booleanScale?: boolean } = {}
+): ChartPoint[] {
+  const booleanScale = options.booleanScale ?? false;
+  if (points.length <= maxPoints || maxPoints < 2) return points;
+
+  const sorted = [...points].sort((a, b) => a.time - b.time);
+  const start = sorted[0]!.time;
+  const end = sorted[sorted.length - 1]!.time;
+  const span = Math.max(end - start, 1);
+  const bucketMs = span / maxPoints;
+
+  const buckets = new Map<number, ChartPoint[]>();
+  for (const point of sorted) {
+    const index = Math.min(maxPoints - 1, Math.floor((point.time - start) / bucketMs));
+    const group = buckets.get(index) ?? [];
+    group.push(point);
+    buckets.set(index, group);
+  }
+
+  return [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, group]) => {
+      const anchor = group[Math.floor(group.length / 2)]!;
+      if (booleanScale) {
+        return {
+          time: anchor.time,
+          label: anchor.label,
+          value: group.some((point) => point.value >= 1) ? 1 : 0,
+        };
+      }
+      const sum = group.reduce((total, point) => total + point.value, 0);
+      const average = sum / group.length;
+      return {
+        time: anchor.time,
+        label: anchor.label,
+        value: Math.round(average * 10) / 10,
+      };
+    });
+}
+
+function metricSeries(
+  readings: Reading[],
+  key: string,
+  options?: BuildSeriesOptions
+): ReadingSeries | null {
   const color = CHART_COLORS[key] ?? '#64748b';
   const booleanScale = isBooleanMetric(key);
-  const points = sortReadingsOldestFirst(readings)
+  let points = sortReadingsOldestFirst(readings)
     .filter((reading) => readingMetrics(reading)[key] != null)
     .map((reading) => {
       const raw = readingMetrics(reading)[key]!;
@@ -70,6 +123,10 @@ function metricSeries(readings: Reading[], key: string): ReadingSeries | null {
 
   if (points.length === 0) return null;
 
+  if (options?.maxPoints != null) {
+    points = downsamplePoints(points, options.maxPoints, { booleanScale });
+  }
+
   return {
     key,
     label: metricLabel(key),
@@ -79,9 +136,13 @@ function metricSeries(readings: Reading[], key: string): ReadingSeries | null {
   };
 }
 
-export function buildReadingSeries(deviceType: string, readings: Reading[]): ReadingSeries[] {
+export function buildReadingSeries(
+  deviceType: string,
+  readings: Reading[],
+  options?: BuildSeriesOptions
+): ReadingSeries[] {
   return chartMetricKeys(deviceType, readings)
-    .map((key) => metricSeries(readings, key))
+    .map((key) => metricSeries(readings, key, options))
     .filter((item): item is ReadingSeries => item != null);
 }
 
@@ -97,13 +158,20 @@ export function chartPath(
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
   const valueRange = maxValue - minValue || 1;
+  const times = points.map((point) => point.time);
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const timeRange = maxTime - minTime || 1;
 
   const innerWidth = width - padding * 2;
   const innerHeight = height - padding * 2;
 
   return points
     .map((point, index) => {
-      const x = padding + (index / Math.max(points.length - 1, 1)) * innerWidth;
+      const x =
+        points.length === 1
+          ? padding + innerWidth / 2
+          : padding + ((point.time - minTime) / timeRange) * innerWidth;
       const y = padding + innerHeight - ((point.value - minValue) / valueRange) * innerHeight;
       return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
     })

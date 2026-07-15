@@ -21,6 +21,10 @@ function createProvisionTask(
     runtime: 'python3.13',
     memory: stageConfig.lambda.memory,
     timeout: '120 seconds',
+    // Provisioning is triggered by DynamoDB → Pipe → Step Functions. Live/dev
+    // mode often hangs these invocations (CreateCert/Finalize timeout at 120s).
+    // Run them in AWS so device create works even when the Live bridge is flaky.
+    dev: false,
     link: [table, simulatorQueue],
     environment: {
       TABLE_NAME: table.name,

@@ -1,9 +1,10 @@
-import type { Reading } from '@sst-monorepo/core';
+import type { DeviceConfiguration, Reading } from '@sst-monorepo/core';
 import { DEFAULT_THRESHOLDS, type DeviceThresholds, parseThresholds } from '$lib/device-thresholds';
 import { normalizeDeviceType } from '$lib/device-type';
 
 export type ReadingState = 'normal' | 'warning';
 export type ReadingMetrics = Record<string, number | boolean>;
+type ConfigArg = DeviceConfiguration | null | undefined;
 
 const METRIC_LABELS: Record<string, string> = {
   heat: 'Heat',
@@ -24,7 +25,7 @@ const METRIC_SHORT_LABELS: Record<string, string> = {
 };
 
 const DEVICE_PROFILES: Record<string, { summaryKeys: string[]; chartKeys: string[] }> = {
-  'heat-alarm': { summaryKeys: ['heat', 'temperature'], chartKeys: ['temperature', 'heat'] },
+  'heat-alarm': { summaryKeys: ['temperature'], chartKeys: ['temperature'] },
   'carbon-monoxide-alarm': {
     summaryKeys: ['co'],
     chartKeys: ['co'],
@@ -90,7 +91,7 @@ function profileForDeviceType(deviceType: string) {
 export function lastReadingCompactParts(
   deviceType: string,
   reading: Reading | null | undefined,
-  configuration?: string | null
+  configuration?: ConfigArg
 ): CompactReadingPart[] | null {
   if (!reading) return null;
   const metrics = readingMetrics(reading, deviceType);
@@ -233,7 +234,7 @@ export function formatLastReadingPrimary(
 export function formatLastReadingCompact(
   deviceType: string,
   reading: Reading | null | undefined,
-  configuration?: string | null
+  configuration?: ConfigArg
 ): string {
   if (!reading) return '—';
   const metrics = readingMetrics(reading, deviceType);
@@ -287,7 +288,7 @@ export type DerivedReadingState = { alarm: boolean; state: ReadingState };
 export function effectiveReadingState(
   reading: Reading,
   deviceType: string,
-  configuration?: string | null
+  configuration?: ConfigArg
 ): DerivedReadingState {
   const thresholds = parseThresholds(configuration, deviceType);
   return deriveAlarmState(readingMetrics(reading, deviceType), thresholds, deviceType);
@@ -319,7 +320,7 @@ export function readingDotTone(state: DerivedReadingState): ReadingDotTone {
 export function readingDotTones(
   readings: Reading[],
   deviceType: string,
-  configuration?: string | null,
+  configuration?: ConfigArg,
   limit = READING_DOT_LIMIT
 ): ReadingDotTone[] {
   return readings

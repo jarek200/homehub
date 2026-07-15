@@ -24,6 +24,7 @@ $effect(() => {
 
 const user = $derived(authState.user);
 const isDevices = $derived($page.url.pathname.startsWith('/devices'));
+const isApiDocs = $derived($page.url.pathname.startsWith('/api-docs'));
 
 const navLink = 'text-xs uppercase tracking-widest transition-colors';
 const navActive = 'text-foreground';
@@ -58,6 +59,9 @@ async function handleLogout() {
           >
             Devices
           </button>
+          <a href="/api-docs" class="{navLink} {isApiDocs ? navActive : navInactive}">
+            API docs
+          </a>
         </nav>
       </div>
       <div class="flex shrink-0 items-center gap-4">

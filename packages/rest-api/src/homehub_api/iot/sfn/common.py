@@ -162,13 +162,13 @@ def parse_stream_record(record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def shadow_desired(configuration: str | None, device_type: str) -> dict[str, Any]:
-    import json
+def shadow_desired(
+    configuration: str | dict[str, Any] | None, device_type: str
+) -> dict[str, Any]:
+    from homehub_api.device_configuration import as_config_dict
 
     desired: dict[str, Any] = {"type": device_type}
-    if configuration:
-        try:
-            desired["configuration"] = json.loads(configuration)
-        except json.JSONDecodeError:
-            desired["configuration"] = configuration
+    parsed = as_config_dict(configuration)
+    if parsed:
+        desired["configuration"] = parsed
     return desired

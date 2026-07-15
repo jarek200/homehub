@@ -27,9 +27,21 @@ export function createIotTelemetry(table: StorageTable) {
     databaseName: glueDatabase.name,
     name: 'device_telemetry',
     tableType: 'EXTERNAL_TABLE',
-    parameters: {
+    parameters: telemetryBucket.bucket.apply((name) => ({
       classification: 'parquet',
-    },
+      'projection.enabled': 'true',
+      'projection.hub.type': 'injected',
+      'projection.year.type': 'integer',
+      'projection.year.range': '2024,2035',
+      'projection.year.digits': '4',
+      'projection.month.type': 'integer',
+      'projection.month.range': '1,12',
+      'projection.month.digits': '2',
+      'projection.day.type': 'integer',
+      'projection.day.range': '1,31',
+      'projection.day.digits': '2',
+      'storage.location.template': `s3://${name}/telemetry/hub=\${hub}/year=\${year}/month=\${month}/day=\${day}`,
+    })),
     storageDescriptor: {
       location: telemetryBucket.bucket.apply((name) => `s3://${name}/telemetry/`),
       inputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat',
@@ -53,6 +65,19 @@ export function createIotTelemetry(table: StorageTable) {
       { name: 'month', type: 'string' },
       { name: 'day', type: 'string' },
     ],
+  });
+
+  const athenaResultsBucket = new aws.s3.Bucket('AthenaResults', {
+    bucket: `${$app.name}-athena-results-${$app.stage}`,
+    forceDestroy: $app.stage !== 'prod',
+  });
+
+  new aws.s3.BucketPublicAccessBlock('AthenaResultsPublicAccessBlock', {
+    bucket: athenaResultsBucket.id,
+    blockPublicAcls: true,
+    blockPublicPolicy: true,
+    ignorePublicAcls: true,
+    restrictPublicBuckets: true,
   });
 
   const firehoseRole = new aws.iam.Role('TelemetryFirehoseRole', {
@@ -236,6 +261,7 @@ export function createIotTelemetry(table: StorageTable) {
 
   return {
     telemetryBucket,
+    athenaResultsBucket,
     glueDatabase,
     glueTable,
     firehoseStream,

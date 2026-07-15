@@ -5,7 +5,7 @@ import { lastReadingCompactParts } from '$lib/telemetry';
 interface Props {
   deviceType: string;
   reading: Reading | null;
-  configuration?: string | null;
+  configuration?: import('@sst-monorepo/core').DeviceConfiguration | null;
 }
 
 let { deviceType, reading, configuration = null }: Props = $props();

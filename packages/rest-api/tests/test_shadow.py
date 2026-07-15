@@ -11,14 +11,14 @@ from homehub_api.iot.shadow import (
 
 def test_merge_configuration_deep_merges_thresholds() -> None:
     base = {
-        "reportingIntervalSeconds": 60,
+        "reportingIntervalSeconds": 10,
         "thresholds": {"humidityWarning": 70, "temperatureWarning": 28},
     }
     patch = {"thresholds": {"humidityWarning": 65}}
 
     merged = merge_configuration(base, patch)
 
-    assert merged["reportingIntervalSeconds"] == 60
+    assert merged["reportingIntervalSeconds"] == 10
     assert merged["thresholds"]["humidityWarning"] == 65
     assert merged["thresholds"]["temperatureWarning"] == 28
 
@@ -26,7 +26,7 @@ def test_merge_configuration_deep_merges_thresholds() -> None:
 def test_apply_shadow_state_updates_configuration_json() -> None:
     current = json.dumps(
         {
-            "reportingIntervalSeconds": 60,
+            "reportingIntervalSeconds": 10,
             "thresholds": {"humidityWarning": 70},
         }
     )

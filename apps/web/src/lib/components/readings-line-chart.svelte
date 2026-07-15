@@ -8,9 +8,18 @@ interface Props {
   color?: string;
   points: ChartPoint[];
   booleanScale?: boolean;
+  /** Show a marker on every point (fine for recent; noisy for dense Athena series). */
+  showMarkers?: boolean;
 }
 
-let { title, unit = '', color = '#3b82f6', points, booleanScale = false }: Props = $props();
+let {
+  title,
+  unit = '',
+  color = '#3b82f6',
+  points,
+  booleanScale = false,
+  showMarkers = true,
+}: Props = $props();
 
 const width = 640;
 const height = 180;
@@ -18,6 +27,7 @@ const padding = 20;
 
 const path = $derived(chartPath(points, width, height, padding));
 const domain = $derived(chartDomain(points));
+const drawMarkers = $derived(showMarkers && points.length <= 48);
 
 const yLabels = $derived.by(() => {
   if (booleanScale) return ['Off', 'On'];
@@ -33,6 +43,22 @@ const xLabels = $derived.by(() => {
   const last = points[points.length - 1];
   return [first?.label ?? '', last?.label ?? ''];
 });
+
+function pointXY(point: ChartPoint) {
+  const innerWidth = width - padding * 2;
+  const innerHeight = height - padding * 2;
+  const valueRange = domain.max - domain.min || 1;
+  const times = points.map((item) => item.time);
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const timeRange = maxTime - minTime || 1;
+  const x =
+    points.length === 1
+      ? padding + innerWidth / 2
+      : padding + ((point.time - minTime) / timeRange) * innerWidth;
+  const y = padding + innerHeight - ((point.value - domain.min) / valueRange) * innerHeight;
+  return { x, y };
+}
 </script>
 
 <div class="rounded-sm border border-border bg-card/40 p-4">
@@ -72,15 +98,20 @@ const xLabels = $derived.by(() => {
           stroke="currentColor"
           stroke-opacity="0.2"
         />
-        <path d={path} fill="none" stroke={color} stroke-width="2.5" stroke-linecap="round" />
-        {#each points as point, index}
-          {@const innerWidth = width - padding * 2}
-          {@const innerHeight = height - padding * 2}
-          {@const valueRange = domain.max - domain.min || 1}
-          {@const x = padding + (index / Math.max(points.length - 1, 1)) * innerWidth}
-          {@const y = padding + innerHeight - ((point.value - domain.min) / valueRange) * innerHeight}
-          <circle cx={x} cy={y} r="3.5" fill={color} />
-        {/each}
+        <path
+          d={path}
+          fill="none"
+          stroke={color}
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        {#if drawMarkers}
+          {#each points as point (point.time)}
+            {@const pos = pointXY(point)}
+            <circle cx={pos.x} cy={pos.y} r="3" fill={color} />
+          {/each}
+        {/if}
       </svg>
       <div class="mt-1 flex justify-between text-[0.65rem] text-muted-foreground">
         <span>{xLabels[0]}</span>

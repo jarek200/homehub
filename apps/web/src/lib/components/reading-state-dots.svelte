@@ -5,7 +5,7 @@ import { readingDotsAriaLabel, readingDotTones } from '$lib/telemetry';
 interface Props {
   readings: Reading[];
   deviceType: string;
-  configuration?: string | null;
+  configuration?: import('@sst-monorepo/core').DeviceConfiguration | null;
 }
 
 let { readings, deviceType, configuration = null }: Props = $props();

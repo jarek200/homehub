@@ -1,3 +1,4 @@
+import type { DeviceConfiguration } from '@sst-monorepo/core';
 import { normalizeDeviceType } from '$lib/device-type';
 
 export type ThresholdKey = 'humidityWarning' | 'temperatureWarning' | 'coAlarm';
@@ -76,44 +77,38 @@ export function defaultThresholdsForType(deviceType: string): DeviceThresholds {
   return thresholds;
 }
 
+export function asDeviceConfiguration(
+  configuration: DeviceConfiguration | null | undefined
+): DeviceConfiguration | null {
+  if (configuration == null) return null;
+  return configuration;
+}
+
 export function parseThresholds(
-  configuration: string | null | undefined,
+  configuration: DeviceConfiguration | null | undefined,
   deviceType: string
 ): DeviceThresholds {
   const thresholds = defaultThresholdsForType(deviceType);
-  if (!configuration?.trim()) return thresholds;
-  try {
-    const parsed = JSON.parse(configuration) as { thresholds?: DeviceThresholds };
-    return { ...thresholds, ...(parsed.thresholds ?? {}) };
-  } catch {
-    return thresholds;
-  }
+  const parsed = asDeviceConfiguration(configuration);
+  if (!parsed?.thresholds) return thresholds;
+  return { ...thresholds, ...parsed.thresholds };
 }
 
 export function buildConfiguration(
   deviceType: string,
   thresholds: DeviceThresholds,
-  existingConfiguration?: string | null
-): string {
-  let reportingIntervalSeconds = 60;
-  if (existingConfiguration?.trim()) {
-    try {
-      const parsed = JSON.parse(existingConfiguration) as { reportingIntervalSeconds?: number };
-      if (typeof parsed.reportingIntervalSeconds === 'number') {
-        reportingIntervalSeconds = parsed.reportingIntervalSeconds;
-      }
-    } catch {
-      // keep default
-    }
-  }
-  return JSON.stringify({
-    reportingIntervalSeconds,
+  existingConfiguration?: DeviceConfiguration | null
+): DeviceConfiguration {
+  const existing = asDeviceConfiguration(existingConfiguration);
+  return {
+    ...(existing ?? {}),
+    reportingIntervalSeconds: existing?.reportingIntervalSeconds ?? 10,
     thresholds: { ...defaultThresholdsForType(deviceType), ...thresholds },
-  });
+  };
 }
 
 export function formatThresholdSummary(
-  configuration: string | null | undefined,
+  configuration: DeviceConfiguration | null | undefined,
   deviceType: string
 ): string {
   const fields = thresholdFieldsForType(deviceType);

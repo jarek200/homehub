@@ -69,6 +69,9 @@ class VirtualDevice:
             self.ssm_cert_prefix,
         )
         client_id = self.thing_name
+        # First connect publishes immediately; reconnects wait a full reporting
+        # interval first so a client-id clash can't spam telemetry every 10s.
+        publish_immediately = True
 
         while not self._stop.is_set():
             try:
@@ -98,27 +101,40 @@ class VirtualDevice:
                 )
                 subscribe_future.result(timeout=5)
 
-                interval = self._reporting_interval_seconds()
+                if not publish_immediately:
+                    interval = self._reporting_interval_seconds()
+                    if self._stop.wait(interval):
+                        break
+
                 while not self._stop.is_set():
                     self._publish_telemetry()
+                    interval = self._reporting_interval_seconds()
                     if self._stop.wait(interval):
                         break
 
                 self._connection.disconnect().result(timeout=5)
                 return
             except Exception:
+                publish_immediately = False
                 logger.exception("MQTT loop error for %s; retrying in 10s", self.device_id)
                 if self._stop.wait(10):
                     return
 
     def _reporting_interval_seconds(self) -> int:
         if not self.configuration:
-            return 60
+            return 10
         try:
-            parsed = json.loads(self.configuration)
-            return int(parsed.get("reportingIntervalSeconds", 60))
+            parsed = (
+                self.configuration
+                if isinstance(self.configuration, dict)
+                else json.loads(self.configuration)
+            )
+            if not isinstance(parsed, dict):
+                return 10
+            value = int(parsed.get("reportingIntervalSeconds", 10))
+            return value if value > 0 else 10
         except (json.JSONDecodeError, TypeError, ValueError):
-            return 60
+            return 10
 
     def _publish_telemetry(self) -> None:
         if not self._connection:

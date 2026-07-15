@@ -1,4 +1,6 @@
+import type { DeviceConfiguration } from '@sst-monorepo/core';
 import {
+  asDeviceConfiguration,
   type DeviceThresholds,
   defaultThresholdsForType,
   formatThresholdSummary,
@@ -29,49 +31,40 @@ export const LIFECYCLE_STATUSES = [
   { value: 'DECOMMISSIONED', label: 'Decommissioned' },
 ] as const;
 
-export function getDefaultConfiguration(deviceType?: string): Record<string, unknown> {
+export function getDefaultConfiguration(deviceType?: string): DeviceConfiguration {
   const normalizedType = normalizeDeviceType(deviceType ?? 'heat-alarm');
   return {
-    reportingIntervalSeconds: 60,
+    reportingIntervalSeconds: 10,
     thresholds: defaultThresholdsForType(normalizedType),
   };
 }
 
 export function configurationForType(
-  configuration: string | null | undefined,
+  configuration: DeviceConfiguration | null | undefined,
   deviceType: string
-): string {
+): DeviceConfiguration {
   const normalizedType = normalizeDeviceType(deviceType);
   const defaults = getDefaultConfiguration(normalizedType);
-  if (!configuration?.trim()) {
-    return JSON.stringify(defaults);
+  const parsed = asDeviceConfiguration(configuration);
+  if (!parsed) {
+    return defaults;
   }
-  try {
-    const parsed = JSON.parse(configuration) as Record<string, unknown>;
-    const parsedThresholds =
-      typeof parsed.thresholds === 'object' && parsed.thresholds != null
-        ? (parsed.thresholds as DeviceThresholds)
-        : {};
-    return JSON.stringify({
-      ...parsed,
-      reportingIntervalSeconds: defaults.reportingIntervalSeconds,
-      thresholds: {
-        ...(defaults.thresholds as DeviceThresholds),
-        ...parsedThresholds,
-      },
-    });
-  } catch {
-    return JSON.stringify(defaults);
-  }
+  const parsedThresholds =
+    typeof parsed.thresholds === 'object' && parsed.thresholds != null
+      ? (parsed.thresholds as DeviceThresholds)
+      : {};
+  return {
+    ...parsed,
+    reportingIntervalSeconds:
+      typeof parsed.reportingIntervalSeconds === 'number'
+        ? parsed.reportingIntervalSeconds
+        : defaults.reportingIntervalSeconds,
+    thresholds: {
+      ...(defaults.thresholds as DeviceThresholds),
+      ...parsedThresholds,
+    },
+  };
 }
-
-/** Remote device commands. */
-export const COMMAND_OPTIONS = [
-  { value: 'button-test', label: 'Button test' },
-  { value: 'silence-alarm', label: 'Silence alarm' },
-  { value: 'report-status', label: 'Report status' },
-  { value: 'restart', label: 'Restart device' },
-] as const;
 
 export function isEnvironmentalSensor(type: string): boolean {
   return normalizeDeviceType(type) === 'humidity-sensor';
@@ -140,16 +133,19 @@ export function formatWhen(iso: string | null | undefined): string {
 }
 
 export function formatConfigurationSummary(
-  configuration: string | null | undefined,
+  configuration: DeviceConfiguration | null | undefined,
   deviceType?: string
 ): string {
   if (!configuration) return '—';
   try {
-    const parsed = JSON.parse(configuration) as Record<string, unknown>;
     const parts: string[] = [];
-    if (parsed.reportingIntervalSeconds != null) {
-      parts.push(`Reports every ${String(parsed.reportingIntervalSeconds)}s`);
-    }
+    const defaults = getDefaultConfiguration(deviceType);
+    const parsed = asDeviceConfiguration(configuration);
+    const interval =
+      typeof parsed?.reportingIntervalSeconds === 'number'
+        ? parsed.reportingIntervalSeconds
+        : defaults.reportingIntervalSeconds;
+    parts.push(`Reports every ${String(interval)}s`);
     if (deviceType) {
       const thresholdSummary = formatThresholdSummary(configuration, deviceType);
       if (thresholdSummary) parts.push(thresholdSummary);

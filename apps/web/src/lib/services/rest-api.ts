@@ -1,11 +1,7 @@
 import type {
-  Command,
   CreateDeviceInput,
-  CreateReadingInput,
   Device,
-  HomeIssue,
   Reading,
-  SendCommandInput,
   UpdateDeviceInput,
   User,
 } from '@sst-monorepo/core';
@@ -57,28 +53,11 @@ export async function listDeviceReadings(deviceId: string): Promise<Reading[]> {
   return result.items ?? [];
 }
 
-export async function createDeviceReading(
-  deviceId: string,
-  input: CreateReadingInput
-): Promise<{ reading: Reading; issue: HomeIssue | null }> {
-  return restRequest<{ reading: Reading; issue: HomeIssue | null }>(
-    `/devices/${encodeURIComponent(deviceId)}/readings`,
-    { method: 'POST', body: input }
-  );
-}
-
-export async function listDeviceCommands(deviceId: string): Promise<Command[]> {
-  const result = await restRequest<ListResponse<Command>>(
-    `/devices/${encodeURIComponent(deviceId)}/commands`
+export async function listDeviceReadingHistory(deviceId: string, hours = 3): Promise<Reading[]> {
+  const result = await restRequest<ListResponse<Reading>>(
+    `/devices/${encodeURIComponent(deviceId)}/readings/history?hours=${hours}`
   );
   return result.items ?? [];
-}
-
-export async function sendCommand(deviceId: string, input: SendCommandInput): Promise<Command> {
-  return restRequest<Command>(`/devices/${encodeURIComponent(deviceId)}/commands`, {
-    method: 'POST',
-    body: input,
-  });
 }
 
 export async function getMyProfile(): Promise<User | null> {

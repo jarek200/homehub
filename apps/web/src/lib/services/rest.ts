@@ -11,7 +11,8 @@ export class RestApiError extends Error {
   }
 }
 
-function baseUrl(): string {
+/** Public base URL for the REST API (no trailing slash). */
+export function getRestApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
     const win = window as Window & { ENV?: Record<string, string> };
     const url = win.ENV?.VITE_REST_API_URL ?? import.meta.env.VITE_REST_API_URL;
@@ -22,6 +23,10 @@ function baseUrl(): string {
     throw new RestApiError('REST API URL is not configured', 0, 'ConfigError');
   }
   return url.replace(/\/$/, '');
+}
+
+function baseUrl(): string {
+  return getRestApiBaseUrl();
 }
 
 async function authHeaders(): Promise<Record<string, string>> {

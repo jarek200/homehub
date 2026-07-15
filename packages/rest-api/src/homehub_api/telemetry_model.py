@@ -42,7 +42,7 @@ def _is_humidity_sensor(device_type: str | None) -> bool:
     return normalize_device_type(device_type) == "humidity-sensor"
 
 
-def sample_metrics(device_type: str, configuration: str | None = None) -> dict[str, float | bool]:
+def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, float | bool]:
     normalized_type = normalize_device_type(device_type) or device_type
     if normalized_type == "heat-alarm":
         return {
@@ -120,7 +120,7 @@ def _map_metrics_for_device_type(
 def normalize_telemetry_event(
     event: dict[str, Any],
     *,
-    configuration: str | None = None,
+    configuration: Any = None,
     thresholds: dict[str, float] | None = None,
     device_type: str | None = None,
 ) -> dict[str, Any]:
@@ -165,7 +165,7 @@ def normalize_telemetry_event(
 def reading_from_dynamo(
     item: dict[str, Any],
     *,
-    configuration: str | None = None,
+    configuration: Any = None,
     thresholds: dict[str, float] | None = None,
     device_type: str | None = None,
 ) -> dict[str, Any]:
@@ -189,13 +189,6 @@ def reading_from_dynamo(
     )
 
     return {"alarm": alarm, "state": state, "metrics": metrics}
-
-
-def metrics_humidity(metrics: dict[str, float | bool]) -> float | None:
-    value = metrics.get("humidity")
-    if value is None:
-        return None
-    return float(value)
 
 
 def metrics_to_dynamo(metrics: dict[str, float | bool]) -> dict[str, Decimal | bool]:

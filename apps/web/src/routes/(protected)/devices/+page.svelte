@@ -117,7 +117,7 @@ function toggleSelectAll() {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-const READINGS_POLL_MS = 5000;
+const READINGS_POLL_MS = 10_000;
 
 onMount(() => {
   void loadDevices();
@@ -435,7 +435,7 @@ $effect(() => {
             Telemetry sent
           </p>
           <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
-            Example payload reported every 60 seconds once the device is online.
+            Example payload reported every 10 seconds once the device is online.
           </p>
           <pre
             class="mt-3 overflow-x-auto rounded-sm border border-border bg-background px-3 py-2 font-mono text-[0.7rem] text-foreground leading-relaxed"

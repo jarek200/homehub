@@ -1,15 +1,12 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from homehub_api.auth import verify_api_key_or_jwt
+from homehub_api.config import hub_id_from_pk
 from homehub_api.dependencies import get_store
 from homehub_api.errors import ApiError
+from homehub_api.iot.athena_history import query_device_history
 from homehub_api.models import (
-    CommandListResponse,
-    CommandResponse,
-    CreateCommandRequest,
     CreateDeviceRequest,
-    CreateReadingRequest,
-    CreateReadingResponse,
     DeleteDeviceResponse,
     DeviceListResponse,
     DeviceResponse,
@@ -70,40 +67,19 @@ def list_readings(device_id: str, store: HubStore = Depends(get_store)) -> Readi
     return ReadingListResponse(items=store.list_readings(device_id))
 
 
-@router.post("/{device_id}/readings", response_model=CreateReadingResponse, status_code=201)
+@router.get("/{device_id}/readings/history", response_model=ReadingListResponse)
 @tracer.capture_method
-def create_reading(
+def list_reading_history(
     device_id: str,
-    payload: CreateReadingRequest,
     store: HubStore = Depends(get_store),
-) -> CreateReadingResponse:
-    result = store.create_reading(device_id, payload)
-    metrics.add_metric(name="ReadingCreated", unit=MetricUnit.Count, value=1)
-    if result.issue is not None:
-        metrics.add_metric(name="HumidityIssueRaised", unit=MetricUnit.Count, value=1)
-        logger.info(
-            "Humidity issue raised from reading",
-            extra={"device_id": device_id, "issue_id": result.issue.issue_id},
-        )
-    return result
-
-
-@router.get("/{device_id}/commands", response_model=CommandListResponse)
-def list_commands(device_id: str, store: HubStore = Depends(get_store)) -> CommandListResponse:
-    return CommandListResponse(items=store.list_commands(device_id))
-
-
-@router.post("/{device_id}/commands", response_model=CommandResponse, status_code=201)
-@tracer.capture_method
-def create_command(
-    device_id: str,
-    payload: CreateCommandRequest,
-    store: HubStore = Depends(get_store),
-) -> CommandResponse:
-    command = store.create_command(device_id, payload)
-    metrics.add_metric(name="CommandCreated", unit=MetricUnit.Count, value=1)
-    logger.info(
-        "Command created",
-        extra={"device_id": device_id, "command_id": command.command_id},
-    )
-    return command
+    hours: int = Query(default=3, ge=1, le=72),
+) -> ReadingListResponse:
+    device = store.get_device(device_id)
+    if not device:
+        raise ApiError("Device not found", 404, "NotFound")
+    hub_id = hub_id_from_pk(store.tenant_pk)
+    items = query_device_history(hub_id=hub_id, device_id=device_id, hours=hours)
+    metrics.add_metric(name="AthenaHistoryQueried", unit=MetricUnit.Count, value=1)
+    # Newest-first to match Dynamo list_readings ordering for the UI.
+    items_newest_first = list(reversed(items))
+    return ReadingListResponse(items=items_newest_first)

@@ -40,7 +40,7 @@ onMount(() => {
     if (device?.lifecycleStatus === 'PROVISIONING' || device?.status === 'ONLINE') {
       void refreshDevice();
     }
-  }, 5000);
+  }, 10_000);
 });
 
 onDestroy(() => {
@@ -174,6 +174,7 @@ async function loadDevice() {
     {#if showReadings}
       <section class="border-border border-b py-10">
         <DeviceReadingsPanel
+          deviceId={device.deviceId}
           deviceType={deviceType}
           configuration={device.configuration}
           {readings}

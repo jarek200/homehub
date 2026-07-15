@@ -11,13 +11,10 @@ import boto3
 from ulid import new as new_ulid
 
 from homehub_api.config import DEMO_TENANT_PK, hub_pk_for_user
-from homehub_api.store import humidity_issue_title
 from homehub_api.telemetry_model import (
-    metrics_humidity,
     metrics_to_dynamo,
     normalize_telemetry_event,
 )
-from homehub_api.thresholds import humidity_issue_threshold
 
 
 def _now_iso() -> str:
@@ -63,11 +60,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
 
     tenant_pk = _tenant_pk_for_device(table, device_id, event)
     device_item = _device_record(table, tenant_pk, device_id)
-    configuration = (
-        str(device_item["configuration"])
-        if device_item and device_item.get("configuration")
-        else None
-    )
+    configuration = device_item.get("configuration") if device_item else None
     device_type = (
         str(device_item["type"]) if device_item and device_item.get("type") else None
     )
@@ -120,38 +113,6 @@ def write_telemetry(event: dict[str, Any]) -> None:
                 ":updatedAt": timestamp,
             },
         )
-
-    humidity = metrics_humidity(normalized["metrics"])
-    humidity_limit = humidity_issue_threshold(configuration)
-    if humidity is not None and humidity >= humidity_limit:
-        issues = table.query(
-            KeyConditionExpression="PK = :pk AND begins_with(SK, :sk)",
-            ExpressionAttributeValues={":pk": tenant_pk, ":sk": "ISSUE#"},
-            Limit=100,
-        ).get("Items", [])
-        open_for_device = [
-            issue
-            for issue in issues
-            if issue.get("deviceId") == device_id and issue.get("status") == "OPEN"
-        ]
-        if not open_for_device:
-            issue_id = _new_id()
-            table.put_item(
-                Item={
-                    "PK": tenant_pk,
-                    "SK": f"ISSUE#{issue_id}",
-                    "issueId": issue_id,
-                    "title": humidity_issue_title(humidity),
-                    "deviceId": device_id,
-                    "severity": "HIGH",
-                    "status": "OPEN",
-                    "notes": "Automatically raised from a high humidity sensor reading.",
-                    "createdAt": timestamp,
-                    "updatedAt": timestamp,
-                    "GSI1PK": tenant_pk,
-                    "GSI1SK": f"ISSUE#{timestamp}",
-                }
-            )
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:

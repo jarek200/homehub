@@ -372,5 +372,12 @@ function toggleMode() {
         {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
       </button>
     {/if}
+
+    <a
+      href="/api-docs"
+      class="text-center text-muted-foreground text-xs uppercase tracking-widest hover:text-foreground"
+    >
+      API docs
+    </a>
   </form>
 </main>

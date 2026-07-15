@@ -14,14 +14,10 @@ from homehub_api.iot.sfn.common import shadow_desired, thing_name_for
 logger = logging.getLogger(__name__)
 
 
-def parse_configuration(configuration: str | None) -> dict[str, Any]:
-    if not configuration:
-        return {}
-    try:
-        parsed = json.loads(configuration)
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+def parse_configuration(configuration: str | dict[str, Any] | None) -> dict[str, Any]:
+    from homehub_api.device_configuration import as_config_dict
+
+    return as_config_dict(configuration)
 
 
 def merge_configuration(base: dict[str, Any], patch: Any) -> dict[str, Any]:
@@ -44,7 +40,7 @@ def merge_configuration(base: dict[str, Any], patch: Any) -> dict[str, Any]:
 
 def apply_shadow_state(
     *,
-    configuration: str | None,
+    configuration: str | dict[str, Any] | None,
     device_type: str,
     state: dict[str, Any],
 ) -> tuple[str | None, dict[str, Any]]:
@@ -70,7 +66,7 @@ def push_device_shadow_desired(
     *,
     device_id: str,
     device_type: str,
-    configuration: str | None,
+    configuration: str | dict[str, Any] | None,
     thing_name: str | None = None,
 ) -> None:
     if os.environ.get("SKIP_IOT_PROVISIONING", "").lower() in {"1", "true", "yes"}:
