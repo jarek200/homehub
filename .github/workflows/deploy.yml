@@ -159,6 +159,12 @@ jobs:
           echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
       - run: pnpm exec sst unlock --stage ${{ needs.setup.outputs.env_name }}
       - run: pnpm exec sst deploy --stage ${{ needs.setup.outputs.env_name }}
+      - name: Deploy device simulator to Lightsail
+        if: needs.setup.outputs.env_name == 'int' || needs.setup.outputs.env_name == 'prod'
+        env:
+          SST_STAGE: ${{ needs.setup.outputs.env_name }}
+          HOMEHUB_FORCE_SIMULATOR_DEPLOY: 'true'
+        run: pnpm simulator:deploy
       - name: Mark int deploy complete
         if: success() && needs.setup.outputs.env_name == 'int'
         env:

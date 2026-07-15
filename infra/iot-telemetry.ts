@@ -2,6 +2,7 @@
 
 import * as aws from '@pulumi/aws';
 import { IamPropagationDelay } from './iam-wait';
+import { pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -193,6 +194,7 @@ export function createIotTelemetry(table: StorageTable) {
     timeout: stageConfig.lambda.timeout,
     link: [table],
     environment: {
+      ...pythonLambdaEnv,
       TABLE_NAME: table.name,
     },
     permissions: [

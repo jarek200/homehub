@@ -401,17 +401,6 @@ $effect(() => {
             }}
           />
         </div>
-        <div class="mt-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
-          <p class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
-            Telemetry sent
-          </p>
-          <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
-            Example payload reported every 10 seconds once the device is online.
-          </p>
-          <pre
-            class="mt-3 overflow-x-auto rounded-sm border border-border bg-background px-3 py-2 font-mono text-[0.7rem] text-foreground leading-relaxed"
-          >{telemetryPreview}</pre>
-        </div>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -423,6 +412,18 @@ $effect(() => {
           required
           class={inputMinimal}
         />
+      </div>
+
+      <div class="rounded-sm border border-border bg-muted/20 px-4 py-3">
+        <p class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
+          Telemetry sent
+        </p>
+        <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
+          Example payload reported every 10 seconds once the device is online.
+        </p>
+        <pre
+          class="mt-3 overflow-x-auto rounded-sm border border-border bg-background px-3 py-2 font-mono text-[0.7rem] text-foreground leading-relaxed"
+        >{telemetryPreview}</pre>
       </div>
 
       <Button type="submit" class="rounded-sm" disabled={creating || !name.trim() || !location.trim()}>

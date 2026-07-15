@@ -271,26 +271,16 @@ class HubStore:
         return {"deleted": True, "deviceId": device_id}
 
     def _decommission_device(self, device_id: str) -> None:
-        timestamp = _now_iso()
-        try:
-            self._table.update_item(
-                Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"},
-                UpdateExpression="SET enabled = :enabled, #status = :status, updatedAt = :updatedAt",
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":enabled": False,
-                    ":status": "STOPPED",
-                    ":updatedAt": timestamp,
-                },
-            )
-        except Exception:
-            pass
         queue_url = os.environ.get("SIMULATOR_QUEUE_URL", "").strip()
         if queue_url:
             boto3.client("sqs").send_message(
                 QueueUrl=queue_url,
                 MessageBody=json.dumps({"eventType": "DEVICE_STOP", "deviceId": device_id}),
             )
+        try:
+            self._table.delete_item(Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"})
+        except Exception:
+            pass
 
     def list_readings(self, device_id: str, limit: int = 50) -> list[ReadingResponse]:
         device = self._require_device(device_id)

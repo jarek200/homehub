@@ -2,6 +2,7 @@
 
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -27,6 +28,7 @@ function createProvisionTask(
     dev: false,
     link: [table, simulatorQueue],
     environment: {
+      ...pythonLambdaEnv,
       TABLE_NAME: table.name,
       SIMULATOR_QUEUE_URL: simulatorQueue.url,
       SKIP_IOT_PROVISIONING: stageConfig.iot.skipProvisioning ? 'true' : 'false',
@@ -185,8 +187,13 @@ export function createIotProvisioning(table: StorageTable) {
     ([parseArn, certArn, thingArn, finalizeArn, failedArn]) =>
       JSON.stringify({
         Comment: 'Provision HomeHub IoT device with per-device certificate',
-        StartAt: 'ParseInput',
+        StartAt: 'NormalizeInput',
         States: {
+          NormalizeInput: {
+            Type: 'Pass',
+            InputPath: '$[0]',
+            Next: 'ParseInput',
+          },
           ParseInput: {
             Type: 'Task',
             Resource: parseArn,
