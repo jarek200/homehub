@@ -1,0 +1,42 @@
+{
+  "name": "homehub",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "clean": "pnpm -r exec -- rm -rf node_modules .turbo 2>/dev/null || true && rm -rf node_modules .turbo && rm -f pnpm-lock.yaml",
+    "build": "turbo run build",
+    "dev": "uv sync --all-packages && bash scripts/dev.sh",
+    "dev:local": "pnpm --filter @sst-monorepo/web dev",
+    "dev:simulator": "bash scripts/dev-simulator.sh",
+    "simulator:deploy": "bash scripts/deploy-simulator.sh",
+    "deploy:int": "pnpm sst deploy --stage int && pnpm simulator:deploy",
+    "deploy:int:recover": "bash scripts/cleanup-simulator-orphans.sh int && pnpm sst deploy --stage int && pnpm simulator:deploy",
+    "deploy:prod": "pnpm sst deploy --stage prod",
+    "remove:int": "pnpm sst remove --stage int",
+    "reset:int": "bash scripts/reset-stage.sh int",
+    "sso": "aws sso login --sso-session=homehub",
+    "lint": "pnpm exec biome check .",
+    "lint:fix": "pnpm exec biome check . --write",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run && pnpm test:api",
+    "test:api": "uv sync --all-packages --dev && uv run --directory packages/rest-api pytest",
+    "test:watch": "vitest",
+    "prepare": "husky",
+    "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "HomeHub — smart home IoT hub with REST API, DynamoDB, Cognito, and SST IaC",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@pulumi/aws": "^7.36.0",
+    "@pulumi/pulumi": "^3.251.0",
+    "@types/node": "^24.13.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "sst": "^4.17.0",
+    "turbo": "^2.10.4",
+    "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@10.20.0"
+}

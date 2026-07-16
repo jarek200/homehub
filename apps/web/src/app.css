@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+@theme {
+  /* Minimal white-on-black; maps to shadcn-style tokens used by ui primitives */
+  --color-background: #000000;
+  --color-foreground: #f5f5f5;
+  --color-card: #000000;
+  --color-card-foreground: #f5f5f5;
+  --color-popover: #0a0a0a;
+  --color-popover-foreground: #f5f5f5;
+  --color-primary: #f5f5f5;
+  --color-primary-foreground: #000000;
+  --color-secondary: #171717;
+  --color-secondary-foreground: #f5f5f5;
+  --color-muted: #171717;
+  --color-muted-foreground: #a3a3a3;
+  --color-accent: #262626;
+  --color-accent-foreground: #f5f5f5;
+  --color-destructive: #7f1d1d;
+  --color-destructive-foreground: #f5f5f5;
+  --color-border: #262626;
+  --color-input: #262626;
+  --color-ring: #f5f5f5;
+  --radius: 0.125rem;
+
+  --font-display: "Syne", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+:root {
+  --background: var(--color-background);
+  --foreground: var(--color-foreground);
+  --card: var(--color-card);
+  --card-foreground: var(--color-card-foreground);
+  --popover: var(--color-popover);
+  --popover-foreground: var(--color-popover-foreground);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-primary-foreground);
+  --secondary: var(--color-secondary);
+  --secondary-foreground: var(--color-secondary-foreground);
+  --muted: var(--color-muted);
+  --muted-foreground: var(--color-muted-foreground);
+  --accent: var(--color-accent);
+  --accent-foreground: var(--color-accent-foreground);
+  --destructive: var(--color-destructive);
+  --destructive-foreground: var(--color-destructive-foreground);
+  --border: var(--color-border);
+  --input: var(--color-input);
+  --ring: var(--color-ring);
+  --radius: var(--radius);
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
+
+.device-checkbox {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-background);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 10px 10px;
+}
+
+.device-checkbox:checked,
+.device-checkbox:indeterminate {
+  border-color: #000;
+  background-color: #000;
+}
+
+.device-checkbox:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
+}
+
+.device-checkbox:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round'%3E%3Cline x1='4' y1='8' x2='12' y2='8'/%3E%3C/svg%3E");
+}
+
+.device-status-switch {
+  position: relative;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background-color: var(--color-background);
+  transition: background-color 150ms ease;
+}
+
+.device-status-switch::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.device-status-switch[aria-checked="true"] {
+  background-color: #000;
+  border-color: #000;
+}
+
+.device-status-switch[aria-checked="true"]::after {
+  transform: translateX(1rem);
+  background-color: #fff;
+  border-color: #fff;
+}
+
+.device-status-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

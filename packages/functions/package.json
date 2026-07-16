@@ -1,0 +1,23 @@
+{
+  "name": "@sst-monorepo/functions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1084.0",
+    "@aws-sdk/lib-dynamodb": "^3.1084.0",
+    "@sst-monorepo/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.162",
+    "@types/node": "^24.13.3",
+    "typescript": "^6.0.3"
+  },
+  "packageManager": "pnpm@10.20.0"
+}

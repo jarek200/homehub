@@ -1,0 +1,30 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "APP_URL",
+    "APPS_HOSTED_ZONE_ID",
+    "DNS_AWS_ACCESS_KEY_ID",
+    "DNS_AWS_SECRET_ACCESS_KEY",
+    "DNS_AWS_SESSION_TOKEN",
+    "REST_API_KEY"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".svelte-kit/**", "build/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["**/*.ts", "**/*.svelte", "**/tsconfig.json"],
+      "outputs": []
+    },
+    "test": {
+      "inputs": ["src/**/*.ts", "**/*.test.ts", "**/*.spec.ts", "vitest.config.ts"],
+      "outputs": ["coverage/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
