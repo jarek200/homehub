@@ -24,7 +24,7 @@ cd "$ROOT"
 echo "SST dev stage: $STAGE (profile=${AWS_PROFILE:-default}, region=${AWS_REGION:-})"
 echo "Shared int/prod stacks are untouched. Use pnpm deploy:int for the stable demo."
 
-if [[ "${HOMEHUB_SKIP_IOT_PROVISIONING:-}" != "true" && "${HOMEHUB_SKIP_SIMULATOR:-}" != "true" ]]; then
+if [[ "${HOMEHUB_SKIP_SIMULATOR:-}" != "true" ]]; then
   # Lightsail only exists on int/prod; this is a no-op for personal stages.
   SIMULATOR_LOG="$ROOT/.homehub-simulator-deploy.log"
   echo "Device simulator check will run in background (log: $SIMULATOR_LOG)"

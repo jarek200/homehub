@@ -69,9 +69,6 @@ def push_device_shadow_desired(
     configuration: str | dict[str, Any] | None,
     thing_name: str | None = None,
 ) -> None:
-    if os.environ.get("SKIP_IOT_PROVISIONING", "").lower() in {"1", "true", "yes"}:
-        return
-
     endpoint = os.environ.get("IOT_DATA_ENDPOINT", "").strip()
     if not endpoint:
         logger.debug("IOT_DATA_ENDPOINT not set; skipping shadow update for %s", device_id)

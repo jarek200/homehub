@@ -65,13 +65,3 @@ def test_push_device_shadow_desired_updates_shadow(mock_boto_client: MagicMock) 
     assert payload["state"]["desired"]["type"] == "heat-alarm"
     assert payload["state"]["desired"]["configuration"]["thresholds"]["temperatureWarning"] == 30
 
-
-@patch.dict(os.environ, {"SKIP_IOT_PROVISIONING": "true"})
-@patch("homehub_api.iot.shadow.boto3.client")
-def test_push_device_shadow_desired_skips_when_disabled(mock_boto_client: MagicMock) -> None:
-    push_device_shadow_desired(
-        device_id="dev1",
-        device_type="heat-alarm",
-        configuration="{}",
-    )
-    mock_boto_client.assert_not_called()

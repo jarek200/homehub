@@ -17,7 +17,6 @@ PROVISION_CONTEXT_KEYS = (
     "configuration",
     "thingName",
     "ssmCertPrefix",
-    "skipIot",
     "certificateArn",
     "certificateId",
 )
@@ -35,10 +34,6 @@ def thing_name_for(device_id: str) -> str:
 
 def ssm_prefix_for(device_id: str) -> str:
     return f"/homehub/devices/{device_id}"
-
-
-def skip_iot_provisioning() -> bool:
-    return os.environ.get("SKIP_IOT_PROVISIONING", "").lower() in {"1", "true", "yes"}
 
 
 def _device_id_from_hints(event: dict[str, Any]) -> str | None:
@@ -158,7 +153,6 @@ def parse_stream_record(record: dict[str, Any]) -> dict[str, Any] | None:
         "configuration": new_image.get("configuration", {}).get("S"),
         "thingName": thing_name_for(device_id),
         "ssmCertPrefix": ssm_prefix_for(device_id),
-        "skipIot": skip_iot_provisioning(),
     }
 
 

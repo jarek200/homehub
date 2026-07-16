@@ -31,7 +31,6 @@ function createProvisionTask(
       ...pythonLambdaEnv,
       TABLE_NAME: table.name,
       SIMULATOR_QUEUE_URL: simulatorQueue.url,
-      SKIP_IOT_PROVISIONING: stageConfig.iot.skipProvisioning ? 'true' : 'false',
       ...extraEnv,
     },
     permissions: [
@@ -197,13 +196,8 @@ export function createIotProvisioning(table: StorageTable) {
           ParseInput: {
             Type: 'Task',
             Resource: parseArn,
-            Next: 'SkipChoice',
+            Next: 'CreateCert',
             Catch: [{ ErrorEquals: ['States.ALL'], ResultPath: '$.error', Next: 'MarkFailed' }],
-          },
-          SkipChoice: {
-            Type: 'Choice',
-            Choices: [{ Variable: '$.skipIot', BooleanEquals: true, Next: 'Finalize' }],
-            Default: 'CreateCert',
           },
           CreateCert: {
             Type: 'Task',

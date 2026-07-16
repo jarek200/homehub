@@ -8,8 +8,8 @@ IMAGE_TAG="${SIMULATOR_IMAGE_TAG:-latest}"
 
 cd "$ROOT"
 
-if [[ "${HOMEHUB_SKIP_IOT_PROVISIONING:-}" == "true" || "${HOMEHUB_SKIP_SIMULATOR:-}" == "true" ]]; then
-  echo "Skipping device simulator deploy (HOMEHUB_SKIP_IOT_PROVISIONING or HOMEHUB_SKIP_SIMULATOR)."
+if [[ "${HOMEHUB_SKIP_SIMULATOR:-}" == "true" ]]; then
+  echo "Skipping device simulator deploy (HOMEHUB_SKIP_SIMULATOR)."
   exit 0
 fi
 

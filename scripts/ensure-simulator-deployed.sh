@@ -13,7 +13,7 @@ cd "$ROOT"
 source "$ROOT/scripts/lib/aws-stage.sh"
 homehub_aws_stage_env "$STAGE"
 
-if [[ "${HOMEHUB_SKIP_IOT_PROVISIONING:-}" == "true" || "${HOMEHUB_SKIP_SIMULATOR:-}" == "true" ]]; then
+if [[ "${HOMEHUB_SKIP_SIMULATOR:-}" == "true" ]]; then
   exit 0
 fi
 
