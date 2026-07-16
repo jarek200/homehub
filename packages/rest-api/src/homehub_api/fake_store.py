@@ -7,12 +7,18 @@ from typing import Any
 
 from ulid import new as new_ulid
 
+from homehub_api.config import DEMO_TENANT_PK
 from homehub_api.errors import ApiError
 from homehub_api.models import (
     CreateDeviceRequest,
     DeviceResponse,
     ReadingResponse,
     UpdateDeviceRequest,
+)
+from homehub_api.pagination import (
+    DeviceListPage,
+    decode_device_cursor,
+    encode_device_cursor,
 )
 
 
@@ -29,8 +35,25 @@ class FakeHubStore:
         self.devices: dict[str, DeviceResponse] = {}
         self.readings: dict[str, list[ReadingResponse]] = {}
 
-    def list_devices(self, limit: int = 50) -> list[DeviceResponse]:
-        return list(self.devices.values())[:limit]
+    def list_devices(self, *, limit: int = 50, cursor: str | None = None) -> DeviceListPage:
+        sorted_devices = sorted(self.devices.values(), key=lambda device: device.device_id)
+        start_idx = 0
+        if cursor:
+            key = decode_device_cursor(cursor)
+            after_id = key["SK"].removeprefix("DEVICE#")
+            for index, device in enumerate(sorted_devices):
+                if device.device_id == after_id:
+                    start_idx = index + 1
+                    break
+
+        page = sorted_devices[start_idx : start_idx + limit]
+        next_cursor = None
+        if start_idx + limit < len(sorted_devices) and page:
+            last = page[-1]
+            next_cursor = encode_device_cursor(
+                {"PK": DEMO_TENANT_PK, "SK": f"DEVICE#{last.device_id}"}
+            )
+        return DeviceListPage(items=page, next_cursor=next_cursor)
 
     def get_device(self, device_id: str) -> DeviceResponse | None:
         return self.devices.get(device_id)

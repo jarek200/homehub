@@ -130,6 +130,9 @@ class DeviceResponse(BaseModel):
 
 class DeviceListResponse(BaseModel):
     items: list[DeviceResponse]
+    next_cursor: str | None = Field(default=None, alias="nextCursor")
+
+    model_config = {"populate_by_name": True}
 
 
 class ReadingListResponse(BaseModel):
@@ -159,3 +162,11 @@ class ServiceInfoResponse(BaseModel):
     version: str
     framework: str
     endpoints: list[str]
+
+
+class HealthResponse(BaseModel):
+    status: Literal["ok"] = "ok"
+
+
+class ReadyResponse(BaseModel):
+    status: Literal["ready"] = "ready"

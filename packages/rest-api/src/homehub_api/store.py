@@ -18,6 +18,11 @@ from homehub_api.models import (
     ReadingResponse,
     UpdateDeviceRequest,
 )
+from homehub_api.pagination import (
+    DeviceListPage,
+    decode_device_cursor,
+    encode_device_cursor,
+)
 from homehub_api.telemetry_model import reading_from_dynamo
 
 
@@ -140,18 +145,25 @@ class HubStore:
         self.tenant_pk = tenant_pk
         self._table = boto3.resource("dynamodb").Table(table_name)
 
-    def list_devices(self, limit: int = 50) -> list[DeviceResponse]:
-        result = self._table.query(
-            KeyConditionExpression="PK = :pk AND begins_with(SK, :sk)",
-            ExpressionAttributeValues={":pk": self.tenant_pk, ":sk": "DEVICE#"},
-            Limit=limit,
-        )
+    def list_devices(self, *, limit: int = 50, cursor: str | None = None) -> DeviceListPage:
+        query_kwargs: dict[str, Any] = {
+            "KeyConditionExpression": "PK = :pk AND begins_with(SK, :sk)",
+            "ExpressionAttributeValues": {":pk": self.tenant_pk, ":sk": "DEVICE#"},
+            "Limit": limit,
+        }
+        if cursor:
+            query_kwargs["ExclusiveStartKey"] = decode_device_cursor(cursor)
+
+        result = self._table.query(**query_kwargs)
         devices: list[DeviceResponse] = []
         for item in result.get("Items", []):
             device = _safe_to_device(item)
             if device is not None:
                 devices.append(device)
-        return devices
+
+        last_key = result.get("LastEvaluatedKey")
+        next_cursor = encode_device_cursor(last_key) if last_key else None
+        return DeviceListPage(items=devices, next_cursor=next_cursor)
 
     def get_device(self, device_id: str) -> DeviceResponse | None:
         result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": f"DEVICE#{device_id}"})

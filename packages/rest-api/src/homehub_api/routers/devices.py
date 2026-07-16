@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
-from homehub_api.auth import verify_api_key_or_jwt
-from homehub_api.config import hub_id_from_pk
+from homehub_api.config import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, hub_id_from_pk
 from homehub_api.dependencies import get_store
 from homehub_api.errors import ApiError
 from homehub_api.iot.athena_history import query_device_history
@@ -16,12 +15,17 @@ from homehub_api.models import (
 from homehub_api.observability import MetricUnit, logger, metrics, tracer
 from homehub_api.store import HubStore
 
-router = APIRouter(prefix="/devices", dependencies=[Depends(verify_api_key_or_jwt)])
+router = APIRouter(prefix="/devices")
 
 
 @router.get("", response_model=DeviceListResponse)
-def list_devices(store: HubStore = Depends(get_store)) -> DeviceListResponse:
-    return DeviceListResponse(items=store.list_devices())
+def list_devices(
+    store: HubStore = Depends(get_store),
+    limit: int = Query(default=DEFAULT_PAGE_LIMIT, ge=1, le=MAX_PAGE_LIMIT),
+    cursor: str | None = Query(default=None),
+) -> DeviceListResponse:
+    page = store.list_devices(limit=limit, cursor=cursor)
+    return DeviceListResponse(items=page.items, nextCursor=page.next_cursor)
 
 
 @router.post("", response_model=DeviceResponse, status_code=201)

@@ -1,33 +1,45 @@
+import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from homehub_api.config import table_name
-from homehub_api.errors import ApiError
+from homehub_api.config import request_id_from, table_name
+from homehub_api.errors import ApiError, error_body
 from homehub_api.models import ServiceInfoResponse
 from homehub_api.observability import logger
-from homehub_api.routers import devices, profile
+from homehub_api.routers import devices, health, profile
 from homehub_api.store import HubStore
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        logger.append_keys(http_method=request.method, path=request.url.path)
+        start = time.perf_counter()
+        request_id = request_id_from(request)
+        logger.append_keys(
+            http_method=request.method,
+            path=request.url.path,
+            request_id=request_id,
+        )
         try:
             response = await call_next(request)
         except Exception:
             logger.exception("Unhandled request error")
-            raise
-
+            return JSONResponse(
+                status_code=500,
+                content=error_body("Internal server error", "InternalError"),
+                headers={"X-Request-Id": request_id},
+            )
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        response.headers["X-Request-Id"] = request_id
         logger.info(
             "Request completed",
-            extra={"status_code": response.status_code},
+            extra={"status_code": response.status_code, "duration_ms": duration_ms},
         )
         return response
 
@@ -71,10 +83,36 @@ def create_app(store: HubStore | None = None) -> FastAPI:
                 "path": request.url.path,
             },
         )
-        body: dict[str, Any] = {"error": exc.message}
-        if exc.code:
-            body["code"] = exc.code
-        return JSONResponse(status_code=exc.status_code, content=body)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=error_body(exc.message, exc.code),
+            headers={"X-Request-Id": request_id_from(request)},
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, dict) and "error" in detail:
+            message = str(detail["error"])
+            code = detail.get("code")
+            if code is not None:
+                code = str(code)
+        elif isinstance(detail, str):
+            message = detail
+            code = None
+        else:
+            message = "Request failed"
+            code = None
+
+        logger.warning(
+            "HTTP error",
+            extra={"status_code": exc.status_code, "code": code, "path": request.url.path},
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=error_body(message, code),
+            headers={"X-Request-Id": request_id_from(request)},
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
@@ -91,7 +129,17 @@ def create_app(store: HubStore | None = None) -> FastAPI:
         )
         return JSONResponse(
             status_code=400,
-            content={"error": "; ".join(messages), "code": "ValidationError"},
+            content=error_body("; ".join(messages), "ValidationError"),
+            headers={"X-Request-Id": request_id_from(request)},
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("Unhandled error", extra={"path": request.url.path})
+        return JSONResponse(
+            status_code=500,
+            content=error_body("Internal server error", "InternalError"),
+            headers={"X-Request-Id": request_id_from(request)},
         )
 
     @app.get("/", response_model=ServiceInfoResponse)
@@ -101,6 +149,8 @@ def create_app(store: HubStore | None = None) -> FastAPI:
             version="1.0",
             framework="FastAPI",
             endpoints=[
+                "GET /health",
+                "GET /ready",
                 "GET /devices",
                 "POST /devices",
                 "GET /devices/{deviceId}",
@@ -112,6 +162,7 @@ def create_app(store: HubStore | None = None) -> FastAPI:
             ],
         )
 
+    app.include_router(health.router)
     app.include_router(devices.router)
     app.include_router(profile.router)
 

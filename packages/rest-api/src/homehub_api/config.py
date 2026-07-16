@@ -1,4 +1,7 @@
 import os
+import uuid
+
+from starlette.requests import Request
 
 DEMO_TENANT_ID = "demo"
 DEMO_TENANT_PK = f"HUB#{DEMO_TENANT_ID}"
@@ -9,6 +12,9 @@ INPUT_LIMITS = {
     "location": 100,
     "configuration": 4096,
 }
+
+DEFAULT_PAGE_LIMIT = 50
+MAX_PAGE_LIMIT = 100
 
 
 def table_name() -> str | None:
@@ -27,3 +33,11 @@ def hub_pk_for_user(user_id: str) -> str:
 
 def hub_id_from_pk(tenant_pk: str) -> str:
     return tenant_pk.removeprefix("HUB#")
+
+
+def request_id_from(request: Request) -> str:
+    for header in ("x-amzn-requestid", "x-request-id"):
+        value = request.headers.get(header)
+        if value:
+            return value
+    return str(uuid.uuid4())

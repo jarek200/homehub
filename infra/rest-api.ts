@@ -113,6 +113,7 @@ export function createRestApi(
           'dynamodb:PutItem',
           'dynamodb:UpdateItem',
           'dynamodb:DeleteItem',
+          'dynamodb:DescribeTable',
         ],
         resources: [table.arn, $interpolate`${table.arn}/index/*`],
       },

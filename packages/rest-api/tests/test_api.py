@@ -242,3 +242,176 @@ def test_next_recent_readings_prepends_and_caps() -> None:
     assert len(next_readings) == RECENT_READINGS_LIMIT
     assert next_readings[0]["readingId"] == "newest"
     assert next_readings[-1]["readingId"] == f"r{RECENT_READINGS_LIMIT - 2}"
+
+
+def _assert_error_shape(body: dict, *, message: str, code: str) -> None:
+    assert set(body.keys()) == {"error", "code"}
+    assert body["error"] == message
+    assert body["code"] == code
+
+
+def test_auth_error_shape_when_api_key_required(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
+    monkeypatch.setenv("REST_API_KEY", "secret-key")
+
+    response = client.get("/devices", headers={"X-Api-Key": "wrong-key"})
+
+    assert response.status_code == 401
+    _assert_error_shape(
+        response.json(),
+        message="Invalid or missing API key",
+        code="Unauthorized",
+    )
+
+
+def test_profile_requires_cognito_user(client: TestClient) -> None:
+    response = client.get("/me")
+
+    assert response.status_code == 401
+    _assert_error_shape(
+        response.json(),
+        message="Cognito sign-in required",
+        code="Unauthorized",
+    )
+
+
+def test_not_found_error_shape(client: TestClient) -> None:
+    response = client.get("/devices/missing")
+
+    assert response.status_code == 404
+    _assert_error_shape(response.json(), message="Device not found", code="NotFound")
+
+
+def test_validation_error_shape(client: TestClient) -> None:
+    response = client.post("/devices", json={"type": "sensor"})
+
+    assert response.status_code == 400
+    body = response.json()
+    assert set(body.keys()) == {"error", "code"}
+    assert body["code"] == "ValidationError"
+    assert "name" in body["error"]
+
+
+def test_health_returns_ok(client: TestClient) -> None:
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert "X-Request-Id" in response.headers
+
+
+def test_ready_returns_ready_with_injected_store(client: TestClient) -> None:
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_ready_checks_dynamodb_when_not_injected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TABLE_NAME", "HomeHubTable")
+
+    class FakeDynamoClient:
+        def describe_table(self, *, TableName: str) -> dict:
+            assert TableName == "HomeHubTable"
+            return {"Table": {"TableName": TableName}}
+
+    monkeypatch.setattr(
+        "homehub_api.routers.health.boto3.client",
+        lambda _service: FakeDynamoClient(),
+    )
+
+    app = create_app()
+    with TestClient(app) as test_client:
+        response = test_client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_ready_returns_503_when_dynamodb_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from botocore.exceptions import ClientError
+
+    monkeypatch.setenv("TABLE_NAME", "HomeHubTable")
+
+    class FailingDynamoClient:
+        def describe_table(self, *, TableName: str) -> dict:
+            raise ClientError(
+                {"Error": {"Code": "ResourceNotFoundException", "Message": "missing"}},
+                "DescribeTable",
+            )
+
+    monkeypatch.setattr(
+        "homehub_api.routers.health.boto3.client",
+        lambda _service: FailingDynamoClient(),
+    )
+
+    app = create_app()
+    with TestClient(app) as test_client:
+        response = test_client.get("/ready")
+
+    assert response.status_code == 503
+    _assert_error_shape(
+        response.json(),
+        message="DynamoDB unavailable",
+        code="ServiceUnavailable",
+    )
+
+
+def test_internal_error_shape(client: TestClient, store: FakeHubStore) -> None:
+    def boom(*_args: object, **_kwargs: object) -> object:
+        raise RuntimeError("boom")
+
+    store.list_devices = boom  # type: ignore[method-assign]
+
+    response = client.get("/devices")
+
+    assert response.status_code == 500
+    _assert_error_shape(
+        response.json(),
+        message="Internal server error",
+        code="InternalError",
+    )
+
+
+def test_request_id_is_echoed(client: TestClient) -> None:
+    response = client.get("/health", headers={"x-amzn-requestid": "req-abc-123"})
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-Id"] == "req-abc-123"
+
+
+def test_list_devices_pagination(client: TestClient) -> None:
+    create_device(client, name="Device A")
+    create_device(client, name="Device B")
+    create_device(client, name="Device C")
+
+    first = client.get("/devices?limit=2")
+    assert first.status_code == 200
+    first_body = first.json()
+    assert len(first_body["items"]) == 2
+    assert first_body["nextCursor"]
+
+    second = client.get("/devices", params={"limit": 2, "cursor": first_body["nextCursor"]})
+    assert second.status_code == 200
+    second_body = second.json()
+    assert len(second_body["items"]) == 1
+    assert second_body.get("nextCursor") is None
+
+    all_ids = [item["deviceId"] for item in first_body["items"] + second_body["items"]]
+    assert len(all_ids) == 3
+    assert len(set(all_ids)) == 3
+
+
+def test_list_devices_invalid_cursor(client: TestClient) -> None:
+    response = client.get("/devices?cursor=not-valid")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "ValidationError"
+
+
+def test_list_devices_limit_validation(client: TestClient) -> None:
+    assert client.get("/devices?limit=0").status_code == 400
+    assert client.get("/devices?limit=101").status_code == 400

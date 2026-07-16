@@ -4,10 +4,11 @@ import os
 from dataclasses import dataclass
 
 import jwt
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header
 from jwt import PyJWKClient
 
 from homehub_api.config import rest_api_key
+from homehub_api.errors import ApiError
 
 
 @dataclass
@@ -33,10 +34,7 @@ def _verify_bearer_token(token: str) -> str:
         payload = jwt.decode(token, options={"verify_signature": False})
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(
-                status_code=401,
-                detail={"error": "Invalid token", "code": "Unauthorized"},
-            )
+            raise ApiError("Invalid token", 401, "Unauthorized")
         return str(user_id)
 
     global _jwk_client
@@ -53,10 +51,7 @@ def _verify_bearer_token(token: str) -> str:
     )
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "Invalid token", "code": "Unauthorized"},
-        )
+        raise ApiError("Invalid token", 401, "Unauthorized")
     return str(user_id)
 
 
@@ -72,10 +67,7 @@ def verify_api_key_or_jwt(
     expected = rest_api_key()
     if expected:
         if x_api_key != expected:
-            raise HTTPException(
-                status_code=401,
-                detail={"error": "Invalid or missing API key", "code": "Unauthorized"},
-            )
+            raise ApiError("Invalid or missing API key", 401, "Unauthorized")
         return AuthContext(user_id=None, auth_method="api_key")
 
     # Local dev when REST_API_KEY is not configured
@@ -86,8 +78,5 @@ def require_user(
     auth: AuthContext = Depends(verify_api_key_or_jwt),
 ) -> str:
     if not auth.user_id:
-        raise HTTPException(
-            status_code=401,
-            detail={"error": "Cognito sign-in required", "code": "Unauthorized"},
-        )
+        raise ApiError("Cognito sign-in required", 401, "Unauthorized")
     return auth.user_id
