@@ -130,7 +130,7 @@ jobs:
       DNS_ROLE_ARN: ${{ secrets.DNS_ROLE_ARN }}
       SST_APP_NAME: ${{ vars.SST_APP_NAME }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: aws-actions/configure-aws-credentials@v6
