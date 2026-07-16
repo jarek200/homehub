@@ -46,18 +46,60 @@ def _is_complete_device(item: dict[str, Any]) -> bool:
 def _to_device(item: dict[str, Any]) -> DeviceResponse:
     if not _is_complete_device(item):
         raise ValueError("Incomplete device record")
+
+    device_id = _device_id_from_item(item)
+    device_type = str(item["type"])
+    configuration = item.get("configuration")
+
+    recent_raw = item.get("recentReadings")
+    recent_items: list[dict[str, Any]] = []
+    if isinstance(recent_raw, list):
+        recent_items = [entry for entry in recent_raw if isinstance(entry, dict)]
+
+    last_raw = item.get("lastReading")
+    if isinstance(last_raw, dict) and not recent_items:
+        recent_items = [last_raw]
+    elif isinstance(last_raw, dict) and recent_items:
+        # Prefer explicit lastReading when present; keep recent list as stored.
+        pass
+
+    recent_readings = [
+        _to_reading(
+            {**entry, "deviceId": entry.get("deviceId") or device_id},
+            configuration=configuration,
+            device_type=device_type,
+        )
+        for entry in recent_items
+        if entry.get("readingId") and entry.get("recordedAt") and entry.get("createdAt")
+    ]
+
+    last_reading: ReadingResponse | None = None
+    if isinstance(last_raw, dict) and last_raw.get("readingId"):
+        try:
+            last_reading = _to_reading(
+                {**last_raw, "deviceId": last_raw.get("deviceId") or device_id},
+                configuration=configuration,
+                device_type=device_type,
+            )
+        except (KeyError, TypeError, ValueError):
+            last_reading = None
+    if last_reading is None and recent_readings:
+        last_reading = recent_readings[0]
+
     return DeviceResponse(
-        deviceId=_device_id_from_item(item),
+        deviceId=device_id,
         name=str(item["name"]),
-        type=str(item["type"]),
+        type=device_type,
         location=item.get("location"),
         status=item.get("status", "UNKNOWN"),
         lifecycleStatus=item.get("lifecycleStatus", "READY"),
         thingName=item.get("thingName"),
         certificateId=item.get("certificateId"),
         failureReason=item.get("failureReason"),
-        configuration=item.get("configuration"),
+        configuration=configuration,
         lastSeenAt=item.get("lastSeenAt"),
+        lastReading=last_reading,
+        recentReadings=recent_readings,
         createdAt=str(item["createdAt"]),
         updatedAt=str(item["updatedAt"]),
     )
@@ -229,26 +271,16 @@ class HubStore:
         return {"deleted": True, "deviceId": device_id}
 
     def _decommission_device(self, device_id: str) -> None:
-        timestamp = _now_iso()
-        try:
-            self._table.update_item(
-                Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"},
-                UpdateExpression="SET enabled = :enabled, #status = :status, updatedAt = :updatedAt",
-                ExpressionAttributeNames={"#status": "status"},
-                ExpressionAttributeValues={
-                    ":enabled": False,
-                    ":status": "STOPPED",
-                    ":updatedAt": timestamp,
-                },
-            )
-        except Exception:
-            pass
         queue_url = os.environ.get("SIMULATOR_QUEUE_URL", "").strip()
         if queue_url:
             boto3.client("sqs").send_message(
                 QueueUrl=queue_url,
                 MessageBody=json.dumps({"eventType": "DEVICE_STOP", "deviceId": device_id}),
             )
+        try:
+            self._table.delete_item(Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"})
+        except Exception:
+            pass
 
     def list_readings(self, device_id: str, limit: int = 50) -> list[ReadingResponse]:
         device = self._require_device(device_id)

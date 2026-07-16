@@ -2,7 +2,7 @@
 
 Python Docker container that long-polls the simulator SQS queue and runs one MQTT client per virtual device.
 
-**Managed by SST** on `int` and `prod`: Lightsail Container Service + ECR (`infra/device-simulator.ts`). For local fallback, use `pnpm dev:simulator`.
+**Managed by SST** on `int` and `prod`: Lightsail Container Service + ECR (`infra/device-simulator.ts`). Personal `pnpm dev` stages use the local Docker simulator instead (`pnpm dev:simulator`).
 
 ## What it does
 
@@ -15,32 +15,27 @@ Python Docker container that long-polls the simulator SQS queue and runs one MQT
 
 Certs are created automatically by the **DeviceProvision** Step Functions workflow when a device is registered.
 
-## SST / Lightsail (int & prod)
+## SST / Lightsail (int & prod only)
 
-`pnpm dev` and `pnpm deploy:int` provision:
+`pnpm deploy:int` / `pnpm deploy:prod` provision:
 
 - ECR repository `homehub-device-simulator-{stage}`
 - Lightsail Container Service `homehub-{stage}-simulator`
 - IAM user + SSM parameters for container AWS credentials
 
-`pnpm dev` auto-deploys the simulator in the background once the stack is ready. To force a rebuild:
+CI rebuilds Lightsail only when simulator-related paths change. Locally, `pnpm simulator:deploy` skips if Lightsail is already ACTIVE. Force a rebuild:
 
 ```bash
 HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
 ```
 
-Skip the Lightsail simulator:
-
-```bash
-HOMEHUB_SKIP_SIMULATOR=true pnpm dev
-```
-
 ## Local dev (compose)
 
-When you want the simulator on your machine instead of Lightsail:
+Personal `pnpm dev` stages do not create Lightsail. Run the simulator locally against the same personal stage:
 
 ```bash
-pnpm dev:simulator
+pnpm dev              # terminal 1 — personal stage (OS username by default)
+pnpm dev:simulator    # terminal 2 — reads SST_STAGE / same default
 ```
 
 Or manually:

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Ensure the Lightsail device simulator is built and deployed (used by pnpm dev).
+# Ensure the Lightsail device simulator is built and deployed (int/prod only).
+# Personal sst dev stages exit immediately — use pnpm dev:simulator instead.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,6 +18,7 @@ if [[ "${HOMEHUB_SKIP_IOT_PROVISIONING:-}" == "true" || "${HOMEHUB_SKIP_SIMULATO
 fi
 
 if [[ "$STAGE" != "int" && "$STAGE" != "prod" ]]; then
+  echo "Skipping Lightsail simulator deploy for personal stage '$STAGE' (use pnpm dev:simulator)."
   exit 0
 fi
 

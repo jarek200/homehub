@@ -50,6 +50,16 @@ export type ReadingState = (typeof READING_STATES)[number];
 
 export type ReadingMetrics = Record<string, number | boolean>;
 
+export interface ReadingRecord {
+  readingId: string;
+  deviceId: string;
+  alarm: boolean;
+  state: ReadingState;
+  metrics: ReadingMetrics;
+  recordedAt: string;
+  createdAt: string;
+}
+
 export interface DeviceRecord {
   deviceId: string;
   name: string;
@@ -62,16 +72,10 @@ export interface DeviceRecord {
   failureReason?: string | null;
   configuration?: DeviceConfiguration | null;
   lastSeenAt?: string | null;
+  /** Latest reading denormalized onto the device for list views. */
+  lastReading?: ReadingRecord | null;
+  /** Newest-first recent readings (up to 10) denormalized for list sparklines. */
+  recentReadings?: ReadingRecord[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface ReadingRecord {
-  readingId: string;
-  deviceId: string;
-  alarm: boolean;
-  state: ReadingState;
-  metrics: ReadingMetrics;
-  recordedAt: string;
-  createdAt: string;
 }

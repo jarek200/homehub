@@ -64,16 +64,18 @@ nvm use
 pnpm install
 uv sync --all-packages   # install Python deps for the REST API Lambda (required for sst dev)
 pnpm sso          # AWS SSO login
-pnpm dev          # SST dev (int stack + web hot reload + Lightsail simulator auto-deploy)
+pnpm dev          # SST hot reload on a personal stage (defaults to your OS username)
 ```
 
-Register a device in the UI → Step Functions provisions cert/Thing → Lightsail simulator picks up `DEVICE_READY` → readings appear.
+`pnpm dev` **never** targets `int` or `prod`. It uses a personal stage (e.g. `jarekwyprzal`) in the int AWS account so the shared CloudFront / demo stack stays intact. Override with `SST_STAGE=myname pnpm dev` if needed. Deploy the stable demo with `pnpm deploy:int`.
 
-**Optional local simulator** (instead of Lightsail):
+Register a device in the UI → Step Functions provisions cert/Thing → local simulator picks up `DEVICE_READY` → readings appear.
+
+**Local simulator** (personal stages — Lightsail is int/prod only):
 
 ```bash
-HOMEHUB_SKIP_SIMULATOR=true pnpm dev   # terminal 1
-pnpm dev:simulator                     # terminal 2
+pnpm dev              # terminal 1
+pnpm dev:simulator    # terminal 2 (same personal stage as pnpm dev)
 ```
 
 To stub IoT (READY without cert/Thing) for faster UI-only work:
@@ -82,7 +84,7 @@ To stub IoT (READY without cert/Thing) for faster UI-only work:
 HOMEHUB_SKIP_IOT_PROVISIONING=true pnpm dev
 ```
 
-Force rebuild/redeploy the Lightsail simulator image:
+Lightsail rebuild/redeploy is skipped when the simulator is already ACTIVE (CI only forces a rebuild when `packages/device-simulator/**` or related deploy files change). Force anytime:
 
 ```bash
 HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
@@ -96,7 +98,7 @@ pnpm dev:local
 
 ## REST API
 
-After `pnpm dev` or `pnpm deploy:int`, SST prints `restApiUrl`. Signed-in device endpoints use the caller's hub (`HUB#{sub}`).
+After `pnpm dev` (personal stage) or `pnpm deploy:int`, SST prints `restApiUrl`. Signed-in device endpoints use the caller's hub (`HUB#{sub}`).
 
 Set the base URL once:
 
@@ -249,7 +251,7 @@ Tests cover:
 
 ```bash
 pnpm sso
-pnpm deploy:int              # stack + Lightsail simulator image
+pnpm deploy:int              # stack + Lightsail (redeploy only if missing/inactive)
 # pnpm deploy:prod
 ```
 
@@ -259,7 +261,7 @@ Useful ops scripts:
 pnpm deploy:int:recover      # clean simulator IAM/SSM orphans, then redeploy
 pnpm reset:int               # sst remove + orphan cleanup (int only)
 pnpm remove:int              # sst remove only
-pnpm simulator:deploy        # rebuild/push/redeploy Lightsail simulator
+pnpm simulator:deploy        # Lightsail deploy (skip if already ACTIVE)
 ```
 
 SST outputs:
@@ -293,15 +295,17 @@ The interview REST API and Svelte console work without Lightsail. The stretch pa
    - **Cold path:** IoT Rule → Firehose → S3 Parquet (analytics lake; 64 MB min buffer with Parquet conversion — files flush on the 60s interval or when 64 MB accumulates).
 6. Device detail **Last 3h** chart calls `GET /devices/{deviceId}/readings/history`, which runs a partition-pruned **Athena** query over the lake (on demand — not on the 10s UI poll).
 
-Personal `sst dev` stages use the same full IoT pipeline as `int`/`prod`. Set `HOMEHUB_SKIP_IOT_PROVISIONING=true` only when you want to stub provisioning for UI-only work.
+Personal `sst dev` stages use the same IoT provisioning + telemetry pipeline as `int`/`prod`, but **without** Lightsail — run `pnpm dev:simulator` locally instead. Set `HOMEHUB_SKIP_IOT_PROVISIONING=true` only when you want to stub provisioning for UI-only work.
 
 **Athena caveats:** Firehose buffering means the lake is ~1 minute behind live MQTT; the first query after deploy can be slower; empty charts are normal until Parquet objects land. Cost stays tiny at demo scale (Athena bills by data scanned, ~$5/TB with a 10 MB minimum per query) as long as history is fetched on demand.
 
 ### Demo script
 
-1. Deploy `int`: `pnpm deploy:int` (or `pnpm dev`)
+**Shared int demo (Lightsail + CloudFront):**
+
+1. Deploy `int`: `pnpm deploy:int` (never `pnpm dev` against int)
 2. Register a device in the web console → detail page shows **Provisioning** then **Ready**.
-3. Simulator runs on Lightsail automatically (`pnpm dev` deploys it in the background; `pnpm simulator:deploy` for manual updates).
+3. Simulator runs on Lightsail (`pnpm simulator:deploy` if you need a rebuild).
 4. Watch readings appear on the device detail page without manual “Record reading”.
 5. After ~60s, confirm Parquet objects under `s3://{telemetryBucket}/telemetry/hub={yourUserId}/` and use **Last 3h** on the device chart, or query with Athena:
 
@@ -311,6 +315,11 @@ FROM homehub_int_telemetry.device_telemetry
 WHERE hub = 'your-cognito-sub' AND year = '2026' AND month = '07' AND day = '15'
 LIMIT 20;
 ```
+
+**Personal hot-reload loop:**
+
+1. `pnpm dev` (personal stage) + `pnpm dev:simulator` in a second terminal
+2. Register a device → provisioning → local Docker simulator MQTT → live readings
 
 ### Per-device certs (SSM)
 

@@ -1,6 +1,7 @@
 /// <reference path="../../.sst/platform/config.d.ts" />
 
 import * as aws from '@pulumi/aws';
+import { pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -86,6 +87,7 @@ export function createRestApi(
     timeout: stageConfig.lambda.timeout,
     link: [table],
     environment: {
+      ...pythonLambdaEnv,
       TABLE_NAME: table.name,
       REST_API_KEY: process.env.REST_API_KEY ?? '',
       COGNITO_USER_POOL_ID: auth.id,

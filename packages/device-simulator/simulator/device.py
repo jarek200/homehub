@@ -53,13 +53,18 @@ class VirtualDevice:
         self._thread = threading.Thread(target=self._run, name=f"device-{self.device_id}", daemon=True)
         self._thread.start()
 
+    def _safe_disconnect(self) -> None:
+        if not self._connection:
+            return
+        try:
+            self._connection.disconnect().result(timeout=5)
+        except Exception:
+            # stop() and _run() can both disconnect; NOT_CONNECTED is normal on shutdown.
+            logger.debug("Disconnect failed for %s", self.device_id, exc_info=True)
+
     def stop(self) -> None:
         self._stop.set()
-        if self._connection:
-            try:
-                self._connection.disconnect().result(timeout=5)
-            except Exception:
-                logger.debug("Disconnect failed for %s", self.device_id, exc_info=True)
+        self._safe_disconnect()
         if self._thread:
             self._thread.join(timeout=10)
 
@@ -112,7 +117,7 @@ class VirtualDevice:
                     if self._stop.wait(interval):
                         break
 
-                self._connection.disconnect().result(timeout=5)
+                self._safe_disconnect()
                 return
             except Exception:
                 publish_immediately = False
@@ -142,11 +147,12 @@ class VirtualDevice:
 
         payload = self._build_telemetry()
         topic = TELEMETRY_TOPIC.format(device_id=self.device_id)
-        self._connection.publish(
+        publish_future, _ = self._connection.publish(
             topic=topic,
             payload=json.dumps(payload),
             qos=mqtt.QoS.AT_LEAST_ONCE,
-        ).result(timeout=5)
+        )
+        publish_future.result(timeout=5)
         logger.info("Published telemetry for %s", self.device_id)
 
     def _build_telemetry(self) -> dict[str, Any]:
@@ -198,11 +204,12 @@ class VirtualDevice:
 
             reported_topic = f"$aws/things/{self.thing_name}/shadow/update"
             response = {"state": {"reported": reported_state}}
-            self._connection.publish(
+            publish_future, _ = self._connection.publish(
                 topic=reported_topic,
                 payload=json.dumps(response),
                 qos=mqtt.QoS.AT_LEAST_ONCE,
             )
+            publish_future.result(timeout=5)
             logger.info("Applied shadow delta for %s", self.device_id)
         except Exception:
             logger.exception("Failed to apply shadow delta for %s", self.device_id)

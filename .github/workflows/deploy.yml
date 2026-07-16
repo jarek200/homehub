@@ -131,6 +131,8 @@ jobs:
       SST_APP_NAME: ${{ vars.SST_APP_NAME }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets[format('AWS_ROLE_ARN_{0}', needs.setup.outputs.env_upper)] }}
@@ -159,6 +161,30 @@ jobs:
           echo "DNS_AWS_SESSION_TOKEN=$(echo "$CREDS" | jq -r '.Credentials.SessionToken')" >> "$GITHUB_ENV"
       - run: pnpm exec sst unlock --stage ${{ needs.setup.outputs.env_name }}
       - run: pnpm exec sst deploy --stage ${{ needs.setup.outputs.env_name }}
+      - name: Detect simulator-related changes
+        id: simulator
+        if: needs.setup.outputs.env_name == 'int' || needs.setup.outputs.env_name == 'prod'
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          if git diff --name-only "$BASE" "$HEAD" -- \
+            packages/device-simulator \
+            scripts/deploy-simulator.sh \
+            scripts/ensure-simulator-deployed.sh \
+            infra/device-simulator.ts \
+            | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Simulator-related files changed — will rebuild and redeploy Lightsail."
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No simulator-related changes — Lightsail redeploy only if missing/inactive."
+          fi
+      - name: Deploy device simulator to Lightsail
+        if: needs.setup.outputs.env_name == 'int' || needs.setup.outputs.env_name == 'prod'
+        env:
+          SST_STAGE: ${{ needs.setup.outputs.env_name }}
+          HOMEHUB_FORCE_SIMULATOR_DEPLOY: ${{ steps.simulator.outputs.changed }}
+        run: pnpm simulator:deploy
       - name: Mark int deploy complete
         if: success() && needs.setup.outputs.env_name == 'int'
         env:

@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Device, DeviceStatus, Reading } from '@sst-monorepo/core';
+import type { Device, DeviceStatus } from '@sst-monorepo/core';
 import { goto } from '$app/navigation';
 import CompactReadingLine from '$lib/components/compact-reading-line.svelte';
 import DeviceThresholdsFields from '$lib/components/device-thresholds-fields.svelte';
@@ -26,22 +26,13 @@ import { updateDevice } from '$lib/services/rest-api';
 interface Props {
   device: Device;
   selected: boolean;
-  recentReadings: Reading[];
   deleting?: boolean;
   onToggleSelect: () => void;
   onDelete: () => void;
   onUpdated: (device: Device) => void;
 }
 
-let {
-  device,
-  selected,
-  recentReadings,
-  deleting = false,
-  onToggleSelect,
-  onDelete,
-  onUpdated,
-}: Props = $props();
+let { device, selected, deleting = false, onToggleSelect, onDelete, onUpdated }: Props = $props();
 
 let expanded = $state(false);
 let editing = $state(false);
@@ -53,7 +44,14 @@ let name = $state('');
 let location = $state('');
 let thresholds = $state<DeviceThresholds>({});
 
-const lastReading = $derived(recentReadings[0] ?? null);
+const recentReadings = $derived(
+  device.recentReadings?.length
+    ? device.recentReadings
+    : device.lastReading
+      ? [device.lastReading]
+      : []
+);
+const lastReading = $derived(device.lastReading ?? recentReadings[0] ?? null);
 
 const isOn = $derived(isDeviceOn(device.status));
 

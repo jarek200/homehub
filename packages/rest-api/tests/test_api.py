@@ -194,3 +194,51 @@ def test_list_readings(client: TestClient, store: FakeHubStore) -> None:
     assert response.status_code == 200
     assert len(response.json()["items"]) == 1
     assert response.json()["items"][0]["metrics"]["humidity"] == 55.0
+
+
+def test_list_devices_includes_denormalized_readings(
+    client: TestClient, store: FakeHubStore
+) -> None:
+    from homehub_api.models import ReadingResponse
+
+    device = create_device(client, name="Kitchen Sensor", type="humidity-sensor")
+    timestamp = "2026-07-15T12:00:00.000000Z"
+    reading = ReadingResponse(
+        readingId="01TESTREADING0000000000001",
+        deviceId=device["deviceId"],
+        alarm=False,
+        state="normal",
+        metrics={"humidity": 55.0},
+        recordedAt=timestamp,
+        createdAt=timestamp,
+    )
+    existing = store.devices[device["deviceId"]]
+    store.devices[device["deviceId"]] = existing.model_copy(
+        update={"last_reading": reading, "recent_readings": [reading]}
+    )
+
+    listed = client.get("/devices")
+    assert listed.status_code == 200
+    item = listed.json()["items"][0]
+    assert item["lastReading"]["metrics"]["humidity"] == 55.0
+    assert len(item["recentReadings"]) == 1
+    assert item["recentReadings"][0]["readingId"] == reading.reading_id
+
+
+def test_next_recent_readings_prepends_and_caps() -> None:
+    from homehub_api.iot.telemetry import RECENT_READINGS_LIMIT, _next_recent_readings
+
+    prior = [
+        {"readingId": f"r{i}", "deviceId": "d1", "recordedAt": f"t{i}", "createdAt": f"t{i}"}
+        for i in range(RECENT_READINGS_LIMIT)
+    ]
+    snapshot = {
+        "readingId": "newest",
+        "deviceId": "d1",
+        "recordedAt": "now",
+        "createdAt": "now",
+    }
+    next_readings = _next_recent_readings({"recentReadings": prior}, snapshot)
+    assert len(next_readings) == RECENT_READINGS_LIMIT
+    assert next_readings[0]["readingId"] == "newest"
+    assert next_readings[-1]["readingId"] == f"r{RECENT_READINGS_LIMIT - 2}"
