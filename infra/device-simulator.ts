@@ -95,7 +95,7 @@ export function createDeviceSimulator(
             },
             {
               Effect: 'Allow',
-              Action: ['dynamodb:GetItem'],
+              Action: ['dynamodb:GetItem', 'dynamodb:Query'],
               Resource: [tableArn, `${tableArn}/index/*`],
             },
             {

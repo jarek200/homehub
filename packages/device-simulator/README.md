@@ -23,7 +23,7 @@ Certs are created automatically by the **DeviceProvision** Step Functions workfl
 - Lightsail Container Service `homehub-{stage}-simulator`
 - IAM user + SSM parameters for container AWS credentials
 
-To force a rebuild on int:
+CI rebuilds Lightsail only when simulator-related paths change. Locally, `pnpm simulator:deploy` skips if Lightsail is already ACTIVE. Force a rebuild:
 
 ```bash
 HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy

@@ -77,6 +77,21 @@ if aws ecr describe-images \
   IMAGE_EXISTS=true
 fi
 
+# Skip rebuild/redeploy when an image is already live, unless explicitly forced
+# (CI sets HOMEHUB_FORCE_SIMULATOR_DEPLOY only when simulator-related paths change).
+if [[ "${HOMEHUB_FORCE_SIMULATOR_DEPLOY:-}" != "true" && "${HOMEHUB_SIMULATOR_BUILD:-}" != "true" && "$IMAGE_EXISTS" == "true" ]]; then
+  STATE="$(aws lightsail get-container-service-deployments \
+    --region "$AWS_REGION" \
+    --service-name "$SERVICE_NAME" \
+    --query 'deployments[0].state' \
+    --output text 2>/dev/null || echo "NONE")"
+  if [[ "$STATE" == "ACTIVE" ]]; then
+    echo "Lightsail simulator already ACTIVE on $SERVICE_NAME (ECR tag=$IMAGE_TAG) — skipping rebuild/redeploy."
+    echo "Set HOMEHUB_FORCE_SIMULATOR_DEPLOY=true to rebuild and redeploy anyway."
+    exit 0
+  fi
+fi
+
 BUILD_IMAGE=false
 if [[ "${HOMEHUB_SIMULATOR_BUILD:-}" == "true" || "${HOMEHUB_FORCE_SIMULATOR_DEPLOY:-}" == "true" ]]; then
   BUILD_IMAGE=true
@@ -142,10 +157,16 @@ with open("${CONTAINERS_FILE}", "w", encoding="utf-8") as f:
 PY
 
 echo "Creating Lightsail container deployment on $SERVICE_NAME..."
-aws lightsail create-container-service-deployment \
-  --region "$AWS_REGION" \
-  --service-name "$SERVICE_NAME" \
-  --containers "file://${CONTAINERS_FILE}"
+# Do not print the full API response — it includes AWS_SECRET_ACCESS_KEY in env.
+DEPLOY_VERSION="$(
+  aws lightsail create-container-service-deployment \
+    --region "$AWS_REGION" \
+    --service-name "$SERVICE_NAME" \
+    --containers "file://${CONTAINERS_FILE}" \
+    --query 'containerService.nextDeployment.version' \
+    --output text
+)"
+echo "Lightsail deployment version ${DEPLOY_VERSION} created (waiting for ACTIVE)..."
 
 echo "Waiting for deployment to become ACTIVE..."
 for _ in $(seq 1 60); do
@@ -159,7 +180,13 @@ for _ in $(seq 1 60); do
     exit 0
   fi
   if [[ "$STATE" == "FAILED" ]]; then
-    echo "Device simulator deployment FAILED."
+    echo "Device simulator deployment FAILED (version ${DEPLOY_VERSION}). Recent container logs:"
+    aws lightsail get-container-log \
+      --region "$AWS_REGION" \
+      --service-name "$SERVICE_NAME" \
+      --container-name simulator \
+      --query 'logEvents[-20:].message' \
+      --output text 2>/dev/null || true
     exit 1
   fi
   sleep 10

@@ -26,7 +26,11 @@ def main() -> None:
         sys.exit(1)
 
     reconciler = Reconciler(table_name=table_name, queue_url=queue_url)
-    reconciler.bootstrap_online_devices()
+    try:
+        reconciler.bootstrap_online_devices()
+    except Exception:
+        # Do not crash the container on bootstrap failure (Lightsail marks that FAILED).
+        logger.exception("Bootstrap of online devices failed; continuing to poll SQS")
     stop_event = threading.Event()
 
     def shutdown(_signum: int, _frame: object) -> None:

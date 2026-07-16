@@ -84,7 +84,7 @@ To stub IoT (READY without cert/Thing) for faster UI-only work:
 HOMEHUB_SKIP_IOT_PROVISIONING=true pnpm dev
 ```
 
-Force rebuild/redeploy the Lightsail simulator image on **int**:
+Lightsail rebuild/redeploy is skipped when the simulator is already ACTIVE (CI only forces a rebuild when `packages/device-simulator/**` or related deploy files change). Force anytime:
 
 ```bash
 HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
@@ -251,7 +251,7 @@ Tests cover:
 
 ```bash
 pnpm sso
-pnpm deploy:int              # stack + Lightsail simulator image
+pnpm deploy:int              # stack + Lightsail (redeploy only if missing/inactive)
 # pnpm deploy:prod
 ```
 
@@ -261,7 +261,7 @@ Useful ops scripts:
 pnpm deploy:int:recover      # clean simulator IAM/SSM orphans, then redeploy
 pnpm reset:int               # sst remove + orphan cleanup (int only)
 pnpm remove:int              # sst remove only
-pnpm simulator:deploy        # rebuild/push/redeploy Lightsail simulator
+pnpm simulator:deploy        # Lightsail deploy (skip if already ACTIVE)
 ```
 
 SST outputs:
