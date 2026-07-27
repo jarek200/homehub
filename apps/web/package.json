@@ -19,7 +19,7 @@
   "description": "HomeHub SvelteKit console",
   "dependencies": {
     "@sst-monorepo/core": "workspace:*",
-    "aws-amplify": "^6.18.0",
+    "aws-amplify": "^6.19.0",
     "bits-ui": "^2.18.1"
   },
   "devDependencies": {
