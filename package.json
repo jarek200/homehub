@@ -28,14 +28,14 @@
   "license": "ISC",
   "description": "HomeHub — smart home IoT hub with REST API, DynamoDB, Cognito, and SST IaC",
   "devDependencies": {
-    "@biomejs/biome": "^2.5.3",
-    "@pulumi/aws": "^7.36.0",
-    "@pulumi/pulumi": "^3.251.0",
-    "@types/node": "^24.13.3",
+    "@biomejs/biome": "^2.5.8",
+    "@pulumi/aws": "^7.42.0",
+    "@pulumi/pulumi": "^3.257.0",
+    "@types/node": "^26.2.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.3.0",
     "sst": "^4.17.0",
-    "turbo": "^2.10.4",
+    "turbo": "^2.10.10",
     "vitest": "^4.1.10"
   },
   "packageManager": "pnpm@10.20.0"
