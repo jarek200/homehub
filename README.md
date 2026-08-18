@@ -17,12 +17,12 @@ A smart-home app for managing IoT devices — **serverless, event-driven archite
 
 ## Short version
 
-- **What** — FastAPI REST API on AWS Lambda, DynamoDB, Cognito login, Svelte web UI. **AWS IoT Core** (certs, things, MQTT rules) with a **virtual device simulator** (not physical hardware).
+- **What** — FastAPI REST API on AWS Lambda, DynamoDB, Cognito login, Svelte web UI. **AWS IoT Core** (certs, things, MQTT rules) with a Docker MQTT runtime (local or Raspberry Pi).
 - **Run locally** — `pnpm install`, `uv sync --all-packages`, `pnpm sso`, `pnpm dev` (personal AWS stage, not `int`/`prod`).
 - **Try the API** — Open the web app → **`/api-docs`** (Swagger). Use **Try it out** on any endpoint.
-- **Try the UI** — Sign in → **Devices** → add a device → open it for charts.
+- **Try the UI** — Sign in → **Devices** → add a device → open it for charts or camera snapshots.
 - **IoT flow** — Add device (`PROVISIONING`) kicks off the pipeline above (IoT cert + thing + shadow). **Last 3h** history is queried from Athena over S3 Parquet.
-- **Simulator** — Personal `pnpm dev`: run `pnpm dev:simulator` locally (Docker). Shared `int`/`prod`: Lightsail container (not on personal stages).
+- **Device runtime** — Personal `pnpm dev`: `pnpm dev:simulator` (local Docker). Shared stages and cameras: `pnpm device:deploy` to the Pi. No Lightsail.
 
 Details below.
 
@@ -37,6 +37,7 @@ Details below.
 | Delete a device | `DELETE /devices/{deviceId}` |
 | Recent readings | `GET /devices/{deviceId}/readings` |
 | Older readings | `GET /devices/{deviceId}/readings/history` |
+| Camera snapshot | `GET /devices/{deviceId}/snapshot` |
 | Health check | `GET /health` |
 | Ready check (DB) | `GET /ready` |
 
@@ -58,7 +59,7 @@ API docs / integrations      Web app (browser)
             DynamoDB
                   ^
                   | live readings
-         IoT Core ← MQTT ← device simulator
+         IoT Core ← MQTT ← device runtime (Docker / Pi)
                   |
                   v
          S3 Parquet + Athena (history)
@@ -67,7 +68,7 @@ API docs / integrations      Web app (browser)
 - **REST API** — All backend calls go here. Each user gets their own hub. API clients use the API docs (or an API key); the web app uses a login token.
 - **Cognito** — Sign up and sign in for the web app.
 - **DynamoDB** — One table stores users, devices, and readings.
-- **IoT** — AWS IoT Core provisioning; a software simulator acts as the hardware. Live and historical charts need the simulator running (local Docker or Lightsail).
+- **IoT** — AWS IoT Core provisioning. Sensors can run as a software simulator; cameras run on a Raspberry Pi 5. Live readings need the Docker runtime (`pnpm dev:simulator` or `pnpm device:deploy`).
 - **SST** — All AWS resources live in [`sst.config.ts`](sst.config.ts) and [`infra/`](infra/).
 
 ## Tech stack
@@ -84,7 +85,7 @@ API docs / integrations      Web app (browser)
 - pnpm
 - Python 3.13 + [uv](https://docs.astral.sh/uv/)
 - AWS CLI with SSO (for deploy)
-- Docker (only for the local device simulator)
+- Docker (local simulator and/or Pi camera runtime)
 
 ## Get started
 
@@ -98,16 +99,16 @@ pnpm dev
 
 `pnpm dev` uses your own AWS stage (your username). It does **not** touch the shared `int` or `prod` stacks.
 
-Add a device in the UI → cloud provisions the IoT thing → **run the simulator** (see below) → readings show on the device page.
+Add a device in the UI → cloud provisions the IoT thing → **run the device runtime** (see below) → readings or snapshots show on the device page.
 
-**Run the simulator** — Readings only appear when the simulator is running. On personal stages, use local Docker:
+**Run the runtime** — Live MQTT data only appears when the Docker client is running.
 
 ```bash
 pnpm dev              # terminal 1
-pnpm dev:simulator    # terminal 2 (required for live MQTT readings)
+pnpm dev:simulator    # terminal 2 — local sensors (Mac)
+# or
+pnpm device:deploy    # Raspberry Pi 5 (sensors + Camera Module 3)
 ```
-
-On `int`/`prod`, the simulator runs on Lightsail automatically after deploy.
 
 Work on the frontend against an already-deployed backend:
 
@@ -171,7 +172,7 @@ sst.config.ts              Infra entry point
 1. **REST API** — Standard HTTP endpoints for device management and readings.
 2. **One hub per user** — Signup creates `HUB#{userId}`. API key access uses `HUB#demo` for testing.
 3. **Device IDs** — Server creates ULIDs (sortable, unique).
-4. **Three device types** — `heat-alarm`, `carbon-monoxide-alarm`, `humidity-sensor`.
+4. **Four device types** — `heat-alarm`, `carbon-monoxide-alarm`, `humidity-sensor`, `camera`.
 5. **Config is JSON** — Thresholds and reporting interval per device.
 6. **Lists are paginated** — Default 50 per page, max 100. Use `cursor` for the next page.
 
@@ -194,9 +195,9 @@ pnpm deploy:int
 Other useful commands:
 
 ```bash
-pnpm deploy:int:recover      # fix stuck simulator, redeploy
+pnpm deploy:int:recover      # clean leftover Lightsail/ECR, redeploy SST
 pnpm reset:int               # tear down int stack
-pnpm simulator:deploy        # rebuild Lightsail simulator (int/prod)
+pnpm device:deploy           # SSH the MQTT runtime to the Pi
 ```
 
 SST prints URLs and IDs when deploy finishes: API URL, web URL, Cognito pool, IoT endpoint, S3 buckets, etc.
@@ -205,15 +206,16 @@ SST prints URLs and IDs when deploy finishes: API URL, web URL, Cognito pool, Io
 
 IoT resources (IoT Core, Step Functions, telemetry rules, S3, Athena) deploy on **every stage**.
 
-- **CRUD always works** — REST API and web UI manage devices without a running simulator.
-- **Live readings need the simulator** — local Docker on personal `pnpm dev`, or Lightsail on `int`/`prod`.
+- **CRUD always works** — REST API and web UI manage devices without a running runtime.
+- **Live readings need the Docker MQTT client** — `pnpm dev:simulator` locally, or `pnpm device:deploy` on the Pi.
 
 **Demo on `int`:**
 
 1. `pnpm deploy:int`
-2. Add a device in the web UI.
-3. Wait for **Ready** (Lightsail simulator picks it up automatically).
-4. Watch readings on the device page; after ~60s try **Last 3h** (Firehose buffer before Parquet lands in S3).
+2. `pnpm device:deploy` (with `SST_STAGE=int`) if you want live MQTT / camera.
+3. Add a device in the web UI.
+4. Wait for **Ready** (the Pi or local Docker client picks it up from SQS).
+5. Watch readings or snapshots on the device page; after ~60s try **Last 3h** (Firehose buffer before Parquet lands in S3).
 
 **Certs** — Real per-device X.509 certs in SSM (`/homehub/devices/{deviceId}/cert|key|ca`), not in DynamoDB. Revoked and deleted when you remove a device.
 

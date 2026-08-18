@@ -21,8 +21,9 @@
  *
  * Stages:
  *   pnpm dev        → personal stage (OS username); never int/prod
- *   pnpm deploy:int → shared int demo (CloudFront + Lightsail)
+ *   pnpm deploy:int → shared int demo (CloudFront)
  *   pnpm deploy:prod → production
+ *   pnpm device:deploy → MQTT runtime on the Pi (replaces Lightsail)
  *
  * Log in first: pnpm sso
  */
@@ -69,16 +70,22 @@ export default $config({
     const { createRestApi } = await import('./infra/rest-api');
     const { createIotProvisioning } = await import('./infra/iot-provisioning');
     const { createIotTelemetry } = await import('./infra/iot-telemetry');
-    const { createDeviceSimulator } = await import('./infra/device-simulator');
+    const { createDeviceRuntime } = await import('./infra/device-runtime');
     const { stageConfig } = await import('./infra/stage-config');
 
     const { table } = createStorage();
     const createUserProfileFunction = createUserProfile(table);
     const { auth, authClient } = createAuth(createUserProfileFunction);
     const iotProvisioning = createIotProvisioning(table);
-    const deviceSimulator = createDeviceSimulator(table, iotProvisioning);
+    const deviceRuntime = createDeviceRuntime(table, iotProvisioning);
     const iotTelemetry = createIotTelemetry(table);
-    const restApi = createRestApi(table, auth, iotProvisioning, iotTelemetry);
+    const restApi = createRestApi(
+      table,
+      auth,
+      iotProvisioning,
+      iotTelemetry,
+      deviceRuntime.snapshotBucket
+    );
 
     const webAppUrl = getWebAppUrl();
     const webDomain = getWebDomainConfig();
@@ -129,12 +136,7 @@ export default $config({
       provisionStateMachineArn: iotProvisioning.stateMachine.arn,
       telemetryBucket: iotTelemetry.telemetryBucket.bucket,
       athenaResultsBucket: iotTelemetry.athenaResultsBucket.bucket,
-      ...(deviceSimulator
-        ? {
-            deviceSimulatorServiceName: deviceSimulator.serviceName,
-            deviceSimulatorEcrUrl: deviceSimulator.imageUri,
-          }
-        : {}),
+      snapshotBucket: deviceRuntime.snapshotBucket.bucket,
     };
   },
 });

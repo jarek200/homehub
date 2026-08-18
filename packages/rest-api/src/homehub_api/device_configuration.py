@@ -23,6 +23,8 @@ class DeviceConfiguration(BaseModel):
         alias="reportingIntervalSeconds",
         ge=1,
     )
+    pan: int | None = Field(default=None, ge=0, le=180)
+    tilt: int | None = Field(default=None, ge=0, le=180)
     thresholds: dict[str, float] | None = None
 
     @field_validator("thresholds", mode="before")
@@ -109,4 +111,21 @@ def as_config_dict(configuration: ConfigInput) -> dict[str, Any]:
 
 def as_config_json(configuration: ConfigInput) -> str | None:
     data = as_config_dict(configuration)
+    return json.dumps(data) if data else None
+
+
+CAMERA_DEFAULT_CONFIGURATION: dict[str, int] = {
+    "reportingIntervalSeconds": 30,
+    "pan": 90,
+    "tilt": 90,
+}
+
+
+def configuration_for_create(device_type: str, configuration: ConfigInput) -> str | None:
+    """Apply camera pan/tilt defaults when registering a device."""
+    data = as_config_dict(configuration)
+    if device_type == "camera":
+        merged = dict(CAMERA_DEFAULT_CONFIGURATION)
+        merged.update(data)
+        return json.dumps(merged)
     return json.dumps(data) if data else None

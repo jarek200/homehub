@@ -9,13 +9,17 @@ import { onDestroy, onMount } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import ConsoleShell from '$lib/components/console-shell.svelte';
+import DeviceCameraPanel from '$lib/components/device-camera-panel.svelte';
 import DeviceReadingsPanel from '$lib/components/device-readings-panel.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import {
   formatConfigurationSummary,
   formatDeviceType,
+  formatOperatingStatus,
   formatWhen,
+  isCamera,
+  statusColorClass,
   supportsReadings,
 } from '$lib/devices';
 import { getDevice, listDeviceReadings } from '$lib/services/rest-api';
@@ -29,6 +33,7 @@ let error = $state('');
 
 const deviceType = $derived(device?.type ?? '');
 const showReadings = $derived(supportsReadings(deviceType));
+const showCamera = $derived(isCamera(deviceType));
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -126,7 +131,7 @@ async function loadDevice() {
       Back to devices
     </Button>
   {:else}
-    <section class="space-y-4 border-border border-b pb-10">
+    <section class="space-y-3 border-border border-b pb-8">
       <div>
         <h2 class="font-display font-semibold text-lg tracking-tight">{device.name}</h2>
         <p class="mt-1 text-[0.75rem] text-muted-foreground">
@@ -134,6 +139,9 @@ async function loadDevice() {
           {#if device.location}
             · {device.location}
           {/if}
+          ·
+          <span class={statusColorClass(device.status)}>{formatOperatingStatus(device.status)}</span>
+          · Last seen {formatWhen(device.lastSeenAt)}
         </p>
       </div>
 
@@ -147,29 +155,26 @@ async function loadDevice() {
         </p>
       {/if}
 
-      <dl class="grid gap-3 text-[0.75rem] text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <dt class="uppercase tracking-widest">Device ID</dt>
-          <dd class="mt-1 break-all text-foreground">{device.deviceId}</dd>
-        </div>
-        <div>
-          <dt class="uppercase tracking-widest">Thing name</dt>
-          <dd class="mt-1 break-all text-foreground">{device.thingName ?? '—'}</dd>
-        </div>
-        <div>
-          <dt class="uppercase tracking-widest">Last seen</dt>
-          <dd class="mt-1 text-foreground">{formatWhen(device.lastSeenAt)}</dd>
-        </div>
-        <div>
-          <dt class="uppercase tracking-widest">Created</dt>
-          <dd class="mt-1 text-foreground">{formatWhen(device.createdAt)}</dd>
-        </div>
-        <div>
-          <dt class="uppercase tracking-widest">Configuration</dt>
-          <dd class="mt-1 text-foreground">{formatConfigurationSummary(device.configuration, device.type)}</dd>
-        </div>
-      </dl>
+      <p class="break-all text-[0.7rem] text-muted-foreground">
+        {device.deviceId}
+        {#if device.thingName}
+          · {device.thingName}
+        {/if}
+        · Created {formatWhen(device.createdAt)}
+        · {formatConfigurationSummary(device.configuration, device.type)}
+      </p>
     </section>
+
+    {#if showCamera && device}
+      <section class="border-border border-b py-10">
+        <DeviceCameraPanel
+          {device}
+          onUpdated={(updated) => {
+            device = updated;
+          }}
+        />
+      </section>
+    {/if}
 
     {#if showReadings}
       <section class="border-border border-b py-10">

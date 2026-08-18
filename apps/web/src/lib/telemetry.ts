@@ -13,6 +13,8 @@ const METRIC_LABELS: Record<string, string> = {
   temperature: 'Temperature',
   humidity: 'Humidity',
   fault: 'Fault',
+  pan: 'Pan',
+  tilt: 'Tilt',
 };
 
 const METRIC_SHORT_LABELS: Record<string, string> = {
@@ -22,6 +24,8 @@ const METRIC_SHORT_LABELS: Record<string, string> = {
   temperature: 'T',
   humidity: 'H',
   fault: 'Fault',
+  pan: 'Pan',
+  tilt: 'Tilt',
 };
 
 const DEVICE_PROFILES: Record<string, { summaryKeys: string[]; chartKeys: string[] }> = {
@@ -37,6 +41,10 @@ const DEVICE_PROFILES: Record<string, { summaryKeys: string[]; chartKeys: string
   'environmental-sensor': {
     summaryKeys: ['humidity'],
     chartKeys: ['humidity'],
+  },
+  camera: {
+    summaryKeys: ['pan', 'tilt'],
+    chartKeys: ['pan', 'tilt'],
   },
 };
 
@@ -351,6 +359,10 @@ const SAMPLE_METRICS: Record<string, ReadingMetrics> = {
   },
   'environmental-sensor': {
     humidity: 55,
+  },
+  camera: {
+    pan: 90,
+    tilt: 90,
   },
 };
 

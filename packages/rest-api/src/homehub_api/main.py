@@ -158,6 +158,8 @@ def create_app(store: HubStore | None = None) -> FastAPI:
                 "DELETE /devices/{deviceId}",
                 "GET /devices/{deviceId}/readings",
                 "GET /devices/{deviceId}/readings/history",
+                "GET /devices/{deviceId}/snapshot",
+                "GET /devices/{deviceId}/snapshots",
                 "GET /me",
             ],
         )

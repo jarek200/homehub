@@ -1,4 +1,4 @@
-"""Step 4: Write simulator registry, mark READY, notify Lightsail via SQS."""
+"""Step 4: Write simulator registry, mark READY, notify the device runtime via SQS."""
 
 from __future__ import annotations
 

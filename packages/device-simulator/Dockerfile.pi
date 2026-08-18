@@ -1,0 +1,32 @@
+# Built on the Raspberry Pi 5 (linux/arm64). Raspberry Pi apt InRelease still
+# uses a SHA1 binding signature, which Debian 13's sqv rejects — trusted=yes
+# is required to install rpicam-apps inside the container.
+FROM debian:trixie-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        python3 \
+        python3-pip \
+        python3-venv \
+    && echo "deb [trusted=yes] http://archive.raspberrypi.com/debian trixie main" \
+        > /etc/apt/sources.list.d/raspi.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends rpicam-apps i2c-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY simulator ./simulator
+COPY main.py ./
+
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir .
+
+ENV PATH="/opt/venv/bin:${PATH}"
+ENV PYTHONUNBUFFERED=1
+ENV CERT_DIR=/certs
+
+CMD ["python", "main.py"]

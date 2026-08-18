@@ -8,6 +8,7 @@ from typing import Any
 from ulid import new as new_ulid
 
 from homehub_api.config import DEMO_TENANT_PK
+from homehub_api.device_configuration import configuration_for_create
 from homehub_api.errors import ApiError
 from homehub_api.models import (
     CreateDeviceRequest,
@@ -68,7 +69,7 @@ class FakeHubStore:
             location=payload.location,
             status="UNKNOWN",
             lifecycleStatus="PROVISIONING",
-            configuration=payload.configuration,
+            configuration=configuration_for_create(payload.type, payload.configuration),
             createdAt=timestamp,
             updatedAt=timestamp,
         )

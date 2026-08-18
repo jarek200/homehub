@@ -3,6 +3,7 @@ export const DEVICE_TYPES = [
   { value: 'heat-alarm', label: 'Heat alarm' },
   { value: 'carbon-monoxide-alarm', label: 'Carbon monoxide alarm' },
   { value: 'humidity-sensor', label: 'Humidity sensor' },
+  { value: 'camera', label: 'Camera' },
 ] as const;
 
 export type DeviceType = (typeof DEVICE_TYPES)[number]['value'];

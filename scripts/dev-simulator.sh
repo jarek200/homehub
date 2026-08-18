@@ -34,6 +34,7 @@ console.log('export SQS_QUEUE_URL=' + JSON.stringify(queue));
 IOT_HOST="$(aws iot describe-endpoint --endpoint-type iot:Data-ATS --region "$AWS_REGION" --query endpointAddress --output text)"
 export IOT_ENDPOINT="https://${IOT_HOST}"
 export AWS_DEFAULT_REGION="$AWS_REGION"
+export SNAPSHOT_BUCKET="${SNAPSHOT_BUCKET:-homehub-snapshots-${STAGE}}"
 
 # Container has no SSO session — export short-lived keys from the host profile.
 eval "$(aws configure export-credentials --profile "${AWS_PROFILE}" --format env)"

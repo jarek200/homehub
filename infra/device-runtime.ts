@@ -2,59 +2,44 @@
 
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
 type IotProvisioning = ReturnType<typeof import('./iot-provisioning').createIotProvisioning>;
 
-export function createDeviceSimulator(
+/**
+ * IAM + snapshot storage for the MQTT device runtime (Pi Docker / local compose).
+ * Lightsail is not used — deploy the container with `pnpm device:deploy`.
+ */
+export function createDeviceRuntime(
   table: StorageTable,
-  iotProvisioning: Pick<IotProvisioning, 'simulatorQueue' | 'iotEndpoint'>
+  iotProvisioning: Pick<IotProvisioning, 'simulatorQueue'>
 ) {
-  if (!stageConfig.deviceSimulator.enabled) {
-    return undefined;
-  }
-
   const region = aws.getRegionOutput().name;
   const accountId = aws.getCallerIdentityOutput().accountId;
-  const serviceName = `${$app.name}-${$app.stage}-simulator`.replace(/_/g, '-');
 
-  const ecrRepository = new aws.ecr.Repository('DeviceSimulatorEcr', {
-    name: `${$app.name}-device-simulator-${$app.stage}`,
-    imageTagMutability: 'MUTABLE',
-    imageScanningConfiguration: { scanOnPush: true },
-    forceDelete: $app.stage !== 'prod',
+  const snapshotBucket = new aws.s3.Bucket('DeviceSnapshots', {
+    bucket: `${$app.name}-snapshots-${$app.stage}`,
+    forceDestroy: $app.stage !== 'prod',
   });
 
-  const containerService = new aws.lightsail.ContainerService('DeviceSimulator', {
-    name: serviceName,
-    power: stageConfig.deviceSimulator.power,
-    scale: stageConfig.deviceSimulator.scale,
-    isDisabled: false,
-    privateRegistryAccess: {
-      ecrImagePullerRole: { isActive: true },
-    },
-    tags: {
-      Project: $app.name,
-      Stage: $app.stage,
-    },
+  new aws.s3.BucketPublicAccessBlock('DeviceSnapshotsPublicAccessBlock', {
+    bucket: snapshotBucket.id,
+    blockPublicAcls: true,
+    blockPublicPolicy: true,
+    ignorePublicAcls: true,
+    restrictPublicBuckets: true,
   });
 
-  new aws.ecr.RepositoryPolicy('DeviceSimulatorEcrPolicy', {
-    repository: ecrRepository.name,
-    policy: containerService.privateRegistryAccess.apply((access) =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AllowLightsailPull',
-            Effect: 'Allow',
-            Principal: { AWS: access.ecrImagePullerRole.principalArn },
-            Action: ['ecr:BatchGetImage', 'ecr:GetDownloadUrlForLayer'],
-          },
-        ],
-      })
-    ),
+  new aws.s3.BucketLifecycleConfiguration('DeviceSnapshotsLifecycle', {
+    bucket: snapshotBucket.id,
+    rules: [
+      {
+        id: 'abort-incomplete-uploads',
+        status: 'Enabled',
+        abortIncompleteMultipartUpload: { daysAfterInitiation: 1 },
+        filter: {},
+      },
+    ],
   });
 
   const simulatorUser = new aws.iam.User('DeviceSimulatorUser', {
@@ -83,8 +68,8 @@ export function createDeviceSimulator(
   new aws.iam.UserPolicy('DeviceSimulatorUserPolicy', {
     user: simulatorUser.name,
     policy: pulumi
-      .all([table.arn, iotProvisioning.simulatorQueue.arn, accountId, region])
-      .apply(([tableArn, queueArn, acct, reg]) =>
+      .all([table.arn, iotProvisioning.simulatorQueue.arn, snapshotBucket.arn, accountId, region])
+      .apply(([tableArn, queueArn, bucketArn, acct, reg]) =>
         JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -108,17 +93,15 @@ export function createDeviceSimulator(
               Action: ['ssm:GetParameter'],
               Resource: `arn:aws:ssm:${reg}:${acct}:parameter/homehub/devices/*`,
             },
+            {
+              Effect: 'Allow',
+              Action: ['s3:PutObject'],
+              Resource: `${bucketArn}/*`,
+            },
           ],
         })
       ),
   });
 
-  const imageUri = pulumi.interpolate`${accountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepository.name}:latest`;
-
-  return {
-    ecrRepository,
-    containerService,
-    imageUri,
-    serviceName: containerService.name,
-  };
+  return { snapshotBucket };
 }

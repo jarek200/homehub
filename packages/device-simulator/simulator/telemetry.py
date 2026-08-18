@@ -76,6 +76,20 @@ def sample_metrics(device_type: str, configuration: str | None = None) -> dict[s
             "humidity": round(random.uniform(40.0, 65.0), 1),
         }
 
+    if normalized_type == "camera":
+        pan, tilt = 90.0, 90.0
+        if configuration:
+            try:
+                parsed = json.loads(configuration) if isinstance(configuration, str) else configuration
+            except json.JSONDecodeError:
+                parsed = {}
+            if isinstance(parsed, dict):
+                if isinstance(parsed.get("pan"), (int, float)):
+                    pan = float(parsed["pan"])
+                if isinstance(parsed.get("tilt"), (int, float)):
+                    tilt = float(parsed["tilt"])
+        return {"pan": pan, "tilt": tilt}
+
     return {}
 
 

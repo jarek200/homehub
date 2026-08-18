@@ -63,6 +63,12 @@ def test_humidity_sensor_sample_metrics() -> None:
     assert isinstance(metrics["humidity"], float)
 
 
+def test_camera_sample_metrics() -> None:
+    metrics = sample_metrics("camera")
+    assert metrics["pan"] == 90.0
+    assert metrics["tilt"] == 90.0
+
+
 def test_environmental_sensor_alias_sample_metrics() -> None:
     metrics = sample_metrics("environmental-sensor")
     assert "humidity" in metrics

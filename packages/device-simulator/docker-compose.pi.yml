@@ -1,0 +1,24 @@
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.pi
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /dev:/dev
+      - /run/udev:/run/udev:ro
+    environment:
+      TABLE_NAME: ${TABLE_NAME}
+      SQS_QUEUE_URL: ${SQS_QUEUE_URL}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-eu-west-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      IOT_ENDPOINT: ${IOT_ENDPOINT}
+      SNAPSHOT_BUCKET: ${SNAPSHOT_BUCKET:-}
+      CERT_DIR: /tmp/certs
+      I2C_BUS: ${I2C_BUS:-1}
+      PAN_CHANNEL: ${PAN_CHANNEL:-0}
+      TILT_CHANNEL: ${TILT_CHANNEL:-1}

@@ -133,6 +133,158 @@ def test_create_humidity_sensor(client: TestClient) -> None:
     assert created["lifecycleStatus"] == "PROVISIONING"
 
 
+def test_create_camera_applies_pan_tilt_defaults(client: TestClient) -> None:
+    created = create_device(
+        client,
+        name="Hallway Camera",
+        type="camera",
+        location="Hallway",
+    )
+    assert created["type"] == "camera"
+    assert created["configuration"]["pan"] == 90
+    assert created["configuration"]["tilt"] == 90
+    assert created["configuration"]["reportingIntervalSeconds"] == 30
+
+
+def test_create_camera_rejects_invalid_pan(client: TestClient) -> None:
+    response = client.post(
+        "/devices",
+        json={
+            "name": "Hallway Camera",
+            "type": "camera",
+            "location": "Hallway",
+            "configuration": {"pan": 200, "tilt": 90},
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "ValidationError"
+
+
+def test_get_snapshot_404_when_missing(client: TestClient) -> None:
+    device = create_device(client, name="Hallway Camera", type="camera")
+    response = client.get(f"/devices/{device['deviceId']}/snapshot")
+    assert response.status_code == 404
+    assert response.json()["code"] == "NotFound"
+
+
+def test_get_snapshot_returns_presigned_url(
+    client: TestClient,
+    store: FakeHubStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    device = create_device(client, name="Hallway Camera", type="camera")
+    existing = store.devices[device["deviceId"]]
+    store.devices[device["deviceId"]] = existing.model_copy(
+        update={
+            "last_snapshot_key": "snapshots/dev-1/frame.jpg",
+            "last_snapshot_at": "2026-08-14T00:00:00Z",
+        }
+    )
+    monkeypatch.setenv("SNAPSHOT_BUCKET", "homehub-snapshots-test")
+
+    s3 = MagicMock()
+    s3.generate_presigned_url.return_value = "https://example.com/snap.jpg"
+    monkeypatch.setattr("homehub_api.iot.snapshots.boto3.client", lambda _service: s3)
+
+    response = client.get(f"/devices/{device['deviceId']}/snapshot")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["url"] == "https://example.com/snap.jpg"
+    assert body["recordedAt"] == "2026-08-14T00:00:00Z"
+    s3.generate_presigned_url.assert_called_once()
+
+
+def test_list_snapshots_404_when_device_missing(client: TestClient) -> None:
+    response = client.get(
+        "/devices/missing/snapshots",
+        params={"from": "2026-08-16T00:00:00Z", "to": "2026-08-16T01:00:00Z"},
+    )
+    assert response.status_code == 404
+    assert response.json()["code"] == "NotFound"
+
+
+def test_list_snapshots_rejects_invalid_range(client: TestClient) -> None:
+    device = create_device(client, name="Hallway Camera", type="camera")
+    response = client.get(
+        f"/devices/{device['deviceId']}/snapshots",
+        params={"from": "2026-08-16T02:00:00Z", "to": "2026-08-16T01:00:00Z"},
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "ValidationError"
+
+
+def test_list_snapshots_rejects_span_over_7_days(client: TestClient) -> None:
+    device = create_device(client, name="Hallway Camera", type="camera")
+    response = client.get(
+        f"/devices/{device['deviceId']}/snapshots",
+        params={"from": "2026-08-01T00:00:00Z", "to": "2026-08-09T00:00:01Z"},
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "ValidationError"
+
+
+def test_list_snapshots_empty_prefix(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    device = create_device(client, name="Hallway Camera", type="camera")
+    monkeypatch.setenv("SNAPSHOT_BUCKET", "homehub-snapshots-test")
+
+    s3 = MagicMock()
+    s3.list_objects_v2.return_value = {"Contents": [], "IsTruncated": False}
+    monkeypatch.setattr("homehub_api.iot.snapshots.boto3.client", lambda _service: s3)
+
+    response = client.get(
+        f"/devices/{device['deviceId']}/snapshots",
+        params={"from": "2026-08-16T00:00:00Z", "to": "2026-08-16T01:00:00Z"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["items"] == []
+    assert body["sampled"] is False
+    assert body["total"] == 0
+
+
+def test_list_snapshots_samples_and_presigns(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from unittest.mock import MagicMock
+
+    device = create_device(client, name="Hallway Camera", type="camera")
+    device_id = device["deviceId"]
+    monkeypatch.setenv("SNAPSHOT_BUCKET", "homehub-snapshots-test")
+
+    keys = [
+        {"Key": f"snapshots/{device_id}/2026-08-16T10{minute:02d}00Z.jpg"}
+        for minute in range(50)
+    ]
+    s3 = MagicMock()
+    s3.list_objects_v2.return_value = {"Contents": keys, "IsTruncated": False}
+    s3.generate_presigned_url.side_effect = (
+        lambda _method, Params, **_kwargs: f"https://example.com/{Params['Key']}"
+    )
+    monkeypatch.setattr("homehub_api.iot.snapshots.boto3.client", lambda _service: s3)
+
+    response = client.get(
+        f"/devices/{device_id}/snapshots",
+        params={"from": "2026-08-16T10:00:00Z", "to": "2026-08-16T11:00:00Z"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 50
+    assert body["sampled"] is True
+    assert len(body["items"]) == 24
+    assert body["items"][0]["recordedAt"] == "2026-08-16T10:49:00Z"
+    assert body["items"][-1]["recordedAt"] == "2026-08-16T10:00:00Z"
+    assert body["items"][0]["url"].endswith(f"snapshots/{device_id}/2026-08-16T104900Z.jpg")
+    assert s3.generate_presigned_url.call_count == 24
+
+
 def test_create_device_requires_location(client: TestClient) -> None:
     response = client.post("/devices", json={"name": "Hallway Heat", "type": "heat-alarm"})
     assert response.status_code == 400

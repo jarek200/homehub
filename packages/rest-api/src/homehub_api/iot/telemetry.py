@@ -154,6 +154,13 @@ def write_telemetry(event: dict[str, Any]) -> None:
     ]
     expression_names: dict[str, str] | None = None
 
+    snapshot_key = event.get("snapshotKey")
+    if isinstance(snapshot_key, str) and snapshot_key.strip():
+        expression_values[":snapshotKey"] = snapshot_key.strip()
+        expression_values[":snapshotAt"] = recorded_at
+        update_parts.append("lastSnapshotKey = :snapshotKey")
+        update_parts.append("lastSnapshotAt = :snapshotAt")
+
     if device_status != "OFFLINE":
         expression_names = {"#status": "status"}
         expression_values[":online"] = "ONLINE"

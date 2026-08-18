@@ -13,6 +13,7 @@ from awscrt import io, mqtt
 from awsiot import mqtt_connection_builder
 
 from simulator.certs import load_cert_paths_for_device
+from simulator.pan_tilt import PanTiltController, angles_from_configuration
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,13 @@ class VirtualDevice:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._connection: mqtt.Connection | None = None
+        self._pan_tilt: PanTiltController | None = None
+        self._publish_lock = threading.Lock()
+        self._move_snapshot_timer: threading.Timer | None = None
+        if self._is_camera():
+            self._pan_tilt = PanTiltController()
+            pan, tilt = angles_from_configuration(self.configuration)
+            self._pan_tilt.set_angles(pan, tilt)
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -64,6 +72,9 @@ class VirtualDevice:
 
     def stop(self) -> None:
         self._stop.set()
+        if self._move_snapshot_timer:
+            self._move_snapshot_timer.cancel()
+            self._move_snapshot_timer = None
         self._safe_disconnect()
         if self._thread:
             self._thread.join(timeout=10)
@@ -125,9 +136,16 @@ class VirtualDevice:
                 if self._stop.wait(10):
                     return
 
+    def _is_camera(self) -> bool:
+        return self.device_type == "camera"
+
+    def _default_interval_seconds(self) -> int:
+        return 30 if self._is_camera() else 10
+
     def _reporting_interval_seconds(self) -> int:
+        default = self._default_interval_seconds()
         if not self.configuration:
-            return 10
+            return default
         try:
             parsed = (
                 self.configuration
@@ -135,25 +153,44 @@ class VirtualDevice:
                 else json.loads(self.configuration)
             )
             if not isinstance(parsed, dict):
-                return 10
-            value = int(parsed.get("reportingIntervalSeconds", 10))
-            return value if value > 0 else 10
+                return default
+            value = int(parsed.get("reportingIntervalSeconds", default))
+            return value if value > 0 else default
         except (json.JSONDecodeError, TypeError, ValueError):
-            return 10
+            return default
 
     def _publish_telemetry(self) -> None:
         if not self._connection:
             return
 
-        payload = self._build_telemetry()
-        topic = TELEMETRY_TOPIC.format(device_id=self.device_id)
-        publish_future, _ = self._connection.publish(
-            topic=topic,
-            payload=json.dumps(payload),
-            qos=mqtt.QoS.AT_LEAST_ONCE,
-        )
-        publish_future.result(timeout=5)
-        logger.info("Published telemetry for %s", self.device_id)
+        with self._publish_lock:
+            if not self._connection or self._stop.is_set():
+                return
+            payload = self._build_telemetry()
+            topic = TELEMETRY_TOPIC.format(device_id=self.device_id)
+            publish_future, _ = self._connection.publish(
+                topic=topic,
+                payload=json.dumps(payload),
+                qos=mqtt.QoS.AT_LEAST_ONCE,
+            )
+            publish_future.result(timeout=5)
+            logger.info("Published telemetry for %s", self.device_id)
+
+    def _schedule_snapshot_after_move(self) -> None:
+        if self._move_snapshot_timer:
+            self._move_snapshot_timer.cancel()
+        timer = threading.Timer(0.5, self._publish_move_snapshot)
+        timer.daemon = True
+        self._move_snapshot_timer = timer
+        timer.start()
+
+    def _publish_move_snapshot(self) -> None:
+        if self._stop.is_set():
+            return
+        try:
+            self._publish_telemetry()
+        except Exception:
+            logger.exception("Move snapshot failed for %s", self.device_id)
 
     def _build_telemetry(self) -> dict[str, Any]:
         from simulator.telemetry import derive_alarm_state, parse_thresholds, sample_metrics
@@ -162,7 +199,7 @@ class VirtualDevice:
         metrics = sample_metrics(self.device_type, self.configuration)
         thresholds = parse_thresholds(self.configuration)
         alarm, state = derive_alarm_state(metrics, thresholds, self.device_type)
-        return {
+        payload: dict[str, Any] = {
             "deviceId": self.device_id,
             "hubId": self.hub_id,
             "thingName": self.thing_name,
@@ -171,6 +208,13 @@ class VirtualDevice:
             "state": state,
             "metrics": metrics,
         }
+        if self._is_camera():
+            from simulator.camera import capture_and_upload
+
+            snapshot_key = capture_and_upload(device_id=self.device_id, recorded_at=recorded_at)
+            if snapshot_key:
+                payload["snapshotKey"] = snapshot_key
+        return payload
 
     def _on_shadow_delta(
         self,
@@ -198,6 +242,10 @@ class VirtualDevice:
             )
             if configuration is not None:
                 self.configuration = configuration
+                if self._is_camera() and self._pan_tilt is not None:
+                    pan, tilt = angles_from_configuration(self.configuration)
+                    self._pan_tilt.set_angles(pan, tilt)
+                    self._schedule_snapshot_after_move()
 
             if not reported_state:
                 return

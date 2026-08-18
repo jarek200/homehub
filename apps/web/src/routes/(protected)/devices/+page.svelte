@@ -9,21 +9,15 @@ import { onDestroy, onMount } from 'svelte';
 import ConfirmDialog from '$lib/components/confirm-dialog.svelte';
 import ConsoleShell from '$lib/components/console-shell.svelte';
 import DeviceAccordionRow from '$lib/components/device-accordion-row.svelte';
-import DeviceThresholdsFields from '$lib/components/device-thresholds-fields.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import {
-  buildConfiguration,
-  type DeviceThresholds,
-  defaultThresholdsForType,
-} from '$lib/device-thresholds';
-import {
-  DEVICE_TYPES,
   formatDeviceType,
   formatLifecycleStatus,
   formatStatus,
+  getDefaultConfiguration,
   inputMinimal,
 } from '$lib/devices';
 import { createDevice, deleteDevice, listDevices } from '$lib/services/rest-api';
@@ -46,15 +40,10 @@ let selectedIds = $state<string[]>([]);
 let bulkDeleting = $state(false);
 
 let name = $state('');
-let type = $state('heat-alarm');
+const type = 'camera';
 let location = $state('');
-let thresholds = $state<DeviceThresholds>(defaultThresholdsForType('heat-alarm'));
 
-const telemetryPreview = $derived(formatTelemetryPreview(type, thresholds));
-
-$effect(() => {
-  thresholds = defaultThresholdsForType(type);
-});
+const telemetryPreview = $derived(formatTelemetryPreview(type));
 
 const filteredDevices = $derived.by(() => {
   const q = query.trim().toLowerCase();
@@ -150,15 +139,14 @@ async function handleCreate() {
   creating = true;
   error = '';
   try {
-    const created = await createDevice({
+    await createDevice({
       name: name.trim(),
       type,
       location: location.trim(),
-      configuration: buildConfiguration(type, thresholds),
+      configuration: getDefaultConfiguration(type),
     });
     name = '';
     location = '';
-    type = 'heat-alarm';
     showCreate = false;
     await refreshDevices();
   } catch (err) {
@@ -355,10 +343,11 @@ $effect(() => {
     >
       <div>
         <h2 class="font-medium text-muted-foreground text-xs uppercase tracking-widest">
-          Register device
+          Register camera
         </h2>
         <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
-          Add a heat alarm, CO alarm, or humidity sensor to your home.
+          Add the Raspberry Pi camera. After it is ready, open it to view snapshots and control
+          pan/tilt.
         </p>
       </div>
 
@@ -367,40 +356,10 @@ $effect(() => {
         <Input
           id="name"
           bind:value={name}
-          placeholder="Hallway Heat Alarm"
+          placeholder="Living room camera"
           required
           class={inputMinimal}
         />
-      </div>
-
-      <div class="flex flex-col gap-2">
-        <Label for="type" class="text-muted-foreground text-xs font-normal">Type</Label>
-        <select
-          id="type"
-          bind:value={type}
-          class="h-9 border-x-0 border-t-0 border-b border-border bg-transparent px-0 text-sm outline-none focus:border-foreground"
-        >
-          {#each DEVICE_TYPES as option}
-            <option value={option.value}>{option.label}</option>
-          {/each}
-        </select>
-        <div class="mt-4 space-y-4">
-          <div>
-            <p class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
-              Alert thresholds
-            </p>
-            <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
-              Readings above these values move the device into a warning state.
-            </p>
-          </div>
-          <DeviceThresholdsFields
-            deviceType={type}
-            {thresholds}
-            onchange={(next) => {
-              thresholds = next;
-            }}
-          />
-        </div>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -419,7 +378,7 @@ $effect(() => {
           Telemetry sent
         </p>
         <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
-          Example payload reported every 10 seconds once the device is online.
+          Example payload reported once the device is online.
         </p>
         <pre
           class="mt-3 overflow-x-auto rounded-sm border border-border bg-background px-3 py-2 font-mono text-[0.7rem] text-foreground leading-relaxed"
@@ -443,7 +402,7 @@ $effect(() => {
       {#if query.trim()}
         No devices match “{query.trim()}”.
       {:else}
-        No devices yet. Use + to register your first device.
+        No cameras yet. Use + to register your first camera.
       {/if}
     </p>
   {:else}

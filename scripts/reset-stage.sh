@@ -31,8 +31,8 @@ echo "Removing SST stage '$STAGE' (profile=${AWS_PROFILE:-default})..."
 cd "$ROOT"
 pnpm exec sst remove --stage "$STAGE"
 
-echo "Removing simulator orphans not tracked in SST state..."
-bash "$ROOT/scripts/cleanup-simulator-orphans.sh" "$STAGE"
+echo "Removing leftover AWS resources not tracked in SST state..."
+HOMEHUB_CLEAN_RUNTIME_IAM=true bash "$ROOT/scripts/cleanup-simulator-orphans.sh" "$STAGE"
 
 echo ""
 echo "Reset complete for stage '$STAGE'."

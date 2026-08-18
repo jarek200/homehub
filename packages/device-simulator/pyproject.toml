@@ -1,12 +1,13 @@
 [project]
 name = "homehub-device-simulator"
 version = "0.1.0"
-description = "HomeHub virtual IoT device simulator (Docker / Lightsail)"
+description = "HomeHub MQTT device runtime (Docker on Pi or local compose)"
 requires-python = "==3.13.*"
 dependencies = [
   "awsiotsdk>=1.22.0",
   "awscrt>=0.23.0",
   "boto3>=1.35.0",
+  "smbus2>=0.4.3",
 ]
 
 [build-system]

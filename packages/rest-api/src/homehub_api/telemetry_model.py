@@ -61,6 +61,12 @@ def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, flo
             "humidity": round(random.uniform(40.0, 65.0), 1),
         }
 
+    if normalized_type == "camera":
+        return {
+            "pan": 90.0,
+            "tilt": 90.0,
+        }
+
     return {}
 
 

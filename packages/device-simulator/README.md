@@ -1,8 +1,8 @@
-# HomeHub device simulator
+# HomeHub device runtime
 
-Python Docker container that long-polls the simulator SQS queue and runs one MQTT client per virtual device.
+Python Docker container that long-polls the simulator SQS queue and runs one MQTT client per device. Sensor types emit virtual telemetry. `camera` devices capture JPEG stills (Camera Module 3) and drive the Arducam pan-tilt over I2C.
 
-**Managed by SST** on `int` and `prod`: Lightsail Container Service + ECR (`infra/device-simulator.ts`). Personal `pnpm dev` stages use the local Docker simulator instead (`pnpm dev:simulator`).
+The container is **not** hosted on Lightsail. Deploy it to the Raspberry Pi with `pnpm device:deploy`, or run it locally with `pnpm dev:simulator`.
 
 ## What it does
 
@@ -10,49 +10,36 @@ Python Docker container that long-polls the simulator SQS queue and runs one MQT
 - Loads **per-device** X.509 certs from SSM (`/homehub/devices/{deviceId}/cert|key|ca`)
 - Loads device config from DynamoDB (`SIMULATOR` registry + `DEVICE#` item)
 - Connects to AWS IoT Core with the device-specific certificate
-- Publishes telemetry to `homehub/devices/{deviceId}/telemetry` (~10s interval)
+- Publishes telemetry to `homehub/devices/{deviceId}/telemetry`
 - Subscribes to Device Shadow deltas and reports state
+- For `camera`: `rpicam-still` → S3 snapshot + PCA9685 pan/tilt from shadow `configuration`
 
 Certs are created automatically by the **DeviceProvision** Step Functions workflow when a device is registered.
 
-## SST / Lightsail (int & prod only)
+## Raspberry Pi (`pnpm device:deploy`)
 
-`pnpm deploy:int` / `pnpm deploy:prod` provision:
-
-- ECR repository `homehub-device-simulator-{stage}`
-- Lightsail Container Service `homehub-{stage}-simulator`
-- IAM user + SSM parameters for container AWS credentials
-
-CI rebuilds Lightsail only when simulator-related paths change. Locally, `pnpm simulator:deploy` skips if Lightsail is already ACTIVE. Force a rebuild:
+Builds `Dockerfile.pi` on the Pi over SSH (`Host pi` → `jarek@192.168.0.35`):
 
 ```bash
-HOMEHUB_FORCE_SIMULATOR_DEPLOY=true pnpm simulator:deploy
+pnpm sso
+pnpm device:deploy            # uses SST_STAGE or your personal stage
+SST_STAGE=int pnpm device:deploy
 ```
 
-## Local dev (compose)
+The script enables GPIO I2C, installs Docker if needed, rsyncs this package, and runs `docker compose -f docker-compose.pi.yml up -d --build`.
 
-Personal `pnpm dev` stages do not create Lightsail. Run the simulator locally against the same personal stage:
+## Local Mac (sensors only)
 
 ```bash
-pnpm dev              # terminal 1 — personal stage (OS username by default)
-pnpm dev:simulator    # terminal 2 — reads SST_STAGE / same default
+pnpm dev              # terminal 1 — personal stage
+pnpm dev:simulator    # terminal 2 — slim image, no CSI/I2C
 ```
 
-Or manually:
-
-```bash
-export TABLE_NAME=...
-export SQS_QUEUE_URL=...
-export IOT_ENDPOINT=https://...
-docker compose up --build
-```
+Camera capture no-ops when `rpicam-still` is missing; pan/tilt no-ops without `/dev/i2c-1`.
 
 ## Build image only
 
 ```bash
 docker build -t homehub-device-simulator:latest .
+docker build -f Dockerfile.pi -t homehub-device-simulator:pi .
 ```
-
-## Scaling
-
-The PoC targets 1–10 virtual devices on a nano Lightsail container (512 MB). For 10→100 devices, increase `power` in `infra/stage-config.ts`, tune `reportingIntervalSeconds`, and run multiple reconciler containers with competing consumers on the same queue.

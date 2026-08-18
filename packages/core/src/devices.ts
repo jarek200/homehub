@@ -26,6 +26,8 @@ export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 export interface DeviceConfiguration {
   reportingIntervalSeconds?: number;
   thresholds?: Record<string, number>;
+  pan?: number;
+  tilt?: number;
   [key: string]: unknown;
 }
 
@@ -72,6 +74,8 @@ export interface DeviceRecord {
   failureReason?: string | null;
   configuration?: DeviceConfiguration | null;
   lastSeenAt?: string | null;
+  lastSnapshotKey?: string | null;
+  lastSnapshotAt?: string | null;
   /** Latest reading denormalized onto the device for list views. */
   lastReading?: ReadingRecord | null;
   /** Newest-first recent readings (up to 10) denormalized for list sparklines. */

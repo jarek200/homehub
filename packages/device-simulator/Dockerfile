@@ -1,4 +1,4 @@
-# Platform is set by the build (native for local compose; linux/amd64 for Lightsail).
+# Platform is set by the build (native for local compose).
 FROM python:3.13-slim
 
 WORKDIR /app

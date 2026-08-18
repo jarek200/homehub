@@ -29,7 +29,7 @@ def main() -> None:
     try:
         reconciler.bootstrap_online_devices()
     except Exception:
-        # Do not crash the container on bootstrap failure (Lightsail marks that FAILED).
+        # Do not crash the container on bootstrap failure.
         logger.exception("Bootstrap of online devices failed; continuing to poll SQS")
     stop_event = threading.Event()
 

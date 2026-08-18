@@ -115,3 +115,39 @@ def test_write_telemetry_keeps_offline_devices_offline(monkeypatch: Any) -> None
     assert ":online" not in values
     assert "ExpressionAttributeNames" not in fake_table.update_kwargs[0]
     assert values[":lastReading"]["deviceId"] == device_id
+
+
+def test_write_telemetry_stores_snapshot_key(monkeypatch: Any) -> None:
+    device_id = "cam-1"
+    device_item = {
+        "PK": "HUB#demo",
+        "SK": f"DEVICE#{device_id}",
+        "deviceId": device_id,
+        "name": "Hallway",
+        "type": "camera",
+        "status": "UNKNOWN",
+        "configuration": None,
+    }
+    fake_table = _FakeTable(device_item)
+
+    resource = MagicMock()
+    resource.Table.return_value = fake_table
+    monkeypatch.setenv("TABLE_NAME", "test-table")
+    monkeypatch.setattr(
+        "homehub_api.iot.telemetry.boto3.resource",
+        lambda _service: resource,
+    )
+
+    write_telemetry(
+        {
+            "deviceId": device_id,
+            "metrics": {"pan": 90, "tilt": 45},
+            "snapshotKey": "snapshots/cam-1/frame.jpg",
+            "recordedAt": "2026-08-14T12:00:00Z",
+        }
+    )
+
+    values = fake_table.update_kwargs[0]["ExpressionAttributeValues"]
+    assert values[":snapshotKey"] == "snapshots/cam-1/frame.jpg"
+    assert values[":snapshotAt"] == "2026-08-14T12:00:00Z"
+    assert "lastSnapshotKey = :snapshotKey" in fake_table.update_kwargs[0]["UpdateExpression"]

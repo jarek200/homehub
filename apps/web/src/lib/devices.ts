@@ -33,6 +33,13 @@ export const LIFECYCLE_STATUSES = [
 
 export function getDefaultConfiguration(deviceType?: string): DeviceConfiguration {
   const normalizedType = normalizeDeviceType(deviceType ?? 'heat-alarm');
+  if (normalizedType === 'camera') {
+    return {
+      reportingIntervalSeconds: 30,
+      pan: 90,
+      tilt: 90,
+    };
+  }
   return {
     reportingIntervalSeconds: 10,
     thresholds: defaultThresholdsForType(normalizedType),
@@ -53,6 +60,19 @@ export function configurationForType(
     typeof parsed.thresholds === 'object' && parsed.thresholds != null
       ? (parsed.thresholds as DeviceThresholds)
       : {};
+  if (normalizedType === 'camera') {
+    const pan = typeof parsed.pan === 'number' ? parsed.pan : 90;
+    const tilt = typeof parsed.tilt === 'number' ? parsed.tilt : 90;
+    return {
+      ...parsed,
+      reportingIntervalSeconds:
+        typeof parsed.reportingIntervalSeconds === 'number'
+          ? parsed.reportingIntervalSeconds
+          : defaults.reportingIntervalSeconds,
+      pan,
+      tilt,
+    };
+  }
   return {
     ...parsed,
     reportingIntervalSeconds:
@@ -76,6 +96,10 @@ export function isHeatAlarm(type: string): boolean {
 
 export function isCarbonMonoxideAlarm(type: string): boolean {
   return type === 'carbon-monoxide-alarm';
+}
+
+export function isCamera(type: string): boolean {
+  return normalizeDeviceType(type) === 'camera';
 }
 
 export function supportsReadings(type: string): boolean {
@@ -146,6 +170,12 @@ export function formatConfigurationSummary(
         ? parsed.reportingIntervalSeconds
         : defaults.reportingIntervalSeconds;
     parts.push(`Reports every ${String(interval)}s`);
+    if (normalizeDeviceType(deviceType ?? '') === 'camera') {
+      const pan = typeof parsed?.pan === 'number' ? parsed.pan : 90;
+      const tilt = typeof parsed?.tilt === 'number' ? parsed.tilt : 90;
+      parts.push(`Pan ${pan}° · Tilt ${tilt}°`);
+      return parts.join(' · ');
+    }
     if (deviceType) {
       const thresholdSummary = formatThresholdSummary(configuration, deviceType);
       if (thresholdSummary) parts.push(thresholdSummary);

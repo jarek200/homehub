@@ -7,15 +7,17 @@ import { stageConfig } from './stage-config';
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
 type IotProvisioning = ReturnType<typeof import('./iot-provisioning').createIotProvisioning>;
 type IotTelemetry = ReturnType<typeof import('./iot-telemetry').createIotTelemetry>;
+type SnapshotBucket = aws.s3.Bucket;
 
 export function createRestApi(
   table: StorageTable,
   auth: ReturnType<typeof import('./auth').createAuth>['auth'],
-  iotProvisioning?: Pick<IotProvisioning, 'simulatorQueue' | 'iotPolicy'>,
+  iotProvisioning?: Pick<IotProvisioning, 'simulatorQueue' | 'iotPolicy' | 'iotEndpoint'>,
   iotTelemetry?: Pick<
     IotTelemetry,
     'telemetryBucket' | 'athenaResultsBucket' | 'glueDatabase' | 'glueTable'
-  >
+  >,
+  snapshotBucket?: SnapshotBucket
 ) {
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
     cors: {
@@ -95,6 +97,7 @@ export function createRestApi(
       POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
       POWERTOOLS_LOG_LEVEL: 'INFO',
       ...athenaEnv,
+      ...(snapshotBucket ? { SNAPSHOT_BUCKET: snapshotBucket.bucket } : {}),
       ...(iotProvisioning
         ? {
             SIMULATOR_QUEUE_URL: iotProvisioning.simulatorQueue.url,
@@ -147,6 +150,18 @@ export function createRestApi(
           ]
         : []),
       ...athenaPermissions,
+      ...(snapshotBucket
+        ? [
+            {
+              actions: ['s3:GetObject'],
+              resources: [$interpolate`${snapshotBucket.arn}/*`],
+            },
+            {
+              actions: ['s3:ListBucket'],
+              resources: [snapshotBucket.arn],
+            },
+          ]
+        : []),
       {
         actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],

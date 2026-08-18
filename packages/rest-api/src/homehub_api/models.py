@@ -12,7 +12,7 @@ from homehub_api.device_configuration import (
 DeviceStatus = Literal["ONLINE", "OFFLINE", "UNKNOWN"]
 LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
 ReadingState = Literal["normal", "warning"]
-DeviceType = Literal["heat-alarm", "carbon-monoxide-alarm", "humidity-sensor"]
+DeviceType = Literal["heat-alarm", "carbon-monoxide-alarm", "humidity-sensor", "camera"]
 
 DEVICE_TYPE_ALIASES = {
     "environmental-sensor": "humidity-sensor",
@@ -28,7 +28,7 @@ class CreateDeviceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=INPUT_LIMITS["name"])
     type: DeviceType = Field(
         description=(
-            "Device kind. One of: heat-alarm, carbon-monoxide-alarm, humidity-sensor."
+            "Device kind. One of: heat-alarm, carbon-monoxide-alarm, humidity-sensor, camera."
         ),
     )
     location: str = Field(min_length=1, max_length=INPUT_LIMITS["location"])
@@ -115,6 +115,8 @@ class DeviceResponse(BaseModel):
     failure_reason: str | None = Field(default=None, alias="failureReason")
     configuration: DeviceConfiguration | None = None
     last_seen_at: str | None = Field(default=None, alias="lastSeenAt")
+    last_snapshot_key: str | None = Field(default=None, alias="lastSnapshotKey")
+    last_snapshot_at: str | None = Field(default=None, alias="lastSnapshotAt")
     last_reading: ReadingResponse | None = Field(default=None, alias="lastReading")
     recent_readings: list[ReadingResponse] = Field(default_factory=list, alias="recentReadings")
     created_at: str = Field(alias="createdAt")
@@ -126,6 +128,21 @@ class DeviceResponse(BaseModel):
     @classmethod
     def parse_configuration(cls, value: Any) -> DeviceConfiguration | None:
         return configuration_from_storage(value)
+
+
+class DeviceSnapshotResponse(BaseModel):
+    url: str
+    recorded_at: str | None = Field(default=None, alias="recordedAt")
+
+    model_config = {"populate_by_name": True}
+
+
+class DeviceSnapshotListResponse(BaseModel):
+    items: list[DeviceSnapshotResponse]
+    sampled: bool
+    total: int
+
+    model_config = {"populate_by_name": True}
 
 
 class DeviceListResponse(BaseModel):

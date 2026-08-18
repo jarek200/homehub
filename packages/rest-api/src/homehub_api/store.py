@@ -10,7 +10,7 @@ import boto3
 from ulid import new as new_ulid
 
 from homehub_api.config import DEMO_TENANT_PK
-from homehub_api.device_configuration import as_config_json
+from homehub_api.device_configuration import as_config_json, configuration_for_create
 from homehub_api.errors import ApiError
 from homehub_api.models import (
     CreateDeviceRequest,
@@ -103,6 +103,8 @@ def _to_device(item: dict[str, Any]) -> DeviceResponse:
         failureReason=item.get("failureReason"),
         configuration=configuration,
         lastSeenAt=item.get("lastSeenAt"),
+        lastSnapshotKey=item.get("lastSnapshotKey"),
+        lastSnapshotAt=item.get("lastSnapshotAt"),
         lastReading=last_reading,
         recentReadings=recent_readings,
         createdAt=str(item["createdAt"]),
@@ -180,7 +182,7 @@ class HubStore:
             "name": payload.name,
             "type": payload.type,
             "location": payload.location,
-            "configuration": as_config_json(payload.configuration),
+            "configuration": configuration_for_create(payload.type, payload.configuration),
             "status": "UNKNOWN",
             "lifecycleStatus": "PROVISIONING",
             "createdAt": timestamp,

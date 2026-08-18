@@ -9,6 +9,8 @@ from homehub_api.models import (
     DeleteDeviceResponse,
     DeviceListResponse,
     DeviceResponse,
+    DeviceSnapshotListResponse,
+    DeviceSnapshotResponse,
     ReadingListResponse,
     UpdateDeviceRequest,
 )
@@ -46,6 +48,36 @@ def get_device(device_id: str, store: HubStore = Depends(get_store)) -> DeviceRe
     if not device:
         raise ApiError("Device not found", 404, "NotFound")
     return device
+
+
+@router.get("/{device_id}/snapshot", response_model=DeviceSnapshotResponse)
+def get_device_snapshot(
+    device_id: str, store: HubStore = Depends(get_store)
+) -> DeviceSnapshotResponse:
+    from homehub_api.iot.snapshots import presigned_snapshot_url
+
+    device = store.get_device(device_id)
+    if not device:
+        raise ApiError("Device not found", 404, "NotFound")
+    return presigned_snapshot_url(device)
+
+
+@router.get("/{device_id}/snapshots", response_model=DeviceSnapshotListResponse)
+def list_device_snapshots(
+    device_id: str,
+    store: HubStore = Depends(get_store),
+    from_ts: str = Query(alias="from"),
+    to_ts: str = Query(alias="to"),
+) -> DeviceSnapshotListResponse:
+    from homehub_api.iot.snapshots import list_device_snapshots as list_snapshots
+    from homehub_api.iot.snapshots import parse_query_time
+
+    device = store.get_device(device_id)
+    if not device:
+        raise ApiError("Device not found", 404, "NotFound")
+    start = parse_query_time(from_ts, "from")
+    end = parse_query_time(to_ts, "to")
+    return list_snapshots(device, start=start, end=end)
 
 
 @router.patch("/{device_id}", response_model=DeviceResponse)

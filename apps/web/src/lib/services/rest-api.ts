@@ -46,6 +46,32 @@ export async function deleteDevice(deviceId: string): Promise<boolean> {
   return result.deleted;
 }
 
+export interface DeviceSnapshot {
+  url: string;
+  recordedAt: string | null;
+}
+
+export interface DeviceSnapshotList {
+  items: DeviceSnapshot[];
+  sampled: boolean;
+  total: number;
+}
+
+export async function getDeviceSnapshot(deviceId: string): Promise<DeviceSnapshot> {
+  return restRequest<DeviceSnapshot>(`/devices/${encodeURIComponent(deviceId)}/snapshot`);
+}
+
+export async function listDeviceSnapshots(
+  deviceId: string,
+  from: string,
+  to: string
+): Promise<DeviceSnapshotList> {
+  const params = new URLSearchParams({ from, to });
+  return restRequest<DeviceSnapshotList>(
+    `/devices/${encodeURIComponent(deviceId)}/snapshots?${params.toString()}`
+  );
+}
+
 export async function listDeviceReadings(deviceId: string): Promise<Reading[]> {
   const result = await restRequest<ListResponse<Reading>>(
     `/devices/${encodeURIComponent(deviceId)}/readings`

@@ -59,7 +59,7 @@ homehub_aws_check_auth() {
   else
     echo "AWS credentials are missing or expired for profile '${AWS_PROFILE:-default}'."
     echo "Run: pnpm sso"
-    echo "Then: pnpm simulator:deploy"
+    echo "Then: pnpm device:deploy"
   fi
   return 1
 }
