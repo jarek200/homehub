@@ -43,6 +43,9 @@ export interface DeviceConfiguration {
   contrast?: number;
   vflip?: boolean;
   hmirror?: boolean;
+  motionEnabled?: boolean;
+  motionCooldownSeconds?: number;
+  captureMode?: string;
   [key: string]: unknown;
 }
 

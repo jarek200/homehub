@@ -50,6 +50,9 @@ export function getDefaultConfiguration(deviceType?: string): DeviceConfiguratio
       contrast: 0,
       vflip: true,
       hmirror: false,
+      motionEnabled: true,
+      motionCooldownSeconds: 15,
+      captureMode: 'both',
     };
   }
   if (normalizedType === 'environmental-sensor') {

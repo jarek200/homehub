@@ -27,6 +27,14 @@ export const CAMERA_REPORTING_MIN_SECONDS = 15;
 export const CAMERA_REPORTING_MAX_SECONDS = 3600;
 export const CAMERA_REPORTING_PRESETS_SECONDS = [15, 30, 60, 120, 300, 600, 1800, 3600] as const;
 
+export type CameraCaptureMode = 'both' | 'interval' | 'motion';
+
+export const CAMERA_CAPTURE_MODES: { id: CameraCaptureMode; label: string }[] = [
+  { id: 'both', label: 'Motion + timed snapshots' },
+  { id: 'motion', label: 'Motion only' },
+  { id: 'interval', label: 'Timed only' },
+];
+
 export interface CameraSettings {
   reportingIntervalSeconds: number;
   frameSize: CameraFrameSizeId;
@@ -36,6 +44,9 @@ export interface CameraSettings {
   contrast: number;
   vflip: boolean;
   hmirror: boolean;
+  motionEnabled: boolean;
+  motionCooldownSeconds: number;
+  captureMode: CameraCaptureMode;
 }
 
 export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
@@ -47,6 +58,9 @@ export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
   contrast: 0,
   vflip: true,
   hmirror: false,
+  motionEnabled: true,
+  motionCooldownSeconds: 15,
+  captureMode: 'both',
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -107,6 +121,23 @@ export function cameraSettingsFromConfiguration(
       typeof parsed.vflip === 'boolean' ? parsed.vflip : DEFAULT_CAMERA_SETTINGS.vflip,
     hmirror:
       typeof parsed.hmirror === 'boolean' ? parsed.hmirror : DEFAULT_CAMERA_SETTINGS.hmirror,
+    motionEnabled:
+      typeof parsed.motionEnabled === 'boolean'
+        ? parsed.motionEnabled
+        : DEFAULT_CAMERA_SETTINGS.motionEnabled,
+    motionCooldownSeconds: clamp(
+      typeof parsed.motionCooldownSeconds === 'number'
+        ? Math.round(parsed.motionCooldownSeconds)
+        : DEFAULT_CAMERA_SETTINGS.motionCooldownSeconds,
+      5,
+      300
+    ),
+    captureMode:
+      parsed.captureMode === 'interval' ||
+      parsed.captureMode === 'motion' ||
+      parsed.captureMode === 'both'
+        ? parsed.captureMode
+        : DEFAULT_CAMERA_SETTINGS.captureMode,
   };
 }
 
@@ -124,6 +155,9 @@ export function buildCameraConfiguration(
     contrast: settings.contrast,
     vflip: settings.vflip,
     hmirror: settings.hmirror,
+    motionEnabled: settings.motionEnabled,
+    motionCooldownSeconds: settings.motionCooldownSeconds,
+    captureMode: settings.captureMode,
   };
 }
 
@@ -144,6 +178,7 @@ export function formatCameraSettingsSummary(
   ];
   if (settings.vflip) parts.push('Flipped');
   if (settings.hmirror) parts.push('Mirrored');
+  if (settings.motionEnabled) parts.push('PIR on');
   return parts.join(' · ');
 }
 

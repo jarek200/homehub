@@ -13,6 +13,10 @@ struct CameraSettings {
   int contrast = 0;
   bool vflip = true;
   bool hmirror = false;
+  bool motionEnabled = true;
+  uint32_t motionCooldownSeconds = 15;
+  // both | interval | motion
+  String captureMode = "both";
 };
 
 bool cameraSettingsLoad(CameraSettings& settings);

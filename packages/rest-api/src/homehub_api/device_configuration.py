@@ -26,6 +26,7 @@ CameraFrameSize = Literal[
     "sxga",
     "uxga",
 ]
+CameraCaptureMode = Literal["both", "interval", "motion"]
 CAMERA_REPORTING_MIN_SECONDS = 15
 CAMERA_REPORTING_MAX_SECONDS = 3600
 
@@ -56,6 +57,11 @@ class DeviceConfiguration(BaseModel):
     contrast: int | None = Field(default=None, ge=-2, le=2)
     vflip: bool | None = None
     hmirror: bool | None = None
+    motion_enabled: bool | None = Field(default=None, alias="motionEnabled")
+    motion_cooldown_seconds: int | None = Field(
+        default=None, alias="motionCooldownSeconds", ge=5, le=300
+    )
+    capture_mode: CameraCaptureMode | None = Field(default=None, alias="captureMode")
 
     @field_validator("thresholds", mode="before")
     @classmethod
@@ -155,6 +161,9 @@ CAMERA_DEFAULT_CONFIGURATION: dict[str, Any] = {
     "contrast": 0,
     "vflip": True,
     "hmirror": False,
+    "motionEnabled": True,
+    "motionCooldownSeconds": 15,
+    "captureMode": "both",
 }
 
 ENVIRONMENTAL_DEFAULT_CONFIGURATION: dict[str, Any] = {
@@ -210,10 +219,18 @@ def _normalize_camera_configuration(data: dict[str, Any]) -> dict[str, Any]:
             merged[key] = CAMERA_DEFAULT_CONFIGURATION[key]
         else:
             merged[key] = max(bounds[0], min(bounds[1], value))
-    for key in ("vflip", "hmirror"):
+    for key in ("vflip", "hmirror", "motionEnabled"):
         value = merged.get(key)
         if not isinstance(value, bool):
             merged[key] = CAMERA_DEFAULT_CONFIGURATION[key]
+    capture_mode = merged.get("captureMode")
+    if capture_mode not in get_args(CameraCaptureMode):
+        merged["captureMode"] = CAMERA_DEFAULT_CONFIGURATION["captureMode"]
+    cooldown = merged.get("motionCooldownSeconds")
+    if not isinstance(cooldown, int):
+        merged["motionCooldownSeconds"] = CAMERA_DEFAULT_CONFIGURATION["motionCooldownSeconds"]
+    else:
+        merged["motionCooldownSeconds"] = max(5, min(300, cooldown))
     return _clamp_camera_reporting_interval(merged)
 
 

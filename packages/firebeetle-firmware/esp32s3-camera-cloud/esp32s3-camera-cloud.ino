@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "homehub_camera_settings.h"
+#include "homehub_pir.h"
 
 #if __has_include("generated/iot_config.h")
 #include "generated/iot_config.h"
@@ -46,6 +47,9 @@ bool lastPublishSucceeded = false;
 String lastError;
 size_t lastJpegBytes = 0;
 size_t lastPayloadBytes = 0;
+bool lastPirHigh = false;
+unsigned long lastMotionCaptureMs = 0;
+String lastCaptureReason;
 
 static void initializeOta() {
   ArduinoOTA.setHostname(DEVICE_HOSTNAME);
@@ -153,6 +157,34 @@ static bool runCloudCycle() {
   return published;
 }
 
+static bool shouldCapture(bool intervalDue, bool* motionTriggered) {
+  *motionTriggered = false;
+  if (!settings.motionEnabled) {
+    if (settings.captureMode == "motion") {
+      return false;
+    }
+    return intervalDue;
+  }
+
+  const bool pirHigh = homehubPirRead();
+  const unsigned long now = millis();
+  const bool cooldownOk =
+      (now - lastMotionCaptureMs) >= settings.motionCooldownSeconds * 1000UL;
+  const bool motionEdge = pirHigh && !lastPirHigh && cooldownOk;
+  lastPirHigh = pirHigh;
+  if (motionEdge) {
+    *motionTriggered = true;
+  }
+
+  if (settings.captureMode == "motion") {
+    return motionEdge;
+  }
+  if (settings.captureMode == "interval") {
+    return intervalDue;
+  }
+  return intervalDue || motionEdge;
+}
+
 static void refreshSettingsIfDue() {
   if (static_cast<long>(millis() - nextSettingsRefreshMs) < 0) {
     return;
@@ -165,7 +197,9 @@ static void refreshSettingsIfDue() {
         next.frameSize != settings.frameSize || next.jpegQuality != settings.jpegQuality ||
         next.brightness != settings.brightness || next.saturation != settings.saturation ||
         next.contrast != settings.contrast || next.vflip != settings.vflip ||
-        next.hmirror != settings.hmirror;
+        next.hmirror != settings.hmirror || next.motionEnabled != settings.motionEnabled ||
+        next.motionCooldownSeconds != settings.motionCooldownSeconds ||
+        next.captureMode != settings.captureMode;
     if (changed) {
       settings = next;
       cameraSettingsApply(settings, cameraReady);
@@ -182,7 +216,9 @@ static void handleStatus() {
   document["lastError"] = lastError;
   document["lastJpegBytes"] = lastJpegBytes;
   document["lastPayloadBytes"] = lastPayloadBytes;
+  document["lastCaptureReason"] = lastCaptureReason;
   cameraSettingsToJson(settings, document);
+  homehubPirToJson(document, homehubPirRead(), lastMotionCaptureMs);
   String body;
   serializeJson(document, body);
   statusServer.send(200, "application/json", body);
@@ -203,6 +239,7 @@ void setup() {
   statusServer.begin();
   cameraSettingsLoad(settings);
   cameraSettingsFetchFromShadow(settings);
+  homehubPirBegin();
   cameraSettingsApply(settings, cameraReady);
   nextCaptureMs = millis();
   nextSettingsRefreshMs = millis() + kSettingsRefreshMs;
@@ -217,10 +254,18 @@ void loop() {
     return;
   }
   refreshSettingsIfDue();
-  if (static_cast<long>(millis() - nextCaptureMs) >= 0) {
+  const bool intervalDue = static_cast<long>(millis() - nextCaptureMs) >= 0;
+  bool motionTriggered = false;
+  if (shouldCapture(intervalDue, &motionTriggered)) {
+    lastCaptureReason = motionTriggered ? "motion" : "interval";
     const bool published = runCloudCycle();
-    const uint32_t retrySeconds = published ? settings.reportingIntervalSeconds : 10;
-    nextCaptureMs = millis() + retrySeconds * 1000UL;
+    if (motionTriggered) {
+      lastMotionCaptureMs = millis();
+    }
+    if (intervalDue || motionTriggered) {
+      const uint32_t retrySeconds = published ? settings.reportingIntervalSeconds : 10;
+      nextCaptureMs = millis() + retrySeconds * 1000UL;
+    }
   }
   delay(10);
 }

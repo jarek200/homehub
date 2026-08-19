@@ -5,6 +5,7 @@ import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import {
   buildCameraConfiguration,
+  CAMERA_CAPTURE_MODES,
   CAMERA_FRAME_SIZES,
   CAMERA_JPEG_QUALITY_MAX,
   CAMERA_JPEG_QUALITY_MIN,
@@ -177,6 +178,56 @@ async function saveSettings() {
         <input type="checkbox" bind:checked={settings.hmirror} />
         Mirror horizontally
       </label>
+    </div>
+  {/if}
+
+  {#if isPhysical}
+    <div class="space-y-4 rounded-sm border border-border p-4">
+      <div>
+        <h4 class="text-sm font-medium">Motion sensor (PIR)</h4>
+        <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
+          Gravity PIR on GPIO44. Motion triggers an extra snapshot; timed snapshots still run unless
+          you choose motion-only mode.
+        </p>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" bind:checked={settings.motionEnabled} />
+        Enable PIR motion capture
+      </label>
+      <div class="flex flex-col gap-2">
+        <Label class="text-muted-foreground text-xs font-normal">Capture mode</Label>
+        <div class="flex flex-wrap gap-2">
+          {#each CAMERA_CAPTURE_MODES as mode (mode.id)}
+            <Button
+              type="button"
+              variant={settings.captureMode === mode.id ? 'default' : 'outline'}
+              size="sm"
+              class="rounded-sm"
+              disabled={!settings.motionEnabled && mode.id !== 'interval'}
+              onclick={() => {
+                settings.captureMode = mode.id;
+              }}
+            >
+              {mode.label}
+            </Button>
+          {/each}
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <Label for="{device.deviceId}-motion-cooldown" class="text-muted-foreground text-xs font-normal">
+          Motion cooldown (seconds)
+        </Label>
+        <Input
+          id="{device.deviceId}-motion-cooldown"
+          type="number"
+          min={5}
+          max={300}
+          step={5}
+          bind:value={settings.motionCooldownSeconds}
+          class={inputMinimal}
+          disabled={!settings.motionEnabled}
+        />
+      </div>
     </div>
   {/if}
 

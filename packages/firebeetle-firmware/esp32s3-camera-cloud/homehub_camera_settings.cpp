@@ -159,6 +159,33 @@ bool applyConfigurationJson(JsonVariant desired, CameraSettings& settings) {
       changed = true;
     }
   }
+  if (desired["motionEnabled"].is<bool>()) {
+    const bool next = desired["motionEnabled"].as<bool>();
+    if (settings.motionEnabled != next) {
+      settings.motionEnabled = next;
+      changed = true;
+    }
+  }
+  if (desired["motionCooldownSeconds"].is<uint32_t>()) {
+    uint32_t next = desired["motionCooldownSeconds"].as<uint32_t>();
+    if (next < 5) next = 5;
+    if (next > 300) next = 300;
+    if (settings.motionCooldownSeconds != next) {
+      settings.motionCooldownSeconds = next;
+      changed = true;
+    }
+  }
+  if (desired["captureMode"].is<const char*>()) {
+    const char* raw = desired["captureMode"].as<const char*>();
+    String next = "both";
+    if (raw && (strcmp(raw, "interval") == 0 || strcmp(raw, "motion") == 0)) {
+      next = raw;
+    }
+    if (settings.captureMode != next) {
+      settings.captureMode = next;
+      changed = true;
+    }
+  }
   return changed;
 }
 
@@ -172,6 +199,9 @@ void storeSettings(const CameraSettings& settings) {
   prefs.putChar("contrast", static_cast<int8_t>(settings.contrast));
   prefs.putBool("vflip", settings.vflip);
   prefs.putBool("hmirror", settings.hmirror);
+  prefs.putBool("motionEn", settings.motionEnabled);
+  prefs.putUInt("motionCd", settings.motionCooldownSeconds);
+  prefs.putString("captureMd", settings.captureMode);
   prefs.end();
 }
 
@@ -221,6 +251,14 @@ bool cameraSettingsLoad(CameraSettings& settings) {
   settings.contrast = clampAdjust(prefs.getChar("contrast", 0));
   settings.vflip = prefs.getBool("vflip", true);
   settings.hmirror = prefs.getBool("hmirror", false);
+  settings.motionEnabled = prefs.getBool("motionEn", true);
+  settings.motionCooldownSeconds = prefs.getUInt("motionCd", 15);
+  settings.captureMode = prefs.getString("captureMd", "both");
+  if (settings.captureMode != "interval" && settings.captureMode != "motion") {
+    settings.captureMode = "both";
+  }
+  if (settings.motionCooldownSeconds < 5) settings.motionCooldownSeconds = 5;
+  if (settings.motionCooldownSeconds > 300) settings.motionCooldownSeconds = 300;
   prefs.end();
   return true;
 }
@@ -330,4 +368,7 @@ void cameraSettingsToJson(const CameraSettings& settings, JsonDocument& document
   document["contrast"] = settings.contrast;
   document["vflip"] = settings.vflip;
   document["hmirror"] = settings.hmirror;
+  document["motionEnabled"] = settings.motionEnabled;
+  document["motionCooldownSeconds"] = settings.motionCooldownSeconds;
+  document["captureMode"] = settings.captureMode;
 }
