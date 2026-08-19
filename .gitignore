@@ -85,6 +85,7 @@ $RECYCLE.BIN/
 
 # Misc
 *.pem
+packages/firebeetle-firmware/**/generated/
 .pnpm-store
 sst.pyi
 

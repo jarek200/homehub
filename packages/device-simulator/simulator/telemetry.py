@@ -12,32 +12,27 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     "humidityWarning": 70.0,
     "temperatureWarning": 28.0,
     "coAlarm": 50.0,
-}
-
-DEVICE_TYPE_ALIASES = {
-    "environmental-sensor": "humidity-sensor",
+    "vocIndexWarning": 200.0,
 }
 
 
 def normalize_device_type(device_type: str | None) -> str | None:
     if not device_type:
         return device_type
-    return DEVICE_TYPE_ALIASES.get(device_type, device_type)
+    return device_type
 
 
 def _is_humidity_sensor(device_type: str | None) -> bool:
     return normalize_device_type(device_type) == "humidity-sensor"
 
 
-def simulator_device_type(device_type: str) -> str:
-    """Map API device types onto simulator telemetry slugs.
+def _is_environmental_sensor(device_type: str | None) -> bool:
+    return normalize_device_type(device_type) == "environmental-sensor"
 
-    Legacy Lightsail images only sampled metrics for ``environmental-sensor``.
-    """
-    normalized = normalize_device_type(device_type) or device_type
-    if normalized == "humidity-sensor":
-        return "environmental-sensor"
-    return normalized
+
+def simulator_device_type(device_type: str) -> str:
+    """Map API device types onto simulator telemetry slugs."""
+    return normalize_device_type(device_type) or device_type
 
 
 def parse_thresholds(configuration: str | None) -> dict[str, float]:
@@ -76,6 +71,18 @@ def sample_metrics(device_type: str, configuration: str | None = None) -> dict[s
             "humidity": round(random.uniform(40.0, 65.0), 1),
         }
 
+    if _is_environmental_sensor(device_type):
+        return {
+            "temperature": round(random.uniform(20.0, 24.0), 1),
+            "humidity": round(random.uniform(45.0, 60.0), 1),
+            "pressureHpa": round(random.uniform(990.0, 1020.0), 0),
+            "lightLux": round(random.uniform(80.0, 400.0), 1),
+            "uvMwCm2": round(random.uniform(0.0, 2.0), 2),
+            "vocIndex": round(random.uniform(80.0, 140.0), 0),
+            "batteryVoltage": round(random.uniform(3.8, 4.1), 2),
+            "batteryPercent": round(random.uniform(55.0, 85.0), 0),
+        }
+
     if normalized_type == "camera":
         pan, tilt = 90.0, 90.0
         if configuration:
@@ -102,6 +109,7 @@ def derive_alarm_state(
     humidity_limit = limits.get("humidityWarning", DEFAULT_THRESHOLDS["humidityWarning"])
     temperature_limit = limits.get("temperatureWarning", DEFAULT_THRESHOLDS["temperatureWarning"])
     co_alarm_limit = limits.get("coAlarm", DEFAULT_THRESHOLDS["coAlarm"])
+    voc_limit = limits.get("vocIndexWarning", DEFAULT_THRESHOLDS["vocIndexWarning"])
 
     if metrics.get("heat") is True:
         return True, "warning"
@@ -115,5 +123,9 @@ def derive_alarm_state(
     if not _is_humidity_sensor(device_type):
         temperature = metrics.get("temperature")
         if temperature is not None and float(temperature) >= temperature_limit:
+            return False, "warning"
+    if _is_environmental_sensor(device_type):
+        voc = metrics.get("vocIndex")
+        if voc is not None and float(voc) >= voc_limit:
             return False, "warning"
     return False, "normal"

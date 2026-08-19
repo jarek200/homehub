@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer, model_validator
 
@@ -11,6 +11,27 @@ from homehub_api.config import INPUT_LIMITS
 
 # Internal (Dynamo / shadow) may still be a JSON string; API payloads are objects only.
 ConfigInput = str | dict[str, Any] | BaseModel | None
+
+PowerMode = Literal["low-power-voc", "maintenance"]
+CameraFrameSize = Literal[
+    "qqvga",
+    "qcif",
+    "qvga",
+    "cif",
+    "hvga",
+    "vga",
+    "svga",
+    "xga",
+    "hd",
+    "sxga",
+    "uxga",
+]
+CAMERA_REPORTING_MIN_SECONDS = 15
+CAMERA_REPORTING_MAX_SECONDS = 3600
+
+PHYSICAL_REPORTING_MIN_SECONDS = 60
+PHYSICAL_REPORTING_MAX_SECONDS = 3600
+ENVIRONMENTAL_DEFAULT_REPORTING_SECONDS = 300
 
 
 class DeviceConfiguration(BaseModel):
@@ -26,6 +47,15 @@ class DeviceConfiguration(BaseModel):
     pan: int | None = Field(default=None, ge=0, le=180)
     tilt: int | None = Field(default=None, ge=0, le=180)
     thresholds: dict[str, float] | None = None
+    power_mode: PowerMode | None = Field(default=None, alias="powerMode")
+    maintenance_mode: bool | None = Field(default=None, alias="maintenanceMode")
+    frame_size: CameraFrameSize | None = Field(default=None, alias="frameSize")
+    jpeg_quality: int | None = Field(default=None, alias="jpegQuality", ge=4, le=63)
+    brightness: int | None = Field(default=None, ge=-2, le=2)
+    saturation: int | None = Field(default=None, ge=-2, le=2)
+    contrast: int | None = Field(default=None, ge=-2, le=2)
+    vflip: bool | None = None
+    hmirror: bool | None = None
 
     @field_validator("thresholds", mode="before")
     @classmethod
@@ -114,18 +144,108 @@ def as_config_json(configuration: ConfigInput) -> str | None:
     return json.dumps(data) if data else None
 
 
-CAMERA_DEFAULT_CONFIGURATION: dict[str, int] = {
+CAMERA_DEFAULT_CONFIGURATION: dict[str, Any] = {
     "reportingIntervalSeconds": 30,
     "pan": 90,
     "tilt": 90,
+    "frameSize": "qvga",
+    "jpegQuality": 12,
+    "brightness": 1,
+    "saturation": -2,
+    "contrast": 0,
+    "vflip": True,
+    "hmirror": False,
+}
+
+ENVIRONMENTAL_DEFAULT_CONFIGURATION: dict[str, Any] = {
+    "reportingIntervalSeconds": ENVIRONMENTAL_DEFAULT_REPORTING_SECONDS,
+    "powerMode": "low-power-voc",
+    "maintenanceMode": False,
+    "thresholds": {
+        "humidityWarning": 70.0,
+        "temperatureWarning": 28.0,
+        "vocIndexWarning": 200.0,
+    },
 }
 
 
-def configuration_for_create(device_type: str, configuration: ConfigInput) -> str | None:
-    """Apply camera pan/tilt defaults when registering a device."""
+def _clamp_physical_reporting_interval(data: dict[str, Any]) -> dict[str, Any]:
+    interval = data.get("reportingIntervalSeconds")
+    if not isinstance(interval, int):
+        return data
+    if interval < PHYSICAL_REPORTING_MIN_SECONDS:
+        data["reportingIntervalSeconds"] = PHYSICAL_REPORTING_MIN_SECONDS
+    elif interval > PHYSICAL_REPORTING_MAX_SECONDS:
+        data["reportingIntervalSeconds"] = PHYSICAL_REPORTING_MAX_SECONDS
+    return data
+
+
+
+
+def _clamp_camera_reporting_interval(data: dict[str, Any]) -> dict[str, Any]:
+    interval = data.get("reportingIntervalSeconds")
+    if not isinstance(interval, int):
+        return data
+    if interval < CAMERA_REPORTING_MIN_SECONDS:
+        data["reportingIntervalSeconds"] = CAMERA_REPORTING_MIN_SECONDS
+    elif interval > CAMERA_REPORTING_MAX_SECONDS:
+        data["reportingIntervalSeconds"] = CAMERA_REPORTING_MAX_SECONDS
+    return data
+
+
+def _normalize_camera_configuration(data: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(CAMERA_DEFAULT_CONFIGURATION)
+    merged.update(data)
+    frame_size = merged.get("frameSize")
+    if frame_size not in get_args(CameraFrameSize):
+        merged["frameSize"] = CAMERA_DEFAULT_CONFIGURATION["frameSize"]
+    for key, bounds in (
+        ("jpegQuality", (4, 63)),
+        ("brightness", (-2, 2)),
+        ("saturation", (-2, 2)),
+        ("contrast", (-2, 2)),
+    ):
+        value = merged.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            merged[key] = CAMERA_DEFAULT_CONFIGURATION[key]
+        else:
+            merged[key] = max(bounds[0], min(bounds[1], value))
+    for key in ("vflip", "hmirror"):
+        value = merged.get(key)
+        if not isinstance(value, bool):
+            merged[key] = CAMERA_DEFAULT_CONFIGURATION[key]
+    return _clamp_camera_reporting_interval(merged)
+
+
+def normalize_configuration_update(
+    device_type: str,
+    runtime_kind: str,
+    existing: ConfigInput,
+    patch: ConfigInput,
+) -> str | None:
+    merged = {**as_config_dict(existing), **as_config_dict(patch)}
+    if device_type == "camera":
+        merged = _normalize_camera_configuration(merged)
+    elif device_type == "environmental-sensor" and runtime_kind == "physical":
+        merged = _clamp_physical_reporting_interval(merged)
+    return json.dumps(merged) if merged else None
+
+
+def configuration_for_create(
+    device_type: str,
+    configuration: ConfigInput,
+    *,
+    runtime_kind: str = "simulated",
+) -> str | None:
+    """Apply type defaults when registering a device."""
     data = as_config_dict(configuration)
     if device_type == "camera":
-        merged = dict(CAMERA_DEFAULT_CONFIGURATION)
+        merged = _normalize_camera_configuration(data)
+        return json.dumps(merged)
+    if device_type == "environmental-sensor":
+        merged = dict(ENVIRONMENTAL_DEFAULT_CONFIGURATION)
         merged.update(data)
+        if runtime_kind == "physical":
+            merged = _clamp_physical_reporting_interval(merged)
         return json.dumps(merged)
     return json.dumps(data) if data else None

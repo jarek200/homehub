@@ -23,6 +23,9 @@ class Resource:
     class DeviceRestApi:
         type: str
         url: str
+    class DeviceSnapshotWriter:
+        name: str
+        type: str
     class SfnCreateCert:
         name: str
         type: str

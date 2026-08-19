@@ -57,7 +57,28 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
     assert parsed["deviceId"] == "dev1"
     assert parsed["tenantPk"] == "HUB#demo"
     assert parsed["type"] == "environmental-sensor"
+    assert parsed["runtimeKind"] == "simulated"
     assert parsed["ssmCertPrefix"] == "/homehub/devices/dev1"
+
+
+def test_parse_stream_record_preserves_physical_runtime() -> None:
+    record = {
+        "eventName": "INSERT",
+        "dynamodb": {
+            "Keys": {"PK": {"S": "HUB#demo"}, "SK": {"S": "DEVICE#fb1"}},
+            "NewImage": {
+                "PK": {"S": "HUB#demo"},
+                "SK": {"S": "DEVICE#fb1"},
+                "deviceId": {"S": "fb1"},
+                "type": {"S": "environmental-sensor"},
+                "runtimeKind": {"S": "physical"},
+                "lifecycleStatus": {"S": "PROVISIONING"},
+            },
+        },
+    }
+    parsed = parse_stream_record(record)
+    assert parsed is not None
+    assert parsed["runtimeKind"] == "physical"
 
 
 def test_parse_stream_record_preserves_user_hub() -> None:
@@ -179,3 +200,43 @@ def test_resolve_provision_context_from_stream_record() -> None:
     context = resolve_provision_context(record)
     assert context["deviceId"] == "dev-co"
     assert context["type"] == "carbon-monoxide-alarm"
+
+
+def test_finalize_disables_registry_and_skips_sqs_for_physical(monkeypatch) -> None:
+    from homehub_api.iot.sfn import finalize
+
+    stored: dict[str, object] = {}
+
+    class FakeTable:
+        def put_item(self, Item):
+            stored["registry"] = Item
+
+        def update_item(self, **kwargs):
+            stored["update"] = kwargs
+
+    class FakeResource:
+        def Table(self, _name):
+            return FakeTable()
+
+    class FakeSqs:
+        def send_message(self, **kwargs):
+            stored["sqs"] = kwargs
+
+    monkeypatch.setenv("TABLE_NAME", "test-table")
+    monkeypatch.setenv("SIMULATOR_QUEUE_URL", "https://sqs.example/queue")
+    monkeypatch.setattr(finalize.boto3, "resource", lambda _name: FakeResource())
+    monkeypatch.setattr(finalize.boto3, "client", lambda _name: FakeSqs())
+
+    result = finalize.handler(
+        {
+            "tenantPk": "HUB#demo",
+            "deviceId": "fb1",
+            "runtimeKind": "physical",
+            "thingName": "homehub-fb1",
+        },
+        None,
+    )
+    assert result["lifecycleStatus"] == "READY"
+    assert stored["registry"]["enabled"] is False
+    assert stored["registry"]["runtimeKind"] == "physical"
+    assert "sqs" not in stored

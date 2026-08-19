@@ -54,16 +54,47 @@ export function createIotProvisioning(table: StorageTable) {
 
   const iotPolicy = new aws.iot.Policy('SimulatorIotPolicy', {
     name: `${$app.name}-${$app.stage}-simulator`,
-    policy: JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Action: ['iot:Connect', 'iot:Publish', 'iot:Subscribe', 'iot:Receive'],
-          Resource: ['*'],
-        },
-      ],
-    }),
+    policy: pulumi.all([aws.getRegionOutput().name, aws.getCallerIdentityOutput().accountId]).apply(
+      ([region, accountId]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: 'iot:Connect',
+              Resource: `arn:aws:iot:${region}:${accountId}:client/\${iot:Connection.Thing.ThingName}`,
+            },
+            {
+              Effect: 'Allow',
+              Action: 'iot:Publish',
+              Resource: [
+                `arn:aws:iot:${region}:${accountId}:topic/homehub/devices/\${iot:Connection.Thing.Attributes[deviceId]}/telemetry`,
+                `arn:aws:iot:${region}:${accountId}:topic/homehub/devices/\${iot:Connection.Thing.Attributes[deviceId]}/snapshot`,
+                `arn:aws:iot:${region}:${accountId}:topic/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/get`,
+                `arn:aws:iot:${region}:${accountId}:topic/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/update`,
+              ],
+            },
+            {
+              Effect: 'Allow',
+              Action: 'iot:Subscribe',
+              Resource: [
+                `arn:aws:iot:${region}:${accountId}:topicfilter/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/get/accepted`,
+                `arn:aws:iot:${region}:${accountId}:topicfilter/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/update/accepted`,
+                `arn:aws:iot:${region}:${accountId}:topicfilter/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/update/delta`,
+              ],
+            },
+            {
+              Effect: 'Allow',
+              Action: 'iot:Receive',
+              Resource: [
+                `arn:aws:iot:${region}:${accountId}:topic/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/get/accepted`,
+                `arn:aws:iot:${region}:${accountId}:topic/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/update/accepted`,
+                `arn:aws:iot:${region}:${accountId}:topic/$aws/things/\${iot:Connection.Thing.ThingName}/shadow/update/delta`,
+              ],
+            },
+          ],
+        })
+    ),
   });
 
   const iotEndpoint = aws.iot.getEndpointOutput({ endpointType: 'iot:Data-ATS' });

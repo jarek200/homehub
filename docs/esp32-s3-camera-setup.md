@@ -7,11 +7,11 @@ Standalone **edge AI camera** from [The Pi Hut](https://thepihut.com/) — DFRob
 | **Qty** | 1 |
 | **Cost** | £19.10 |
 | **SKU** | DFR1154 |
-| **HomeHub status** | Wi‑Fi + OTA — see [Registered device](#registered-device) |
+| **HomeHub status** | **Physical camera on int** — see [HomeHub cloud](#homehub-cloud) |
 
 ## What it is
 
-All-in-one board: ESP32-S3 + OV3660 wide-angle IR camera + mic + speaker + ambient light sensor. Built for on-device image recognition (Edge Impulse, etc.) and Wi‑Fi IoT — not wired into HomeHub today.
+All-in-one board: ESP32-S3 + OV3660 wide-angle IR camera + mic + speaker + ambient light sensor. Built for on-device image recognition (Edge Impulse, etc.) and Wi‑Fi IoT. HomeHub uses it as a **physical camera** (snapshot gallery, no pan/tilt).
 
 ```text
 [USB-C or VIN power] → ESP32-S3 AI Camera Module
@@ -39,8 +39,8 @@ In the box: camera board, speaker, Gravity 4-pin I2C/UART cable.
 
 | Device | Role | Connection to Mac | HomeHub today |
 |--------|------|-------------------|---------------|
-| **ESP32-S3 AI Camera** | Standalone AI cam | USB-C (data) | Not integrated |
-| **FireBeetle ESP32-E** ×2 | Sensor nodes | USB + CH340 driver | Wi‑Fi only (local) |
+| **ESP32-S3 AI Camera** | Physical camera spoke | USB-C (data) | `esp32s3-camera-cloud` on int |
+| **FireBeetle ESP32-E** ×2 | Sensor nodes | USB + CH340 driver | Environmental sensor on int |
 | **Raspberry Pi 5 + Cam Module 3** | Hub camera + pan/tilt | SSH over LAN | `pnpm device:deploy` |
 
 ## Mac setup (when you’re ready)
@@ -103,7 +103,7 @@ Same home network as the FireBeetles. Credentials are in `~/.zshrc.local`:
 - `WIFI_SSID` → `NOW216QN`
 - `WIFI_PASSWORD` → (local only)
 
-DFRobot wiki has Wi‑Fi + camera example sketches; HomeHub AWS IoT firmware is still TBD.
+DFRobot wiki has Wi‑Fi + camera example sketches. HomeHub cloud firmware is `esp32s3-camera-cloud` — see [HomeHub cloud](#homehub-cloud).
 
 ## Physical connections
 
@@ -122,7 +122,25 @@ DFRobot wiki has Wi‑Fi + camera example sketches; HomeHub AWS IoT firmware is 
 2. In Arduino IDE: **ESP32S3 Dev Module**, **USB CDC On Boot: Enabled**.
 3. Run DFRobot **Wi‑Fi scan** or **camera capture** example from [DFR1154 wiki](https://wiki.dfrobot.com/dfr1154/).
 4. Join **NOW216QN** (2.4 GHz) using the same credentials as FireBeetle.
-5. Later: decide if this cam joins HomeHub as a second `camera` device or stays standalone AI.
+5. For HomeHub: register as **Camera → Physical device**, then [provision](#homehub-cloud).
+
+## HomeHub cloud
+
+Physical camera on int — snapshots every **30 s** via MQTT (base64 JPEG → IoT Rule → S3).
+
+1. **Register** in the UI: Devices → Add → type **Camera**, runtime **Physical device** → wait for **Ready**.
+2. **Provision + OTA flash** (no USB needed after first OTA):
+
+```bash
+source ~/.zshrc
+SST_STAGE=int bash scripts/provision-esp-iot.sh esp32s3-cam <deviceId>
+```
+
+3. **Verify** on the device page — snapshot gallery should update every ~30 s. Local status: `curl http://192.168.0.38/status`.
+
+Board FQBN (set by scripts): `esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,FlashSize=16M,PartitionScheme=huge_app,PSRAM=opi,FlashMode=qio`
+
+**vs Pi camera:** Pi uses `s3:PutObject` + telemetry with `snapshotKey`. ESP32 publishes JPEG inline on `homehub/devices/{deviceId}/snapshot` — same S3 key layout and gallery API.
 
 ## Registered device
 
@@ -136,8 +154,9 @@ DFRobot wiki has Wi‑Fi + camera example sketches; HomeHub AWS IoT firmware is 
 | Last IP | `192.168.0.38` |
 | Wi‑Fi | NOW216QN |
 | USB port (Mac) | `/dev/cu.usbmodem101` |
-| Firmware | `wifi-connect-ota` |
-| Status | **Wi‑Fi + OTA** |
+| Firmware | `esp32s3-camera-cloud` (HomeHub int) |
+| HomeHub device ID | `01M0CWM0FSQE1A9638WYPS0FAZ` |
+| Status | **Online on int** — 30 s snapshots |
 
 IPs may change after router reboot; MAC is fixed.
 

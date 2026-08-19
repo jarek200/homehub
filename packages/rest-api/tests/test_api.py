@@ -133,6 +133,34 @@ def test_create_humidity_sensor(client: TestClient) -> None:
     assert created["lifecycleStatus"] == "PROVISIONING"
 
 
+def test_create_environmental_sensor(client: TestClient) -> None:
+    created = create_device(
+        client,
+        name="Bench Environmental",
+        type="environmental-sensor",
+        location="Bench",
+    )
+    assert created["type"] == "environmental-sensor"
+    assert created["configuration"]["reportingIntervalSeconds"] == 300
+    assert created["configuration"]["thresholds"]["vocIndexWarning"] == 200
+
+
+def test_create_physical_environmental_sensor(client: TestClient) -> None:
+    response = client.post(
+        "/devices",
+        json={
+            "name": "FireBeetle #1",
+            "type": "environmental-sensor",
+            "location": "Bench",
+            "runtimeKind": "physical",
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["runtimeKind"] == "physical"
+    assert body["type"] == "environmental-sensor"
+
+
 def test_create_camera_applies_pan_tilt_defaults(client: TestClient) -> None:
     created = create_device(
         client,

@@ -10,6 +10,7 @@ DEFAULT_THRESHOLDS: dict[str, float] = {
     "humidityWarning": 70.0,
     "temperatureWarning": 28.0,
     "coAlarm": 50.0,
+    "vocIndexWarning": 200.0,
 }
 
 

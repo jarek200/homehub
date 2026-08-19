@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Device, DeviceConfiguration } from '@sst-monorepo/core';
 import { onDestroy, onMount } from 'svelte';
+import DeviceCameraSettingsPanel from '$lib/components/device-camera-settings-panel.svelte';
 import { Label } from '$lib/components/ui/label/index.js';
 import { configurationForType, formatWhen } from '$lib/devices';
 import { RestApiError } from '$lib/services/rest';
@@ -39,6 +40,7 @@ let {
 } = $props();
 
 const defaults = $derived(configurationForType(device.configuration, device.type));
+const supportsPanTilt = $derived(device.runtimeKind !== 'physical');
 let pan = $state(90);
 let tilt = $state(90);
 let range = $state<SnapshotRange>('1h');
@@ -141,7 +143,7 @@ async function loadGallery(deviceId: string, nextRange: SnapshotRange) {
     galleryTotal = result.total;
     gallerySampled = result.sampled;
     selectedAt = result.items[0]?.recordedAt ?? null;
-    snapshotError = result.items.length ? '' : 'Waiting for the first snapshot from the Pi.';
+    snapshotError = result.items.length ? '' : 'Waiting for the first snapshot from the camera.';
   } catch (err) {
     if (requestId !== galleryRequest) return;
     gallery = [];
@@ -150,7 +152,7 @@ async function loadGallery(deviceId: string, nextRange: SnapshotRange) {
     selectedAt = null;
     if (err instanceof RestApiError && err.status === 404) {
       galleryError = '';
-      snapshotError = 'Waiting for the first snapshot from the Pi.';
+      snapshotError = 'Waiting for the first snapshot from the camera.';
     } else {
       galleryError = err instanceof Error ? err.message : 'Failed to load snapshots';
     }
@@ -172,7 +174,7 @@ async function loadLatest(deviceId: string) {
   } catch (err) {
     if (err instanceof RestApiError && err.status === 404) {
       if (!gallery.length) {
-        snapshotError = 'Waiting for the first snapshot from the Pi.';
+        snapshotError = 'Waiting for the first snapshot from the camera.';
       }
       return;
     }
@@ -195,6 +197,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 function handleArrowKeys(event: KeyboardEvent) {
+  if (!supportsPanTilt) return;
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   if (isTypingTarget(event.target)) return;
 
@@ -281,9 +284,12 @@ async function saveAngles() {
   <div>
     <h3 class="font-medium text-muted-foreground text-xs uppercase tracking-widest">Snapshots</h3>
     <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
-      JPEG stills from Camera Module 3. Pick a time range to browse earlier frames. Use ← → to pan
-      and ↑ ↓ to tilt (5° steps), or drag the sliders. The head moves immediately; a new still is
-      taken after you stop.
+      JPEG stills from {device.runtimeKind === 'physical' ? 'the ESP32-S3 camera' : 'Camera Module 3'}.
+      Pick a time range to browse earlier frames.
+      {#if supportsPanTilt}
+        Use ← → to pan and ↑ ↓ to tilt (5° steps), or drag the sliders. The head moves immediately;
+        a new still is taken after you stop.
+      {/if}
     </p>
   </div>
 
@@ -359,38 +365,42 @@ async function saveAngles() {
     </div>
   {/if}
 
-  <div class="grid gap-6 sm:grid-cols-2">
-    <div class="flex flex-col gap-2">
-      <Label for="camera-pan" class="text-muted-foreground text-xs font-normal">Pan {pan}°</Label>
-      <input
-        id="camera-pan"
-        type="range"
-        min={ANGLE_MIN}
-        max={ANGLE_MAX}
-        step="1"
-        bind:value={pan}
-        class="w-full accent-foreground"
-        oninput={queueSave}
-      />
+  {#if supportsPanTilt}
+    <div class="grid gap-6 sm:grid-cols-2">
+      <div class="flex flex-col gap-2">
+        <Label for="camera-pan" class="text-muted-foreground text-xs font-normal">Pan {pan}°</Label>
+        <input
+          id="camera-pan"
+          type="range"
+          min={ANGLE_MIN}
+          max={ANGLE_MAX}
+          step="1"
+          bind:value={pan}
+          class="w-full accent-foreground"
+          oninput={queueSave}
+        />
+      </div>
+      <div class="flex flex-col gap-2">
+        <Label for="camera-tilt" class="text-muted-foreground text-xs font-normal">Tilt {tilt}°</Label>
+        <input
+          id="camera-tilt"
+          type="range"
+          min={ANGLE_MIN}
+          max={ANGLE_MAX}
+          step="1"
+          bind:value={tilt}
+          class="w-full accent-foreground"
+          oninput={queueSave}
+        />
+      </div>
     </div>
-    <div class="flex flex-col gap-2">
-      <Label for="camera-tilt" class="text-muted-foreground text-xs font-normal">Tilt {tilt}°</Label>
-      <input
-        id="camera-tilt"
-        type="range"
-        min={ANGLE_MIN}
-        max={ANGLE_MAX}
-        step="1"
-        bind:value={tilt}
-        class="w-full accent-foreground"
-        oninput={queueSave}
-      />
-    </div>
-  </div>
+  {/if}
   {#if saving}
     <p class="text-[0.7rem] text-muted-foreground">Updating camera…</p>
   {/if}
   {#if saveError}
     <p class="text-[0.75rem] text-destructive">{saveError}</p>
   {/if}
+
+  <DeviceCameraSettingsPanel {device} {onUpdated} />
 </section>

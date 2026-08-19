@@ -12,6 +12,12 @@ const METRIC_LABELS: Record<string, string> = {
   co2: 'CO₂',
   temperature: 'Temperature',
   humidity: 'Humidity',
+  vocIndex: 'VOC index',
+  pressureHpa: 'Pressure',
+  lightLux: 'Light',
+  uvMwCm2: 'UV',
+  batteryVoltage: 'Battery',
+  batteryPercent: 'Battery %',
   fault: 'Fault',
   pan: 'Pan',
   tilt: 'Tilt',
@@ -23,28 +29,41 @@ const METRIC_SHORT_LABELS: Record<string, string> = {
   co2: 'CO₂',
   temperature: 'T',
   humidity: 'H',
+  vocIndex: 'VOC',
+  pressureHpa: 'P',
+  lightLux: 'Lux',
+  uvMwCm2: 'UV',
+  batteryVoltage: 'V',
+  batteryPercent: 'Bat',
   fault: 'Fault',
   pan: 'Pan',
   tilt: 'Tilt',
 };
 
-const DEVICE_PROFILES: Record<string, { summaryKeys: string[]; chartKeys: string[] }> = {
-  'heat-alarm': { summaryKeys: ['temperature'], chartKeys: ['temperature'] },
+const DEVICE_PROFILES: Record<
+  string,
+  { summaryKeys: string[]; chartKeys: string[]; detailKeys: string[] }
+> = {
+  'heat-alarm': { summaryKeys: ['temperature'], chartKeys: ['temperature'], detailKeys: [] },
   'carbon-monoxide-alarm': {
     summaryKeys: ['co'],
     chartKeys: ['co'],
+    detailKeys: [],
   },
   'humidity-sensor': {
     summaryKeys: ['humidity'],
     chartKeys: ['humidity'],
+    detailKeys: [],
   },
   'environmental-sensor': {
-    summaryKeys: ['humidity'],
-    chartKeys: ['humidity'],
+    summaryKeys: ['temperature', 'humidity', 'vocIndex'],
+    chartKeys: ['temperature', 'humidity', 'vocIndex'],
+    detailKeys: ['pressureHpa', 'lightLux', 'uvMwCm2', 'batteryVoltage', 'batteryPercent'],
   },
   camera: {
     summaryKeys: ['pan', 'tilt'],
     chartKeys: ['pan', 'tilt'],
+    detailKeys: [],
   },
 };
 
@@ -54,6 +73,7 @@ const METRIC_THRESHOLD_KEY: Partial<Record<string, keyof DeviceThresholds>> = {
   temperature: 'temperatureWarning',
   humidity: 'humidityWarning',
   co: 'coAlarm',
+  vocIndex: 'vocIndexWarning',
 };
 
 function thresholdLabelForKey(_key: string): string {
@@ -205,6 +225,12 @@ export function formatMetricValue(key: string, value: number | boolean): string 
   if (key === 'humidity') return `${value}%`;
   if (key === 'co') return `${value} ppm`;
   if (key === 'co2') return `${value} ppm`;
+  if (key === 'pressureHpa') return `${value} hPa`;
+  if (key === 'lightLux') return `${value} lx`;
+  if (key === 'uvMwCm2') return `${value} mW/cm²`;
+  if (key === 'vocIndex') return String(value);
+  if (key === 'batteryVoltage') return `${value} V`;
+  if (key === 'batteryPercent') return `${value}%`;
   return String(value);
 }
 
@@ -279,7 +305,8 @@ export function chartMetricKeys(deviceType: string, readings: Reading[]): string
 export function summaryMetricKeys(deviceType: string, reading: Reading | null): string[] {
   const profile = profileForDeviceType(deviceType);
   const metrics = reading ? readingMetrics(reading, deviceType) : {};
-  const keys = profile?.summaryKeys ?? Object.keys(metrics);
+  const keys = [...(profile?.summaryKeys ?? []), ...(profile?.detailKeys ?? [])];
+  if (keys.length === 0) return Object.keys(metrics).filter((key) => metrics[key] != null);
   return keys.filter((key) => metrics[key] != null);
 }
 
@@ -358,7 +385,14 @@ const SAMPLE_METRICS: Record<string, ReadingMetrics> = {
     humidity: 55,
   },
   'environmental-sensor': {
+    temperature: 22.1,
     humidity: 55,
+    pressureHpa: 1013,
+    lightLux: 120,
+    uvMwCm2: 0.4,
+    vocIndex: 110,
+    batteryVoltage: 3.95,
+    batteryPercent: 72,
   },
   camera: {
     pan: 90,
@@ -374,6 +408,7 @@ function deriveAlarmState(
   const humidityLimit = thresholds.humidityWarning ?? DEFAULT_THRESHOLDS.humidityWarning;
   const temperatureLimit = thresholds.temperatureWarning ?? DEFAULT_THRESHOLDS.temperatureWarning;
   const coAlarmLimit = thresholds.coAlarm ?? DEFAULT_THRESHOLDS.coAlarm;
+  const vocLimit = thresholds.vocIndexWarning ?? DEFAULT_THRESHOLDS.vocIndexWarning;
 
   if (metrics.heat === true) {
     return { alarm: true, state: 'warning' };
@@ -392,6 +427,14 @@ function deriveAlarmState(
     normalizeDeviceType(deviceType) !== 'humidity-sensor' &&
     typeof metrics.temperature === 'number' &&
     metrics.temperature >= temperatureLimit
+  ) {
+    return { alarm: false, state: 'warning' };
+  }
+  if (
+    deviceType &&
+    normalizeDeviceType(deviceType) === 'environmental-sensor' &&
+    typeof metrics.vocIndex === 'number' &&
+    metrics.vocIndex >= vocLimit
   ) {
     return { alarm: false, state: 'warning' };
   }

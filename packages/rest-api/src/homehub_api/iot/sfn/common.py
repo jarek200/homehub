@@ -14,6 +14,7 @@ PROVISION_CONTEXT_KEYS = (
     "deviceId",
     "name",
     "type",
+    "runtimeKind",
     "configuration",
     "thingName",
     "ssmCertPrefix",
@@ -145,11 +146,13 @@ def parse_stream_record(record: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     device_id = new_image.get("deviceId", {}).get("S", sk.removeprefix("DEVICE#"))
+    runtime_kind = new_image.get("runtimeKind", {}).get("S", "simulated")
     return {
         "tenantPk": new_image.get("PK", {}).get("S", DEMO_TENANT_PK),
         "deviceId": device_id,
         "name": new_image.get("name", {}).get("S", ""),
         "type": new_image.get("type", {}).get("S", ""),
+        "runtimeKind": runtime_kind,
         "configuration": new_image.get("configuration", {}).get("S"),
         "thingName": thing_name_for(device_id),
         "ssmCertPrefix": ssm_prefix_for(device_id),

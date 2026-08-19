@@ -1,7 +1,11 @@
 import type { DeviceConfiguration } from '@sst-monorepo/core';
 import { normalizeDeviceType } from '$lib/device-type';
 
-export type ThresholdKey = 'humidityWarning' | 'temperatureWarning' | 'coAlarm';
+export type ThresholdKey =
+  | 'humidityWarning'
+  | 'temperatureWarning'
+  | 'coAlarm'
+  | 'vocIndexWarning';
 
 export type DeviceThresholds = Partial<Record<ThresholdKey, number>>;
 
@@ -18,6 +22,7 @@ export const DEFAULT_THRESHOLDS: Record<ThresholdKey, number> = {
   humidityWarning: 70,
   temperatureWarning: 28,
   coAlarm: 50,
+  vocIndexWarning: 200,
 };
 
 export const THRESHOLD_FIELDS: Record<string, ThresholdField[]> = {
@@ -60,6 +65,22 @@ export const THRESHOLD_FIELDS: Record<string, ThresholdField[]> = {
       max: 100,
       step: 1,
     },
+    {
+      key: 'temperatureWarning',
+      label: 'Temperature warning',
+      unit: '°C',
+      min: 0,
+      max: 100,
+      step: 0.5,
+    },
+    {
+      key: 'vocIndexWarning',
+      label: 'VOC index warning',
+      unit: '',
+      min: 0,
+      max: 500,
+      step: 1,
+    },
   ],
 };
 
@@ -97,14 +118,28 @@ export function parseThresholds(
 export function buildConfiguration(
   deviceType: string,
   thresholds: DeviceThresholds,
-  existingConfiguration?: DeviceConfiguration | null
+  existingConfiguration?: DeviceConfiguration | null,
+  extras?: Partial<DeviceConfiguration>
 ): DeviceConfiguration {
   const existing = asDeviceConfiguration(existingConfiguration);
   return {
     ...(existing ?? {}),
-    reportingIntervalSeconds: existing?.reportingIntervalSeconds ?? 10,
+    ...(extras ?? {}),
+    reportingIntervalSeconds:
+      extras?.reportingIntervalSeconds ??
+      existing?.reportingIntervalSeconds ??
+      defaultReportingIntervalSeconds(deviceType),
+    powerMode: extras?.powerMode ?? existing?.powerMode,
+    maintenanceMode: extras?.maintenanceMode ?? existing?.maintenanceMode,
     thresholds: { ...defaultThresholdsForType(deviceType), ...thresholds },
   };
+}
+
+export function defaultReportingIntervalSeconds(deviceType: string): number {
+  const normalizedType = normalizeDeviceType(deviceType);
+  if (normalizedType === 'camera') return 30;
+  if (normalizedType === 'environmental-sensor') return 300;
+  return 10;
 }
 
 export function formatThresholdSummary(

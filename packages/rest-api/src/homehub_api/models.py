@@ -12,26 +12,26 @@ from homehub_api.device_configuration import (
 DeviceStatus = Literal["ONLINE", "OFFLINE", "UNKNOWN"]
 LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
 ReadingState = Literal["normal", "warning"]
-DeviceType = Literal["heat-alarm", "carbon-monoxide-alarm", "humidity-sensor", "camera"]
-
-DEVICE_TYPE_ALIASES = {
-    "environmental-sensor": "humidity-sensor",
-}
-
-
-def _normalize_device_type(value: str) -> str:
-    stripped = value.strip()
-    return DEVICE_TYPE_ALIASES.get(stripped, stripped)
+RuntimeKind = Literal["simulated", "physical"]
+DeviceType = Literal[
+    "heat-alarm",
+    "carbon-monoxide-alarm",
+    "humidity-sensor",
+    "environmental-sensor",
+    "camera",
+]
 
 
 class CreateDeviceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=INPUT_LIMITS["name"])
     type: DeviceType = Field(
         description=(
-            "Device kind. One of: heat-alarm, carbon-monoxide-alarm, humidity-sensor, camera."
+            "Device kind. One of: heat-alarm, carbon-monoxide-alarm, humidity-sensor, "
+            "environmental-sensor, camera."
         ),
     )
     location: str = Field(min_length=1, max_length=INPUT_LIMITS["location"])
+    runtime_kind: RuntimeKind = Field(default="simulated", alias="runtimeKind")
     configuration: DeviceConfiguration | None = None
 
     @field_validator("name", "location", mode="before")
@@ -44,7 +44,7 @@ class CreateDeviceRequest(BaseModel):
     def normalize_type(cls, value: str) -> str:
         if not isinstance(value, str):
             return value
-        return _normalize_device_type(value)
+        return value.strip()
 
     @field_validator("configuration", mode="before")
     @classmethod
@@ -77,7 +77,7 @@ class UpdateDeviceRequest(BaseModel):
             return None
         if not isinstance(value, str):
             return value
-        return _normalize_device_type(value)
+        return value.strip()
 
     @field_validator("configuration", mode="before")
     @classmethod
@@ -108,6 +108,7 @@ class DeviceResponse(BaseModel):
     name: str
     type: str
     location: str | None = None
+    runtime_kind: RuntimeKind = Field(default="simulated", alias="runtimeKind")
     status: DeviceStatus
     lifecycle_status: LifecycleStatus = Field(default="READY", alias="lifecycleStatus")
     thing_name: str | None = Field(default=None, alias="thingName")

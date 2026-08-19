@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from homehub_api.iot.telemetry import write_telemetry
+from homehub_api.iot.telemetry import _tenant_pk_for_device, write_telemetry
 
 
 class _FakeTable:
@@ -151,3 +151,18 @@ def test_write_telemetry_stores_snapshot_key(monkeypatch: Any) -> None:
     assert values[":snapshotKey"] == "snapshots/cam-1/frame.jpg"
     assert values[":snapshotAt"] == "2026-08-14T12:00:00Z"
     assert "lastSnapshotKey = :snapshotKey" in fake_table.update_kwargs[0]["UpdateExpression"]
+
+
+def test_registered_device_tenant_wins_over_payload_hub() -> None:
+    class RegistryTable:
+        def get_item(self, Key: dict[str, str]) -> dict[str, Any]:  # noqa: N803
+            if Key == {"PK": "SIMULATOR", "SK": "DEVICE#dev-1"}:
+                return {"Item": {"tenantPk": "HUB#trusted-user"}}
+            return {}
+
+    tenant_pk = _tenant_pk_for_device(
+        RegistryTable(),
+        "dev-1",
+        {"hubId": "attacker-controlled"},
+    )
+    assert tenant_pk == "HUB#trusted-user"

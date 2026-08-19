@@ -23,6 +23,7 @@ export type BuildSeriesOptions = {
 const CHART_COLORS: Record<string, string> = {
   temperature: '#f97316',
   humidity: '#3b82f6',
+  vocIndex: '#a855f7',
   co: '#f97316',
   co2: '#8b5cf6',
   heat: '#ef4444',
@@ -31,8 +32,13 @@ const CHART_COLORS: Record<string, string> = {
 const METRIC_UNITS: Record<string, string> = {
   temperature: '°C',
   humidity: '%',
+  vocIndex: '',
   co: 'ppm',
   co2: 'ppm',
+  pressureHpa: 'hPa',
+  lightLux: 'lx',
+  batteryVoltage: 'V',
+  batteryPercent: '%',
 };
 
 function readingTime(reading: Reading): number {

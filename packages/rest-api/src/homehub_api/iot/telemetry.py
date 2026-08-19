@@ -28,13 +28,13 @@ def _new_id() -> str:
 
 
 def _tenant_pk_for_device(table: Any, device_id: str, event: dict[str, Any]) -> str:
-    hub_id = event.get("hubId")
-    if hub_id:
-        return hub_pk_for_user(str(hub_id))
-
     registry = table.get_item(Key={"PK": "SIMULATOR", "SK": f"DEVICE#{device_id}"}).get("Item")
     if registry and registry.get("tenantPk"):
         return str(registry["tenantPk"])
+
+    hub_id = event.get("hubId")
+    if hub_id:
+        return hub_pk_for_user(str(hub_id))
 
     result = table.get_item(Key={"PK": DEMO_TENANT_PK, "SK": f"DEVICE#{device_id}"})
     if result.get("Item"):

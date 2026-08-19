@@ -10,7 +10,7 @@ ESP_FIRMWARE_DIR="${ESP_FIRMWARE_DIR:-$_REPO_ROOT/packages/firebeetle-firmware}"
 esp_resolve_sketch() {
   local sketch="${1:-${ESP_SKETCH:-wifi-connect-ota}}"
   case "$sketch" in
-    wifi-connect-ota | environmental-sensor-ota | wifi-connect | wifi-scan)
+    wifi-connect-ota | environmental-sensor-ota | esp32s3-camera-cloud | wifi-connect | wifi-scan)
       echo "$ESP_FIRMWARE_DIR/$sketch"
       ;;
     /* | ./* | ../*)
@@ -18,7 +18,7 @@ esp_resolve_sketch() {
       ;;
     *)
       echo "Unknown sketch: $sketch" >&2
-      echo "Known sketches: wifi-connect-ota, environmental-sensor-ota, wifi-connect, wifi-scan" >&2
+      echo "Known sketches: wifi-connect-ota, environmental-sensor-ota, esp32s3-camera-cloud, wifi-connect, wifi-scan" >&2
       exit 1
       ;;
   esac
@@ -26,7 +26,7 @@ esp_resolve_sketch() {
 
 esp_active_sketch() {
   if [[ -n "${ESP_OTA_SKETCH:-}" ]]; then
-    echo "$ESP_OTA_SKETCH"
+    esp_resolve_sketch "$ESP_OTA_SKETCH"
     return
   fi
   esp_resolve_sketch "${ESP_SKETCH:-wifi-connect-ota}"
@@ -77,7 +77,8 @@ esp_fqbn_for_board() {
       echo "esp32:esp32:esp32:FlashSize=16M,PartitionScheme=min_spiffs"
       ;;
     esp32s3)
-      echo "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,FlashSize=16M,PartitionScheme=default_8MB"
+      # DFR1154: 16 MB flash + 8 MB OPI PSRAM — needs huge_app, not default_8MB.
+      echo "esp32:esp32:esp32s3:CDCOnBoot=cdc,USBMode=hwcdc,FlashSize=16M,PartitionScheme=huge_app,PSRAM=opi,FlashMode=qio"
       ;;
     *)
       echo "Unsupported board type: $1" >&2
@@ -139,11 +140,16 @@ esp_compile_sketch() {
   local build_path="$2"
   local sketch
   sketch="$(esp_active_sketch)"
+  local include_flags=""
+  local generated_dir="${sketch}/generated"
+  if [[ -f "${generated_dir}/iot_config.h" ]]; then
+    include_flags="-I${generated_dir}"
+  fi
   echo "Sketch:   $sketch"
   arduino-cli compile \
     --fqbn "$fqbn" \
     --build-path "$build_path" \
-    --build-property "build.extra_flags=$(esp_build_extra_flags)" \
+    --build-property "build.extra_flags=$(esp_build_extra_flags) ${include_flags}" \
     "$sketch"
 }
 

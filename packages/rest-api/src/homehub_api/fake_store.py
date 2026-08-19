@@ -67,9 +67,14 @@ class FakeHubStore:
             name=payload.name,
             type=payload.type,
             location=payload.location,
+            runtimeKind=payload.runtime_kind,
             status="UNKNOWN",
             lifecycleStatus="PROVISIONING",
-            configuration=configuration_for_create(payload.type, payload.configuration),
+            configuration=configuration_for_create(
+                payload.type,
+                payload.configuration,
+                runtime_kind=payload.runtime_kind,
+            ),
             createdAt=timestamp,
             updatedAt=timestamp,
         )

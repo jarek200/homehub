@@ -27,19 +27,18 @@ def _coerce_state(
     return derive_alarm_state(metrics, limits, device_type)[1]
 
 
-DEVICE_TYPE_ALIASES = {
-    "environmental-sensor": "humidity-sensor",
-}
-
-
 def normalize_device_type(device_type: str | None) -> str | None:
     if not device_type:
         return device_type
-    return DEVICE_TYPE_ALIASES.get(device_type, device_type)
+    return device_type
 
 
 def _is_humidity_sensor(device_type: str | None) -> bool:
     return normalize_device_type(device_type) == "humidity-sensor"
+
+
+def _is_environmental_sensor(device_type: str | None) -> bool:
+    return normalize_device_type(device_type) == "environmental-sensor"
 
 
 def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, float | bool]:
@@ -61,6 +60,18 @@ def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, flo
             "humidity": round(random.uniform(40.0, 65.0), 1),
         }
 
+    if _is_environmental_sensor(device_type):
+        return {
+            "temperature": round(random.uniform(20.0, 24.0), 1),
+            "humidity": round(random.uniform(45.0, 60.0), 1),
+            "pressureHpa": round(random.uniform(990.0, 1020.0), 0),
+            "lightLux": round(random.uniform(80.0, 400.0), 1),
+            "uvMwCm2": round(random.uniform(0.0, 2.0), 2),
+            "vocIndex": round(random.uniform(80.0, 140.0), 0),
+            "batteryVoltage": round(random.uniform(3.8, 4.1), 2),
+            "batteryPercent": round(random.uniform(55.0, 85.0), 0),
+        }
+
     if normalized_type == "camera":
         return {
             "pan": 90.0,
@@ -79,6 +90,7 @@ def derive_alarm_state(
     humidity_limit = limits.get("humidityWarning", DEFAULT_THRESHOLDS["humidityWarning"])
     temperature_limit = limits.get("temperatureWarning", DEFAULT_THRESHOLDS["temperatureWarning"])
     co_alarm_limit = limits.get("coAlarm", DEFAULT_THRESHOLDS["coAlarm"])
+    voc_limit = limits.get("vocIndexWarning", DEFAULT_THRESHOLDS["vocIndexWarning"])
 
     if metrics.get("heat") is True:
         return True, "warning"
@@ -95,6 +107,10 @@ def derive_alarm_state(
     if not _is_humidity_sensor(device_type):
         temperature = metrics.get("temperature")
         if temperature is not None and float(temperature) >= temperature_limit:
+            return False, "warning"
+    if _is_environmental_sensor(device_type):
+        voc = metrics.get("vocIndex")
+        if voc is not None and float(voc) >= voc_limit:
             return False, "warning"
     return False, "normal"
 
@@ -136,18 +152,12 @@ def normalize_telemetry_event(
     raw_metrics = _parse_metrics_field(event.get("metrics"))
     if raw_metrics:
         metrics = _map_metrics_for_device_type(_coerce_metrics(raw_metrics), device_type)
-        alarm = bool(event.get("alarm", derive_alarm_state(metrics, limits, device_type)[0]))
-        state = _coerce_state(
-            str(event.get("state") or derive_alarm_state(metrics, limits, device_type)[1]),
-            metrics,
-            limits,
-            device_type,
-        )
+        alarm, state = derive_alarm_state(metrics, limits, device_type)
         return {"alarm": alarm, "state": state, "metrics": metrics}
 
     metrics = _coerce_metrics({})
 
-    for key in ("temperature", "humidity", "co", "co2"):
+    for key in ("temperature", "humidity", "co", "co2", "vocIndex", "pressureHpa", "lightLux", "uvMwCm2", "batteryVoltage", "batteryPercent"):
         if event.get(key) is not None and key not in metrics:
             metrics[key] = _coerce_metric_value(event[key])
 
@@ -157,13 +167,7 @@ def normalize_telemetry_event(
 
     metrics = _map_metrics_for_device_type(metrics, device_type)
 
-    alarm = bool(event.get("alarm", derive_alarm_state(metrics, limits, device_type)[0]))
-    state = _coerce_state(
-        str(event.get("state") or derive_alarm_state(metrics, limits, device_type)[1]),
-        metrics,
-        limits,
-        device_type,
-    )
+    alarm, state = derive_alarm_state(metrics, limits, device_type)
 
     return {"alarm": alarm, "state": state, "metrics": metrics}
 
@@ -181,7 +185,7 @@ def reading_from_dynamo(
         metrics = _map_metrics_for_device_type(_coerce_metrics(raw_metrics), device_type)
     else:
         metrics = _coerce_metrics({})
-        for key in ("temperature", "humidity", "co", "co2"):
+        for key in ("temperature", "humidity", "co", "co2", "vocIndex", "pressureHpa", "lightLux", "uvMwCm2", "batteryVoltage", "batteryPercent"):
             if item.get(key) is not None:
                 metrics[key] = _coerce_metric_value(item[key])
         metrics = _map_metrics_for_device_type(metrics, device_type)

@@ -37,6 +37,8 @@ class Reconciler:
             for item in response.get("Items", []):
                 if not item.get("enabled", True):
                     continue
+                if item.get("runtimeKind") == "physical":
+                    continue
 
                 device_id = str(item.get("deviceId") or str(item["SK"]).removeprefix("DEVICE#"))
                 tenant_pk = str(item.get("tenantPk", "HUB#demo"))
@@ -88,6 +90,9 @@ class Reconciler:
         )
         if not registry or not registry.get("enabled", True):
             logger.info("Registry disabled or missing for %s", device_id)
+            return
+        if registry.get("runtimeKind") == "physical":
+            logger.info("Skipping physical device %s in simulator", device_id)
             return
 
         tenant_pk = str(registry.get("tenantPk", "HUB#demo"))

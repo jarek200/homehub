@@ -20,16 +20,19 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     context = resolve_provision_context(event)
     device_id = context["deviceId"]
     tenant_pk = context["tenantPk"]
+    runtime_kind = str(context.get("runtimeKind") or "simulated")
     thing = context.get("thingName") or thing_name_for(device_id)
     prefix = context.get("ssmCertPrefix") or ssm_prefix_for(device_id)
     timestamp = _now_iso()
+    is_physical = runtime_kind == "physical"
 
     registry_item: dict[str, Any] = {
         "PK": "SIMULATOR",
         "SK": f"DEVICE#{device_id}",
         "deviceId": device_id,
         "thingName": thing,
-        "enabled": True,
+        "enabled": not is_physical,
+        "runtimeKind": runtime_kind,
         "status": "READY",
         "tenantPk": tenant_pk,
         "hubId": hub_id_from_pk(tenant_pk),
@@ -62,7 +65,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         ExpressionAttributeValues=update_values,
     )
 
-    if queue_url:
+    if queue_url and not is_physical:
         boto3.client("sqs").send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps({"eventType": "DEVICE_READY", "deviceId": device_id}),

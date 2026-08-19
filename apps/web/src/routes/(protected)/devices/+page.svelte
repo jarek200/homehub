@@ -14,12 +14,14 @@ import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import { Skeleton } from '$lib/components/ui/skeleton/index.js';
 import {
+  DEVICE_TYPES,
   formatDeviceType,
   formatLifecycleStatus,
   formatStatus,
   getDefaultConfiguration,
   inputMinimal,
 } from '$lib/devices';
+import { RUNTIME_KINDS, type DeviceType, type RuntimeKind } from '$lib/device-type';
 import { createDevice, deleteDevice, listDevices } from '$lib/services/rest-api';
 import {
   formatLastReadingCompact,
@@ -40,7 +42,8 @@ let selectedIds = $state<string[]>([]);
 let bulkDeleting = $state(false);
 
 let name = $state('');
-const type = 'camera';
+let type = $state<DeviceType>('camera');
+let runtimeKind = $state<RuntimeKind>('simulated');
 let location = $state('');
 
 const telemetryPreview = $derived(formatTelemetryPreview(type));
@@ -143,6 +146,7 @@ async function handleCreate() {
       name: name.trim(),
       type,
       location: location.trim(),
+      runtimeKind,
       configuration: getDefaultConfiguration(type),
     });
     name = '';
@@ -343,12 +347,38 @@ $effect(() => {
     >
       <div>
         <h2 class="font-medium text-muted-foreground text-xs uppercase tracking-widest">
-          Register camera
+          Register device
         </h2>
         <p class="mt-2 text-[0.75rem] text-muted-foreground leading-relaxed">
-          Add the Raspberry Pi camera. After it is ready, open it to view snapshots and control
-          pan/tilt.
+          Add a camera, environmental sensor, or other HomeHub device. Physical FireBeetle boards
+          use AWS IoT MQTT with battery-efficient sampling.
         </p>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <Label for="device-type" class="text-muted-foreground text-xs font-normal">Type</Label>
+        <select
+          id="device-type"
+          bind:value={type}
+          class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
+        >
+          {#each DEVICE_TYPES as item (item.value)}
+            <option value={item.value}>{item.label}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <Label for="runtime-kind" class="text-muted-foreground text-xs font-normal">Runtime</Label>
+        <select
+          id="runtime-kind"
+          bind:value={runtimeKind}
+          class="rounded-sm border border-border bg-transparent px-3 py-2 text-sm"
+        >
+          {#each RUNTIME_KINDS as item (item.value)}
+            <option value={item.value}>{item.label}</option>
+          {/each}
+        </select>
       </div>
 
       <div class="flex flex-col gap-2">
@@ -356,7 +386,7 @@ $effect(() => {
         <Input
           id="name"
           bind:value={name}
-          placeholder="Living room camera"
+          placeholder={type === 'camera' ? 'Living room camera' : 'Bench environmental sensor'}
           required
           class={inputMinimal}
         />
@@ -402,7 +432,7 @@ $effect(() => {
       {#if query.trim()}
         No devices match “{query.trim()}”.
       {:else}
-        No cameras yet. Use + to register your first camera.
+        No devices yet. Use + to register your first device.
       {/if}
     </p>
   {:else}

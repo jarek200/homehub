@@ -22,12 +22,27 @@ export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 export const LIFECYCLE_STATUSES = ['PROVISIONING', 'READY', 'FAILED', 'DECOMMISSIONED'] as const;
 export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 
+export const RUNTIME_KINDS = ['simulated', 'physical'] as const;
+export type RuntimeKind = (typeof RUNTIME_KINDS)[number];
+
+export const POWER_MODES = ['low-power-voc', 'maintenance'] as const;
+export type PowerMode = (typeof POWER_MODES)[number];
+
 /** Device settings exposed by the REST API (object, not a JSON string). */
 export interface DeviceConfiguration {
   reportingIntervalSeconds?: number;
   thresholds?: Record<string, number>;
   pan?: number;
   tilt?: number;
+  powerMode?: PowerMode;
+  maintenanceMode?: boolean;
+  frameSize?: string;
+  jpegQuality?: number;
+  brightness?: number;
+  saturation?: number;
+  contrast?: number;
+  vflip?: boolean;
+  hmirror?: boolean;
   [key: string]: unknown;
 }
 
@@ -35,6 +50,7 @@ export interface CreateDeviceInput {
   name: string;
   type: string;
   location: string;
+  runtimeKind?: RuntimeKind;
   configuration?: DeviceConfiguration | null;
 }
 
@@ -67,6 +83,7 @@ export interface DeviceRecord {
   name: string;
   type: string;
   location?: string | null;
+  runtimeKind?: RuntimeKind;
   status: DeviceStatus;
   lifecycleStatus: LifecycleStatus;
   thingName?: string | null;

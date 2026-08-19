@@ -6,7 +6,7 @@ Notes for the two **FireBeetle 2 ESP32-E** boards used with HomeHub. Wi‑Fi cre
 
 | Label | MAC address | Hostname | Last IP | Wi‑Fi | Firmware | Status |
 |-------|-------------|----------|---------|-------|----------|--------|
-| FireBeetle #1 | `20:50:0d:b5:fc:a8` | `homehub-fb-b5fca8` | `192.168.0.36` | NOW216QN | `environmental-sensor-ota` | Wi‑Fi + OTA + **both I2C sensors** |
+| FireBeetle #1 | `20:50:0d:b5:fc:a8` | `homehub-fb-b5fca8` | `192.168.0.36` | NOW216QN | `environmental-sensor-ota` | Cloud MQTT + 10 s VOC / 1–60 min publish; HTTP only in maintenance mode |
 | FireBeetle #2 | `20:50:0d:b6:64:50` | `homehub-fb-b66450` | `192.168.0.37` | NOW216QN | `environmental-sensor-ota` | Wi‑Fi + OTA — **no sensors wired** (revert to `wifi-connect-ota` if desired) |
 
 IPs may change after router reboot; MAC addresses are fixed — use them to tell boards apart. Device registry: [`devices.conf`](../packages/firebeetle-firmware/devices.conf).
@@ -65,9 +65,9 @@ Both sensors share one I2C bus via the **Gravity IO shield** (SDA/SCL breakout):
 
 **Env sensor switch:** set onboard **MODESWITCH to I2C** (firmware expects I2C, not UART). Gravity cables: red=VCC, black=GND, blue=SDA, yellow=SCL.
 
-**SGP40 compensation:** firmware passes humidity and temperature from the env sensor into the SGP40 library (`setRhT`) for more accurate VOC index.
+**SGP40 compensation:** firmware passes humidity and temperature from the env sensor into the SGP40 driver (`sgp40SetRhT`) and runs Sensirion’s Gas Index Algorithm at a **10 s** low-power cadence (local `sensirion_voc_algorithm` sources in the sketch folder).
 
-**Libraries (Arduino):** `DFRobot_EnvironmentalSensor`, `DFRobot_SGP40` — installed automatically when compiling via `arduino-cli`.
+**Libraries (Arduino):** `DFRobot_EnvironmentalSensor`, `ArduinoMqttClient`, `ArduinoJson` — installed automatically when compiling via `arduino-cli`. VOC uses the in-sketch SGP40 driver, not `DFRobot_SGP40`.
 
 ### HTTP endpoints (`environmental-sensor-ota`)
 
@@ -184,9 +184,93 @@ Re-flash over USB when changing Wi‑Fi creds, recovering from a bad OTA image, 
 | `port not found` (network) | Script retries via `espota.py`; check router AP isolation |
 | `ESP32_OTA_PASSWORD` missing | Add to `~/.zshrc.local` (see `.env.example`) |
 
-## Not yet connected to HomeHub cloud
+## HomeHub cloud (FireBeetle #1)
 
-FireBeetle #1 publishes readings over **local HTTP** only. **AWS IoT MQTT** registration (device cert from SSM, telemetry topics, Humidity sensor type in the UI) is the next step — see [Learning roadmap](./learning-roadmap.md) Phase 2. The Pi hub runs the camera runtime separately.
+FireBeetle #1 publishes to HomeHub over **AWS IoT MQTT** with battery-efficient sampling:
+
+- **10 s** low-power SGP40 VOC sampling (Wi-Fi and Bluetooth off between ticks)
+- **Configurable cloud publish interval:** 1–60 minutes (default 5)
+- Firmware publishes **metrics only** — HomeHub derives warning state from thresholds
+- **Maintenance mode** in the UI keeps HTTP/OTA available after the next wake
+- USB remains the recovery path if the board is asleep and OTA cannot connect
+
+Canonical MQTT keys: `temperature`, `humidity`, `pressureHpa`, `lightLux`, `uvMwCm2`, `vocIndex`, `batteryVoltage`, `batteryPercent`.
+
+### Register in HomeHub
+
+1. Deploy the latest API/web (`pnpm deploy:int`).
+2. **Devices → Register device**
+   - Type: **Environmental sensor**
+   - Runtime: **Physical device** (never starts a virtual MQTT client)
+3. Wait until lifecycle **Ready**.
+4. Set thresholds and reporting interval in the device accordion.
+
+An interval change is stored immediately and applied when the sleeping device next connects (up to the previous interval).
+
+Default thresholds: humidity **70%**, temperature **28°C**, VOC index **200**.
+
+### Provision IoT credentials (one-time)
+
+After the device is **Ready**:
+
+```bash
+source ~/.zshrc
+SST_STAGE=int bash scripts/provision-esp-iot.sh firebeetle-1 <deviceId>
+```
+
+The script pulls `/homehub/devices/{deviceId}/cert|key|ca` from SSM into a mode-`0700` temp directory, writes `generated/iot_config.h`, compiles, OTA-flashes (USB fallback), and deletes secrets. Never commit that header.
+
+If OTA times out, enable **Maintenance mode** in the UI and wait for the next publish wake, or flash over USB:
+
+```bash
+bash scripts/flash-esp-usb.sh firebeetle-1 environmental-sensor-ota
+```
+
+Without `HOMEHUB_IOT_ENABLED`, firmware still serves local HTTP (`bash scripts/read-esp-readings.sh firebeetle-1`).
+
+### Wake sequence
+
+1. Light-sleep ~10 s with Wi-Fi off; keep SGP40 powered and feed Sensirion’s algorithm.
+2. First 45 s after cold boot: do not publish VOC (blackout).
+3. When the reporting interval is due: read SEN0500 + battery, connect Wi-Fi, NTP, fetch Thing shadow, publish one QoS 1 reading, then sleep again.
+4. If shadow `maintenanceMode=true`, stay awake for HTTP `/readings`, `/battery`, identify, and OTA.
+
+### Int verification (2026-08-19)
+
+- Physical device `01M0BMN0DMX5666GZPZPA6SWHD` reached `READY`; its simulator registry is `enabled: false`.
+- First reading omitted `vocIndex` during blackout; later readings contained VOC indices 94–95.
+- A temporary 60-second interval produced readings 65 seconds apart; the default was restored to 300 seconds.
+- Lowering `temperatureWarning` to 20°C changed the next 27.1°C reading to `warning`; restoring 28°C changed the next reading back to `normal`.
+- Maintenance mode enabled HTTP/OTA, and disabling it made HTTP unavailable again while cloud telemetry continued.
+- The generated IoT header and temporary PEM files were absent after provisioning.
+
+### Power measurement notes
+
+Measure **whole-device** current from the battery (not ESP32 or sensor datasheet figures alone).
+
+| State | How to measure | Datasheet / expected range |
+|-------|----------------|----------------------------|
+| Light sleep + sensors powered | Series ammeter on VBAT / JST, Wi-Fi off, 10 s ticks | ESP32 light sleep ~0.8–10 mA; Gravity shield + SEN0500 often dominate (typically **15–40 mA**) |
+| ~170 ms VOC window | Scope or fast DMM on the same series path | SGP40 heater ~3–4 mA extra for tens of ms |
+| Wi-Fi + MQTT publish | Same, during a 1-minute interval test | ESP32 TX typically **80–150 mA** for a few seconds |
+
+**Bench (FireBeetle #1, Gravity shield + SEN0500 + SGP40):** a series meter was not on the battery rail during this iteration, so treat the ranges above as planning estimates. Do **not** add a GPIO-driven sensor-rail switch until a measured idle current is recorded.
+
+If measured sleep current stays above ~20 mA:
+
+1. Keep the **SGP40 rail powered** (VOC history is invalid if it power-cycles).
+2. Add a load switch / MOSFET on the **SEN0500 rail only** (never power the stack directly from a GPIO).
+3. Re-measure the three states and replace the estimates here.
+
+**Estimated battery life** (2000 mAh LiPo, 5-minute publish, 10 s VOC, ~3 s Wi-Fi burst):
+
+| Assumed sleep current | Approx. life |
+|-----------------------|--------------|
+| 5 mA (gated SEN0500) | 2–3 weeks |
+| 20 mA (shield always on) | 3–5 days |
+| 40 mA (worst idle) | 1–2 days |
+
+Compare 10 s vs 1 s VOC only if measured quality or current requires it; **10 s remains the default**.
 
 ## Related docs
 

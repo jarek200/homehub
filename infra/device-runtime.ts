@@ -2,6 +2,7 @@
 
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { pythonLambdaEnv } from './python-lambda';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
 type IotProvisioning = ReturnType<typeof import('./iot-provisioning').createIotProvisioning>;
@@ -40,6 +41,44 @@ export function createDeviceRuntime(
         filter: {},
       },
     ],
+  });
+
+  const snapshotWriter = new sst.aws.Function('DeviceSnapshotWriter', {
+    handler: 'packages/rest-api/src/homehub_api/iot/snapshot.handler',
+    runtime: 'python3.13',
+    memory: '512 MB',
+    timeout: '30 seconds',
+    link: [table],
+    environment: {
+      ...pythonLambdaEnv,
+      TABLE_NAME: table.name,
+      SNAPSHOT_BUCKET: snapshotBucket.bucket,
+    },
+    permissions: [
+      {
+        actions: ['dynamodb:GetItem', 'dynamodb:UpdateItem'],
+        resources: [table.arn],
+      },
+      {
+        actions: ['s3:PutObject'],
+        resources: [$interpolate`${snapshotBucket.arn}/snapshots/*`],
+      },
+    ],
+  });
+
+  const snapshotRule = new aws.iot.TopicRule('DeviceSnapshotRule', {
+    name: `${$app.name}_${$app.stage}_device_snapshot`,
+    enabled: true,
+    sql: "SELECT topic(3) AS deviceId, * FROM 'homehub/devices/+/snapshot'",
+    sqlVersion: '2016-03-23',
+    lambdas: [{ functionArn: snapshotWriter.arn }],
+  });
+
+  new aws.lambda.Permission('DeviceSnapshotRulePermission', {
+    action: 'lambda:InvokeFunction',
+    function: snapshotWriter.arn,
+    principal: 'iot.amazonaws.com',
+    sourceArn: snapshotRule.arn,
   });
 
   const simulatorUser = new aws.iam.User('DeviceSimulatorUser', {
@@ -103,5 +142,5 @@ export function createDeviceRuntime(
       ),
   });
 
-  return { snapshotBucket };
+  return { snapshotBucket, snapshotWriter, snapshotRule };
 }

@@ -69,9 +69,33 @@ def test_camera_sample_metrics() -> None:
     assert metrics["tilt"] == 90.0
 
 
-def test_environmental_sensor_alias_sample_metrics() -> None:
+def test_environmental_sensor_sample_metrics() -> None:
     metrics = sample_metrics("environmental-sensor")
     assert "humidity" in metrics
+    assert "temperature" in metrics
+    assert "vocIndex" in metrics
+    assert "pressureHpa" in metrics
+
+
+def test_voc_threshold_moves_state_to_warning() -> None:
+    configuration = '{"thresholds":{"vocIndexWarning":150}}'
+    normalized = normalize_telemetry_event(
+        {"metrics": {"vocIndex": 180, "humidity": 50, "temperature": 22}},
+        configuration=configuration,
+        device_type="environmental-sensor",
+    )
+    assert normalized["state"] == "warning"
+
+
+def test_payload_state_does_not_override_server_thresholds() -> None:
+    normalized = normalize_telemetry_event(
+        {
+            "state": "normal",
+            "metrics": {"humidity": 90, "temperature": 30, "vocIndex": 250},
+        },
+        device_type="environmental-sensor",
+    )
+    assert normalized["state"] == "warning"
 
 
 def test_metrics_to_dynamo_serializes_for_dynamodb() -> None:

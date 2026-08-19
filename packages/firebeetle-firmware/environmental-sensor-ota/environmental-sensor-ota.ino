@@ -1,11 +1,18 @@
 #include <ArduinoOTA.h>
 #include <DFRobot_EnvironmentalSensor.h>
-#include <DFRobot_SGP40.h>
 #include <ESPmDNS.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include <cstring>
+#include <esp_sleep.h>
+
+#include "homehub_cloud.h"
+#include "sgp40_driver.h"
+
+extern "C" {
+#include "sensirion_voc_algorithm.h"
+}
 
 #ifndef WIFI_SSID
 #define WIFI_SSID "REPLACE_ME"
@@ -30,7 +37,6 @@
 #error "Set the sensor switch to I2C and MODESWITCH to 0 for Gravity IO shield wiring."
 #else
 DFRobot_EnvironmentalSensor environment(SEN050X_DEFAULT_DEVICE_ADDRESS, &Wire);
-DFRobot_SGP40 airQuality(&Wire);
 #endif
 
 struct SensorReadings {
@@ -60,8 +66,26 @@ constexpr uint32_t kVocWarmupMs = 10000;
 
 constexpr unsigned long kSensorReadIntervalMs = 5000;
 constexpr unsigned long kStatusLogIntervalMs = 10000;
+constexpr unsigned long kVocSampleIntervalMs = 10000;
+constexpr unsigned long kVocBlackoutMs = 45000;
 constexpr int kStatusLedPin = 2;  // FireBeetle ESP32-E onboard LED
 constexpr unsigned long kDefaultIdentifyMs = 20000;
+constexpr unsigned long kMaintenanceWindowMs = 10UL * 60UL * 1000UL;
+
+RTC_DATA_ATTR VocAlgorithmParams gVocParams;
+RTC_DATA_ATTR bool gVocInitialized = false;
+RTC_DATA_ATTR unsigned long gLastPublishMs = 0;
+RTC_DATA_ATTR uint16_t gLatestVocIndex = 0;
+RTC_DATA_ATTR bool gLatestVocValid = false;
+RTC_DATA_ATTR float gCompTemperatureC = 25.0f;
+RTC_DATA_ATTR float gCompHumidity = 50.0f;
+
+CloudSettings gCloudSettings;
+bool gMaintenanceMode = false;
+bool gMaintenanceWindowExpired = false;
+unsigned long gMaintenanceUntilMs = 0;
+unsigned long gBootMs = 0;
+unsigned long gLastVocSampleMs = 0;
 
 WebServer httpServer(80);
 
@@ -262,8 +286,8 @@ static void tryInitVocSensor(unsigned long now) {
     return;
   }
   ensureWire();
-  // begin(0) skips the blocking 10s warmup; we warm up in loop instead.
-  if (airQuality.begin(0)) {
+  // Skip blocking warmup; we warm up in loop instead.
+  if (sgp40Begin()) {
     vocWarming = true;
     vocWarmupUntilMs = now + kVocWarmupMs;
     Serial.println("SGP40 detected (I2C 0x59) — warming up in background");
@@ -282,6 +306,8 @@ static void tickVocWarmup(unsigned long now) {
     Serial.println("SGP40 air quality sensor ready");
   }
 }
+
+static void initVocAlgorithmIfNeeded();
 
 static bool readEnvironmentalSensor(SensorReadings* out) {
   if (!out) {
@@ -306,15 +332,23 @@ static bool readEnvironmentalSensor(SensorReadings* out) {
     candidate.temperatureC = temperatureC;
     candidate.humidity = humidity;
     candidate.pressureHpa = pressureHpa;
-    candidate.lightLux = lightLux;
-    candidate.uvMwCm2 = uvMwCm2;
+    candidate.lightLux = max(0.0f, lightLux);
+    candidate.uvMwCm2 = max(0.0f, uvMwCm2);
   }
 
   if (vocReady || vocWarming) {
     if (sensorReady) {
-      airQuality.setRhT(candidate.humidity, candidate.temperatureC);
+      sgp40SetRhT(candidate.humidity, candidate.temperatureC);
     }
-    candidate.vocIndex = airQuality.getVoclndex();
+    initVocAlgorithmIfNeeded();
+    uint16_t raw = 0;
+    if (sgp40MeasureRawCompensated(&raw)) {
+      int32_t vocIndex = 0;
+      VocAlgorithm_process(&gVocParams, static_cast<int32_t>(raw), &vocIndex);
+      if (vocIndex > 0) {
+        candidate.vocIndex = static_cast<uint16_t>(vocIndex);
+      }
+    }
     candidate.vocReady = vocReady;
   }
 
@@ -399,8 +433,227 @@ static String readingsJson(const SensorReadings& readings) {
   return body;
 }
 
+static void initVocAlgorithmIfNeeded() {
+  if (gVocInitialized) {
+    return;
+  }
+  VocAlgorithm_init(&gVocParams);
+  gVocInitialized = true;
+}
+
+static void sampleVocIndex() {
+  if (!vocReady && !vocWarming) {
+    return;
+  }
+  initVocAlgorithmIfNeeded();
+  sgp40SetRhT(gCompHumidity, gCompTemperatureC);
+  uint16_t raw = 0;
+  if (!sgp40MeasureRawLowPower(&raw)) {
+    return;
+  }
+  int32_t vocIndex = 0;
+  VocAlgorithm_process(&gVocParams, static_cast<int32_t>(raw), &vocIndex);
+  if (millis() - gBootMs < kVocBlackoutMs) {
+    gLatestVocValid = false;
+    return;
+  }
+  if (vocIndex > 0) {
+    gLatestVocIndex = static_cast<uint16_t>(vocIndex);
+    gLatestVocValid = true;
+  }
+}
+
+static CloudReading buildCloudReading() {
+  CloudReading reading;
+  if (latestReadings.valid || sensorReady) {
+    reading.temperatureC = latestReadings.temperatureC;
+    reading.humidity = latestReadings.humidity;
+    reading.pressureHpa = latestReadings.pressureHpa;
+    reading.lightLux = latestReadings.lightLux;
+    reading.uvMwCm2 = latestReadings.uvMwCm2;
+    gCompTemperatureC = reading.temperatureC;
+    gCompHumidity = reading.humidity;
+  }
+  reading.vocIndex = gLatestVocIndex;
+  reading.vocValid = gLatestVocValid;
+#ifdef FIREBEETLE_BATTERY
+  reading.batteryV = readBatteryVoltage();
+  reading.batteryPercent = batteryPercent(reading.batteryV);
+#endif
+  return reading;
+}
+
+static bool publishDue() {
+  if (gLastPublishMs == 0) {
+    return true;
+  }
+  const unsigned long intervalMs = gCloudSettings.reportingIntervalSeconds * 1000UL;
+  return millis() - gLastPublishMs >= intervalMs;
+}
+
+static void applyMaintenanceMode(bool enabled) {
+  if (!enabled) {
+    gMaintenanceWindowExpired = false;
+  }
+  if (enabled && gMaintenanceWindowExpired) {
+    return;
+  }
+  if (gMaintenanceMode == enabled) {
+    return;
+  }
+  gMaintenanceMode = enabled;
+  if (enabled) {
+    gMaintenanceUntilMs = millis() + kMaintenanceWindowMs;
+    httpServer.begin();
+    Serial.println("Maintenance mode on — HTTP/OTA available");
+  } else {
+    httpServer.stop();
+    Serial.println("Maintenance mode off — returning to low-power loop");
+  }
+}
+
+static bool ensureWifiForCloud() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  for (int attempt = 0; attempt < 80; ++attempt) {
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("WiFi reconnected for cloud: ");
+      Serial.println(WiFi.localIP());
+      return true;
+    }
+    delay(250);
+  }
+  Serial.println("WiFi unavailable for cloud publish");
+  return false;
+}
+
+static void runCloudPublishCycle() {
+  if (!ensureWifiForCloud()) {
+    return;
+  }
+  SensorReadings sample;
+  if (readEnvironmentalSensor(&sample)) {
+    latestReadings = sample;
+    if (vocReady) {
+      sgp40SetRhT(latestReadings.humidity, latestReadings.temperatureC);
+    }
+  }
+  sampleVocIndex();
+  homehubCloudFetchSettings(gCloudSettings);
+  applyMaintenanceMode(gCloudSettings.maintenanceMode);
+  if (homehubCloudPublish(buildCloudReading())) {
+    gLastPublishMs = millis();
+    Serial.println("Cloud telemetry published");
+  } else {
+    Serial.println("Cloud telemetry publish failed");
+  }
+}
+
+static void lightSleepUntilNextVocTick() {
+  const unsigned long elapsed = millis() - gLastVocSampleMs;
+  const unsigned long sleepMs =
+      elapsed >= kVocSampleIntervalMs ? 1UL : (kVocSampleIntervalMs - elapsed);
+  esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(sleepMs) * 1000ULL);
+  esp_light_sleep_start();
+}
+
+static void runLowPowerCloudLoop() {
+  ArduinoOTA.handle();
+  if (gMaintenanceMode) {
+    httpServer.handleClient();
+    handleIdentifyLed();
+  }
+
+  if (millis() - gLastVocSampleMs >= kVocSampleIntervalMs) {
+    gLastVocSampleMs = millis();
+    sampleVocIndex();
+  }
+
+  if (publishDue()) {
+    runCloudPublishCycle();
+  }
+
+  if (gMaintenanceMode) {
+    if (millis() >= gMaintenanceUntilMs) {
+      gMaintenanceWindowExpired = true;
+      gMaintenanceMode = false;
+      httpServer.stop();
+      Serial.println("Maintenance window expired — returning to low-power loop");
+    } else {
+      delay(50);
+      return;
+    }
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+  }
+  lightSleepUntilNextVocTick();
+}
+
 static void handleReadingsRequest() {
   httpServer.send(200, "application/json", readingsJson(latestReadings));
+}
+
+static void runLegacyLoop() {
+  ArduinoOTA.handle();
+  httpServer.handleClient();
+  handleIdentifyLed();
+
+  static unsigned long lastSensorMs = 0;
+  static unsigned long lastRetryMs = 0;
+  static bool firstInitAttempt = true;
+  const unsigned long now = millis();
+
+  tickVocWarmup(now);
+
+  if (firstInitAttempt || ((!sensorReady || (!vocReady && !vocWarming)) && now - lastRetryMs >= 30000)) {
+    if (!firstInitAttempt) {
+      lastRetryMs = now;
+      Serial.println("Retrying sensor init...");
+    }
+    firstInitAttempt = false;
+    if (!sensorReady) {
+      tryInitEnvironmentalSensor();
+    }
+    if (!vocReady && !vocWarming) {
+      tryInitVocSensor(now);
+    }
+  }
+
+  if (now - lastSensorMs >= kSensorReadIntervalMs) {
+    lastSensorMs = now;
+    SensorReadings sample;
+    if (readEnvironmentalSensor(&sample)) {
+      latestReadings = sample;
+      logSensorReadings(latestReadings);
+    } else if (sample.updatedAtMs > 0) {
+      latestReadings = sample;
+      if (sample.vocReady || sample.valid) {
+        logSensorReadings(latestReadings);
+      } else {
+        Serial.println("Sensor read failed plausibility check");
+      }
+    } else {
+      latestReadings.valid = false;
+    }
+  }
+
+  static unsigned long lastStatusMs = 0;
+  if (now - lastStatusMs >= kStatusLogIntervalMs) {
+    lastStatusMs = now;
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.print("Still connected, IP: ");
+      Serial.println(WiFi.localIP());
+    } else {
+      Serial.println("WiFi lost — reconnecting...");
+      WiFi.reconnect();
+    }
+  }
 }
 
 #ifdef FIREBEETLE_BATTERY
@@ -517,21 +770,27 @@ void setup() {
 
   setupHttpServer();
   setupOta();
-  Serial.println("Ready for OTA — sensor init runs in background.");
+  gBootMs = millis();
+  gLastVocSampleMs = gBootMs;
+  if (homehubCloudConfigured()) {
+    homehubCloudFetchSettings(gCloudSettings);
+    applyMaintenanceMode(gCloudSettings.maintenanceMode);
+    gLastPublishMs = 0;
+    Serial.println("HomeHub cloud enabled — first publish runs immediately.");
+    if (!gMaintenanceMode) {
+      httpServer.stop();
+    }
+  } else {
+    Serial.println("Ready for OTA — sensor init runs in background.");
+  }
 }
 
 void loop() {
-  ArduinoOTA.handle();
-  httpServer.handleClient();
-  handleIdentifyLed();
-
-  static unsigned long lastSensorMs = 0;
-  static unsigned long lastRetryMs = 0;
   static bool firstInitAttempt = true;
+  static unsigned long lastRetryMs = 0;
   const unsigned long now = millis();
 
   tickVocWarmup(now);
-
   if (firstInitAttempt || ((!sensorReady || (!vocReady && !vocWarming)) && now - lastRetryMs >= 30000)) {
     if (!firstInitAttempt) {
       lastRetryMs = now;
@@ -546,33 +805,9 @@ void loop() {
     }
   }
 
-  if (now - lastSensorMs >= kSensorReadIntervalMs) {
-    lastSensorMs = now;
-    SensorReadings sample;
-    if (readEnvironmentalSensor(&sample)) {
-      latestReadings = sample;
-      logSensorReadings(latestReadings);
-    } else if (sample.updatedAtMs > 0) {
-      latestReadings = sample;
-      if (sample.vocReady || sample.valid) {
-        logSensorReadings(latestReadings);
-      } else {
-        Serial.println("Sensor read failed plausibility check");
-      }
-    } else {
-      latestReadings.valid = false;
-    }
+  if (homehubCloudConfigured()) {
+    runLowPowerCloudLoop();
+    return;
   }
-
-  static unsigned long lastStatusMs = 0;
-  if (now - lastStatusMs >= kStatusLogIntervalMs) {
-    lastStatusMs = now;
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.print("Still connected, IP: ");
-      Serial.println(WiFi.localIP());
-    } else {
-      Serial.println("WiFi lost — reconnecting...");
-      WiFi.reconnect();
-    }
-  }
+  runLegacyLoop();
 }

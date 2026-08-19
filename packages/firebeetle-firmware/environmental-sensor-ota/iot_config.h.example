@@ -1,0 +1,26 @@
+// Copy to generated/iot_config.h via scripts/provision-esp-iot.sh (never commit secrets).
+#ifndef HOMEHUB_IOT_CONFIG_H
+#define HOMEHUB_IOT_CONFIG_H
+
+// #define HOMEHUB_IOT_ENABLED 1
+// #define HOMEHUB_IOT_ENDPOINT "xxxxxxxxxx-ats.iot.eu-west-1.amazonaws.com"
+// #define HOMEHUB_DEVICE_ID "01J..."
+// #define HOMEHUB_HUB_ID "demo"
+// #define HOMEHUB_THING_NAME "homehub-01J..."
+// static const char HOMEHUB_AWS_ROOT_CA[] PROGMEM = R"EOF(
+// -----BEGIN CERTIFICATE-----
+// ...
+// -----END CERTIFICATE-----
+// )EOF";
+// static const char HOMEHUB_DEVICE_CERT[] PROGMEM = R"EOF(
+// -----BEGIN CERTIFICATE-----
+// ...
+// -----END CERTIFICATE-----
+// )EOF";
+// static const char HOMEHUB_DEVICE_KEY[] PROGMEM = R"EOF(
+// -----BEGIN RSA PRIVATE KEY-----
+// ...
+// -----END RSA PRIVATE KEY-----
+// )EOF";
+
+#endif

@@ -2,10 +2,15 @@ import type { DeviceConfiguration } from '@sst-monorepo/core';
 import {
   asDeviceConfiguration,
   type DeviceThresholds,
+  defaultReportingIntervalSeconds,
   defaultThresholdsForType,
   formatThresholdSummary,
   parseThresholds,
 } from '$lib/device-thresholds';
+import { formatCameraSettingsSummary } from '$lib/device-camera-settings';
+import {
+  formatReportingIntervalSummary,
+} from '$lib/device-power-settings';
 import { DEVICE_TYPES, type DeviceType, normalizeDeviceType } from '$lib/device-type';
 
 export type { DeviceThresholds };
@@ -38,6 +43,21 @@ export function getDefaultConfiguration(deviceType?: string): DeviceConfiguratio
       reportingIntervalSeconds: 30,
       pan: 90,
       tilt: 90,
+      frameSize: 'qvga',
+      jpegQuality: 12,
+      brightness: 1,
+      saturation: -2,
+      contrast: 0,
+      vflip: true,
+      hmirror: false,
+    };
+  }
+  if (normalizedType === 'environmental-sensor') {
+    return {
+      reportingIntervalSeconds: 300,
+      powerMode: 'low-power-voc',
+      maintenanceMode: false,
+      thresholds: defaultThresholdsForType(normalizedType),
     };
   }
   return {
@@ -61,16 +81,31 @@ export function configurationForType(
       ? (parsed.thresholds as DeviceThresholds)
       : {};
   if (normalizedType === 'camera') {
-    const pan = typeof parsed.pan === 'number' ? parsed.pan : 90;
-    const tilt = typeof parsed.tilt === 'number' ? parsed.tilt : 90;
+    const merged = {
+      ...defaults,
+      ...parsed,
+      reportingIntervalSeconds:
+        typeof parsed.reportingIntervalSeconds === 'number'
+          ? parsed.reportingIntervalSeconds
+          : defaults.reportingIntervalSeconds,
+      pan: typeof parsed.pan === 'number' ? parsed.pan : 90,
+      tilt: typeof parsed.tilt === 'number' ? parsed.tilt : 90,
+    };
+    return merged;
+  }
+  if (normalizedType === 'environmental-sensor') {
     return {
       ...parsed,
       reportingIntervalSeconds:
         typeof parsed.reportingIntervalSeconds === 'number'
           ? parsed.reportingIntervalSeconds
           : defaults.reportingIntervalSeconds,
-      pan,
-      tilt,
+      powerMode: parsed.powerMode ?? defaults.powerMode,
+      maintenanceMode: parsed.maintenanceMode ?? defaults.maintenanceMode,
+      thresholds: {
+        ...(defaults.thresholds as DeviceThresholds),
+        ...parsedThresholds,
+      },
     };
   }
   return {
@@ -87,7 +122,8 @@ export function configurationForType(
 }
 
 export function isEnvironmentalSensor(type: string): boolean {
-  return normalizeDeviceType(type) === 'humidity-sensor';
+  const normalized = normalizeDeviceType(type);
+  return normalized === 'humidity-sensor' || normalized === 'environmental-sensor';
 }
 
 export function isHeatAlarm(type: string): boolean {
@@ -168,9 +204,14 @@ export function formatConfigurationSummary(
     const interval =
       typeof parsed?.reportingIntervalSeconds === 'number'
         ? parsed.reportingIntervalSeconds
-        : defaults.reportingIntervalSeconds;
-    parts.push(`Reports every ${String(interval)}s`);
+        : defaultReportingIntervalSeconds(deviceType ?? '');
+    if (normalizeDeviceType(deviceType ?? '') === 'environmental-sensor') {
+      parts.push(formatReportingIntervalSummary(parsed ?? { reportingIntervalSeconds: interval }));
+    } else {
+      parts.push(`Reports every ${String(interval)}s`);
+    }
     if (normalizeDeviceType(deviceType ?? '') === 'camera') {
+      parts.push(formatCameraSettingsSummary(configuration));
       const pan = typeof parsed?.pan === 'number' ? parsed.pan : 90;
       const tilt = typeof parsed?.tilt === 'number' ? parsed.tilt : 90;
       parts.push(`Pan ${pan}° · Tilt ${tilt}°`);

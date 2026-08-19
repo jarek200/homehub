@@ -96,9 +96,9 @@ Purchased components for HomeHub and related IoT projects. Source: [The Pi Hut](
 
 | Device | Doc | Status |
 |--------|-----|--------|
-| FireBeetle #1 (`b5:fc:a8`) | [FireBeetle setup](./firebeetle-setup.md) | `environmental-sensor-ota` — **SEN0500 env + SGP40 VOC** on Gravity IO shield, I2C `0x22` + `0x59` |
+| FireBeetle #1 (`b5:fc:a8`) | [FireBeetle setup](./firebeetle-setup.md) | Physical **Environmental sensor** — 10 s VOC, 1–60 min MQTT; HTTP/OTA in maintenance mode |
 | FireBeetle #2 (`b6:64:50`) | [FireBeetle setup](./firebeetle-setup.md) | `environmental-sensor-ota` flashed; **no sensors wired** — spare for PIR / door / BME280 |
-| ESP32-S3 AI Camera Module (DFR1154) | [ESP32-S3 camera setup](./esp32-s3-camera-setup.md) | OTA enabled — `homehub-s3-4c8008` |
+| ESP32-S3 AI Camera Module (DFR1154) | [ESP32-S3 camera setup](./esp32-s3-camera-setup.md) | Physical **Camera** on int — `esp32s3-camera-cloud`, 30 s snapshots |
 | Raspberry Pi 5 + Camera Module 3 | [Device simulator README](../packages/device-simulator/README.md) | Hub camera via `pnpm device:deploy` |
 
 ### FireBeetle #1 — what's on the bench
@@ -110,6 +110,8 @@ Purchased components for HomeHub and related IoT projects. Source: [The Pi Hut](
 | SGP40 Air Quality (SEN0392) | VOC index (0–500), RH/T compensated from env sensor |
 | 18650 / LiPo (optional) | Battery monitoring via `/battery` |
 
-Local readings: `bash scripts/read-esp-readings.sh firebeetle-1`. Cloud MQTT not wired yet.
+Local readings (maintenance / unprovisioned): `bash scripts/read-esp-readings.sh firebeetle-1`. Cloud: register as **Environmental sensor (physical)**, then `SST_STAGE=int bash scripts/provision-esp-iot.sh firebeetle-1 <deviceId>`.
+
+ESP32-S3 camera: register as **Camera (physical)**, then `SST_STAGE=int bash scripts/provision-esp-iot.sh esp32s3-cam <deviceId>`.
 
 **Learning path (what first, then next):** [Learning roadmap](./learning-roadmap.md)

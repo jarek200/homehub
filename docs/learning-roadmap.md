@@ -24,8 +24,10 @@ Kubernetes is a **parallel track** (Mac/cloud lab) — not required on the Pi fo
 | Step | Status | Notes |
 |------|--------|-------|
 | FireBeetle ×2 on home Wi‑Fi | Done | `.36` (#1), `.37` (#2) — see [FireBeetle setup](./firebeetle-setup.md) |
-| FireBeetle #1 sensor firmware | Done | `environmental-sensor-ota` — env + SGP40 over HTTP; MQTT TBD |
+| FireBeetle #1 sensor firmware | Done | `environmental-sensor-ota` — 10 s VOC + MQTT publish; HTTP/OTA in maintenance mode |
 | ESP32-S3 AI Camera on Wi‑Fi | Done | `.38` — see [ESP32-S3 camera setup](./esp32-s3-camera-setup.md) |
+| ESP32-S3 physical camera on int | Done | `esp32s3-camera-cloud` — 30 s snapshots via MQTT |
+| ESP32-S3 physical camera on int | Done | `esp32s3-camera-cloud` — 30 s snapshots via MQTT |
 | ESP32 OTA (FireBeetle ×2 + S3) | Done | USB once, then `flash-esp-ota.sh` — see [FireBeetle setup](./firebeetle-setup.md) |
 | CH340 driver + Arduino CLI on Mac | Done | `flash-esp-usb.sh`, `flash-esp-ota.sh`, `list-esp-devices.sh` |
 | HomeHub int deployed | Project | https://homehub-int.apps.jarekwyprzal.com |
@@ -61,9 +63,9 @@ Kubernetes is a **parallel track** (Mac/cloud lab) — not required on the Pi fo
 | 2.2 | Wire multifunctional env sensor + SGP40 | **Done** | I2C `0x22` + `0x59`; env switch set to I2C — see [FireBeetle setup](./firebeetle-setup.md) |
 | 2.3 | Flash sensor + Wi‑Fi + OTA firmware | **Done** | `environmental-sensor-ota` — `bash scripts/flash-esp-sensor-ota.sh firebeetle-1` |
 | 2.4 | Verify local readings | **Done** | `bash scripts/read-esp-readings.sh firebeetle-1` |
-| 2.5 | Register **Humidity sensor** in HomeHub UI | Todo | Devices → Add → type **Humidity sensor** |
-| 2.6 | Publish telemetry to IoT Core | Todo | MQTT + device cert (same pattern as device simulator) |
-| 2.7 | Optional: UI for pressure / VOC | Todo | Today humidity chart only for `humidity-sensor` type |
+| 2.5 | Register **Environmental sensor (physical)** in HomeHub UI | **Done** | Type **Environmental sensor**, runtime **Physical device** — provisioning leaves simulator `enabled: false` |
+| 2.6 | Publish telemetry to IoT Core | **Done** | `SST_STAGE=int bash scripts/provision-esp-iot.sh firebeetle-1 <deviceId>` — 10 s VOC, 1–60 min MQTT |
+| 2.7 | UI for temperature / humidity / VOC + thresholds | **Done** | Separate charts; cloud-authoritative `humidityWarning` / `temperatureWarning` / `vocIndexWarning` |
 
 **Learn:** I2C on ESP32, JSON telemetry, thresholds in device config.
 
@@ -157,9 +159,9 @@ Kubernetes is a **parallel track** (Mac/cloud lab) — not required on the Pi fo
 |----------------|---------------|
 | Raspberry Pi 5 + Camera Module 3 + pan-tilt | **Phase 1** |
 | FireBeetle ×2 + IO shields | **Phase 2** (#1 deployed; #2 spare) |
-| Multifunctional env sensor + SGP40 on #1 | **Phase 2** — firmware done; MQTT next |
+| Multifunctional env sensor + SGP40 on #1 | **Phase 2** — firmware + HomeHub cloud path ready |
 | BME280, PIR, magnetic switch | **Phase 2** on FireBeetle #2 (pick one) |
-| ESP32-S3 AI Camera (£19) | Phase 1 optional; **Phase 4** as second camera spoke |
+| ESP32-S3 AI Camera (£19) | **Done on int** (physical camera); Phase 4 optional as Greengrass spoke |
 | Batteries, enclosures | When mounting nodes permanently |
 | LED switch | Phase 2+ (indicator on a FireBeetle) |
 
@@ -175,7 +177,12 @@ pnpm sso
 SST_STAGE=int pnpm device:deploy
 ssh pi
 
-# Phase 2 — FireBeetle sensors (local HTTP today)
+# Phase 2 — First spoke sensor (still direct to cloud)
+
+```bash
+# Register in UI, then provision IoT creds and OTA flash
+SST_STAGE=int bash scripts/provision-esp-iot.sh firebeetle-1 <deviceId>
+```
 source ~/.zshrc && bash scripts/flash-esp-sensor-ota.sh firebeetle-1
 bash scripts/read-esp-readings.sh firebeetle-1
 bash scripts/identify-esp-device.sh firebeetle-1

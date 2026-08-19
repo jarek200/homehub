@@ -10,7 +10,11 @@ import boto3
 from ulid import new as new_ulid
 
 from homehub_api.config import DEMO_TENANT_PK
-from homehub_api.device_configuration import as_config_json, configuration_for_create
+from homehub_api.device_configuration import (
+    as_config_json,
+    configuration_for_create,
+    normalize_configuration_update,
+)
 from homehub_api.errors import ApiError
 from homehub_api.models import (
     CreateDeviceRequest,
@@ -96,6 +100,7 @@ def _to_device(item: dict[str, Any]) -> DeviceResponse:
         name=str(item["name"]),
         type=device_type,
         location=item.get("location"),
+        runtimeKind=item.get("runtimeKind", "simulated"),
         status=item.get("status", "UNKNOWN"),
         lifecycleStatus=item.get("lifecycleStatus", "READY"),
         thingName=item.get("thingName"),
@@ -182,7 +187,12 @@ class HubStore:
             "name": payload.name,
             "type": payload.type,
             "location": payload.location,
-            "configuration": configuration_for_create(payload.type, payload.configuration),
+            "runtimeKind": payload.runtime_kind,
+            "configuration": configuration_for_create(
+                payload.type,
+                payload.configuration,
+                runtime_kind=payload.runtime_kind,
+            ),
             "status": "UNKNOWN",
             "lifecycleStatus": "PROVISIONING",
             "createdAt": timestamp,
@@ -209,7 +219,12 @@ class HubStore:
         updates.pop("type", None)
 
         if "configuration" in updates:
-            updates["configuration"] = as_config_json(payload.configuration)
+            updates["configuration"] = normalize_configuration_update(
+                existing.type,
+                existing.runtime_kind,
+                existing.configuration,
+                payload.configuration,
+            )
 
         expression_names: dict[str, str] = {}
         expression_values: dict[str, Any] = {}
@@ -254,6 +269,9 @@ class HubStore:
         )
 
     def _notify_simulator_power(self, device_id: str, status: str) -> None:
+        device = self.get_device(device_id)
+        if device and device.runtime_kind == "physical":
+            return
         queue_url = os.environ.get("SIMULATOR_QUEUE_URL", "").strip()
         if not queue_url:
             return

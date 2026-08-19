@@ -9,6 +9,11 @@ import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
 import { buildConfiguration, type DeviceThresholds } from '$lib/device-thresholds';
 import {
+  REPORTING_INTERVAL_PRESETS_MINUTES,
+  reportingMinutesFromConfiguration,
+  reportingSecondsFromMinutes,
+} from '$lib/device-power-settings';
+import {
   formatDeviceType,
   formatLifecycleStatus,
   formatOperatingStatus,
@@ -17,6 +22,7 @@ import {
   inputMinimal,
   isDeviceOn,
   lifecycleColorClass,
+  normalizeDeviceType,
   operatingStatusAriaLabel,
   parseThresholds,
   statusColorClass,
@@ -43,6 +49,12 @@ let statusToggling = $state(false);
 let name = $state('');
 let location = $state('');
 let thresholds = $state<DeviceThresholds>({});
+let reportingMinutes = $state(5);
+let maintenanceMode = $state(false);
+
+const isPhysicalEnvironmental = $derived(
+  device.runtimeKind === 'physical' && normalizeDeviceType(device.type) === 'environmental-sensor'
+);
 
 const recentReadings = $derived(
   device.recentReadings?.length
@@ -69,6 +81,12 @@ function syncForm(next: Device) {
   name = next.name;
   location = next.location ?? '';
   thresholds = parseThresholds(next.configuration, next.type);
+  reportingMinutes = reportingMinutesFromConfiguration(next.configuration);
+  maintenanceMode = Boolean(next.configuration?.maintenanceMode);
+}
+
+function clampReportingMinutesInput() {
+  reportingMinutes = Math.min(60, Math.max(1, Math.round(reportingMinutes)));
 }
 
 function toggleExpanded() {
@@ -114,11 +132,20 @@ async function toggleStatus() {
 async function handleUpdate() {
   saving = true;
   actionError = '';
+  if (isPhysicalEnvironmental) {
+    clampReportingMinutesInput();
+  }
   try {
     const updated = await updateDevice(device.deviceId, {
       name: name.trim(),
       location: location.trim(),
-      configuration: buildConfiguration(device.type, thresholds, device.configuration),
+      configuration: buildConfiguration(device.type, thresholds, device.configuration, {
+        reportingIntervalSeconds: isPhysicalEnvironmental
+          ? reportingSecondsFromMinutes(reportingMinutes)
+          : device.configuration?.reportingIntervalSeconds,
+        maintenanceMode: isPhysicalEnvironmental ? maintenanceMode : device.configuration?.maintenanceMode,
+        powerMode: isPhysicalEnvironmental ? 'low-power-voc' : device.configuration?.powerMode,
+      }),
     });
     syncForm(updated);
     editing = false;
@@ -342,6 +369,58 @@ $effect(() => {
               </p>
             {/if}
           </div>
+          {#if isPhysicalEnvironmental}
+            <div class="mt-4 flex flex-col gap-2">
+              <Label for={fieldId('reporting-minutes')} class="text-muted-foreground text-xs font-normal">
+                Reporting interval (minutes)
+              </Label>
+              {#if editing}
+                <div class="flex flex-wrap gap-2">
+                  {#each REPORTING_INTERVAL_PRESETS_MINUTES as preset (preset)}
+                    <Button
+                      type="button"
+                      variant={reportingMinutes === preset ? 'default' : 'outline'}
+                      size="sm"
+                      class="rounded-sm"
+                      onclick={() => {
+                        reportingMinutes = preset;
+                      }}
+                    >
+                      {preset}m
+                    </Button>
+                  {/each}
+                </div>
+                <Input
+                  id={fieldId('reporting-minutes')}
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={1}
+                  bind:value={reportingMinutes}
+                  class={inputMinimal}
+                />
+                <p class="text-[0.7rem] text-muted-foreground leading-relaxed">
+                  Changes apply when the device next connects. If it is sleeping on a longer
+                  interval, the update can take up to that long.
+                </p>
+                <label class="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    class={checkboxClass}
+                    bind:checked={maintenanceMode}
+                  />
+                  Maintenance mode (stay awake for HTTP/OTA on next wake)
+                </label>
+              {:else}
+                <p class="text-sm text-foreground">
+                  Every {reportingMinutes} min
+                  {#if maintenanceMode}
+                    · Maintenance mode requested
+                  {/if}
+                </p>
+              {/if}
+            </div>
+          {/if}
         </div>
 
         <div class={detailCellClass}>
