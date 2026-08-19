@@ -29,10 +29,26 @@ export const CAMERA_REPORTING_PRESETS_SECONDS = [15, 30, 60, 120, 300, 600, 1800
 
 export type CameraCaptureMode = 'both' | 'interval' | 'motion';
 
+export type CameraPowerMode = 'always-on' | 'sleep-motion';
+
 export const CAMERA_CAPTURE_MODES: { id: CameraCaptureMode; label: string }[] = [
   { id: 'both', label: 'Motion + timed snapshots' },
   { id: 'motion', label: 'Motion only' },
   { id: 'interval', label: 'Timed only' },
+];
+
+export const CAMERA_POWER_MODES: { id: CameraPowerMode; label: string; description: string }[] = [
+  {
+    id: 'always-on',
+    label: 'Always on',
+    description: 'Wi‑Fi stays connected for timed snapshots and instant settings sync.',
+  },
+  {
+    id: 'sleep-motion',
+    label: 'Sleep between captures',
+    description:
+      'Camera sleeps most of the time and wakes on PIR motion to take a snapshot. Uses light sleep (GPIO44 cannot wake from deep sleep on ESP32-S3).',
+  },
 ];
 
 export interface CameraSettings {
@@ -47,6 +63,7 @@ export interface CameraSettings {
   motionEnabled: boolean;
   motionCooldownSeconds: number;
   captureMode: CameraCaptureMode;
+  powerMode: CameraPowerMode;
 }
 
 export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
@@ -61,6 +78,7 @@ export const DEFAULT_CAMERA_SETTINGS: CameraSettings = {
   motionEnabled: true,
   motionCooldownSeconds: 15,
   captureMode: 'both',
+  powerMode: 'always-on',
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -138,6 +156,10 @@ export function cameraSettingsFromConfiguration(
       parsed.captureMode === 'both'
         ? parsed.captureMode
         : DEFAULT_CAMERA_SETTINGS.captureMode,
+    powerMode:
+      parsed.powerMode === 'sleep-motion' || parsed.powerMode === 'always-on'
+        ? parsed.powerMode
+        : DEFAULT_CAMERA_SETTINGS.powerMode,
   };
 }
 
@@ -158,6 +180,7 @@ export function buildCameraConfiguration(
     motionEnabled: settings.motionEnabled,
     motionCooldownSeconds: settings.motionCooldownSeconds,
     captureMode: settings.captureMode,
+    powerMode: settings.powerMode,
   };
 }
 
@@ -179,6 +202,7 @@ export function formatCameraSettingsSummary(
   if (settings.vflip) parts.push('Flipped');
   if (settings.hmirror) parts.push('Mirrored');
   if (settings.motionEnabled) parts.push('PIR on');
+  if (settings.powerMode === 'sleep-motion') parts.push('Sleep on motion');
   return parts.join(' · ');
 }
 

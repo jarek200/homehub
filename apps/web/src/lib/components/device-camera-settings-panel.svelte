@@ -9,6 +9,7 @@ import {
   CAMERA_FRAME_SIZES,
   CAMERA_JPEG_QUALITY_MAX,
   CAMERA_JPEG_QUALITY_MIN,
+  CAMERA_POWER_MODES,
   CAMERA_REPORTING_MAX_SECONDS,
   CAMERA_REPORTING_MIN_SECONDS,
   CAMERA_REPORTING_PRESETS_SECONDS,
@@ -184,10 +185,37 @@ async function saveSettings() {
   {#if isPhysical}
     <div class="space-y-4 rounded-sm border border-border p-4">
       <div>
+        <h4 class="text-sm font-medium">Power mode</h4>
+        <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
+          Sleep mode turns Wi‑Fi off between captures and wakes on PIR motion. Enable maintenance
+          mode (environmental sensor setting) to keep the camera awake for OTA updates.
+        </p>
+      </div>
+      <div class="flex flex-col gap-2">
+        {#each CAMERA_POWER_MODES as mode (mode.id)}
+          <label class="flex cursor-pointer gap-3 rounded-sm border border-border p-3 text-sm">
+            <input
+              type="radio"
+              name="{device.deviceId}-power-mode"
+              value={mode.id}
+              bind:group={settings.powerMode}
+              class="mt-1"
+            />
+            <span>
+              <span class="font-medium">{mode.label}</span>
+              <span class="mt-0.5 block text-[0.7rem] text-muted-foreground">{mode.description}</span>
+            </span>
+          </label>
+        {/each}
+      </div>
+    </div>
+
+    <div class="space-y-4 rounded-sm border border-border p-4">
+      <div>
         <h4 class="text-sm font-medium">Motion sensor (PIR)</h4>
         <p class="mt-1 text-[0.7rem] text-muted-foreground leading-relaxed">
-          Gravity PIR on GPIO44. Motion triggers an extra snapshot; timed snapshots still run unless
-          you choose motion-only mode.
+          Gravity PIR on GPIO44. In always-on mode, motion triggers extra snapshots. In sleep mode,
+          motion is the only wake source.
         </p>
       </div>
       <label class="flex items-center gap-2 text-sm">
@@ -233,7 +261,11 @@ async function saveSettings() {
 
   <div class="flex flex-col gap-2">
     <Label for="{device.deviceId}-reporting-seconds" class="text-muted-foreground text-xs font-normal">
-      Snapshot interval
+      {#if isPhysical && settings.powerMode === 'sleep-motion'}
+        Settings sync interval
+      {:else}
+        Snapshot interval
+      {/if}
     </Label>
     <div class="flex flex-wrap gap-2">
       {#each CAMERA_REPORTING_PRESETS_SECONDS as preset (preset)}

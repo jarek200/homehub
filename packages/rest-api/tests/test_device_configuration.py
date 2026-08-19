@@ -54,6 +54,16 @@ def test_normalize_camera_configuration_defaults() -> None:
     assert merged["frameSize"] == "qvga"
     assert merged["jpegQuality"] == 12
     assert merged["vflip"] is True
+    assert merged["powerMode"] == "always-on"
+
+
+def test_normalize_camera_configuration_sleep_motion() -> None:
+    from homehub_api.device_configuration import _normalize_camera_configuration
+
+    merged = _normalize_camera_configuration({"powerMode": "sleep-motion"})
+    assert merged["powerMode"] == "sleep-motion"
+    merged_invalid = _normalize_camera_configuration({"powerMode": "deep-sleep"})
+    assert merged_invalid["powerMode"] == "always-on"
 
 
 def test_normalize_camera_configuration_clamps_reporting() -> None:

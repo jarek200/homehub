@@ -25,7 +25,7 @@ export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 export const RUNTIME_KINDS = ['simulated', 'physical'] as const;
 export type RuntimeKind = (typeof RUNTIME_KINDS)[number];
 
-export const POWER_MODES = ['low-power-voc', 'maintenance'] as const;
+export const POWER_MODES = ['low-power-voc', 'maintenance', 'always-on', 'sleep-motion'] as const;
 export type PowerMode = (typeof POWER_MODES)[number];
 
 /** Device settings exposed by the REST API (object, not a JSON string). */

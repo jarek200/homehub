@@ -186,6 +186,24 @@ bool applyConfigurationJson(JsonVariant desired, CameraSettings& settings) {
       changed = true;
     }
   }
+  if (desired["powerMode"].is<const char*>()) {
+    const char* raw = desired["powerMode"].as<const char*>();
+    String next = "always-on";
+    if (raw && strcmp(raw, "sleep-motion") == 0) {
+      next = "sleep-motion";
+    }
+    if (settings.powerMode != next) {
+      settings.powerMode = next;
+      changed = true;
+    }
+  }
+  if (desired["maintenanceMode"].is<bool>()) {
+    const bool next = desired["maintenanceMode"].as<bool>();
+    if (settings.maintenanceMode != next) {
+      settings.maintenanceMode = next;
+      changed = true;
+    }
+  }
   return changed;
 }
 
@@ -202,6 +220,8 @@ void storeSettings(const CameraSettings& settings) {
   prefs.putBool("motionEn", settings.motionEnabled);
   prefs.putUInt("motionCd", settings.motionCooldownSeconds);
   prefs.putString("captureMd", settings.captureMode);
+  prefs.putString("powerMd", settings.powerMode);
+  prefs.putBool("maint", settings.maintenanceMode);
   prefs.end();
 }
 
@@ -254,8 +274,13 @@ bool cameraSettingsLoad(CameraSettings& settings) {
   settings.motionEnabled = prefs.getBool("motionEn", true);
   settings.motionCooldownSeconds = prefs.getUInt("motionCd", 15);
   settings.captureMode = prefs.getString("captureMd", "both");
+  settings.powerMode = prefs.getString("powerMd", "always-on");
+  settings.maintenanceMode = prefs.getBool("maint", false);
   if (settings.captureMode != "interval" && settings.captureMode != "motion") {
     settings.captureMode = "both";
+  }
+  if (settings.powerMode != "sleep-motion") {
+    settings.powerMode = "always-on";
   }
   if (settings.motionCooldownSeconds < 5) settings.motionCooldownSeconds = 5;
   if (settings.motionCooldownSeconds > 300) settings.motionCooldownSeconds = 300;
@@ -371,4 +396,10 @@ void cameraSettingsToJson(const CameraSettings& settings, JsonDocument& document
   document["motionEnabled"] = settings.motionEnabled;
   document["motionCooldownSeconds"] = settings.motionCooldownSeconds;
   document["captureMode"] = settings.captureMode;
+  document["powerMode"] = settings.powerMode;
+  document["maintenanceMode"] = settings.maintenanceMode;
+}
+
+bool cameraSettingsSleepMotion(const CameraSettings& settings) {
+  return settings.powerMode == "sleep-motion";
 }

@@ -53,6 +53,8 @@ export function getDefaultConfiguration(deviceType?: string): DeviceConfiguratio
       motionEnabled: true,
       motionCooldownSeconds: 15,
       captureMode: 'both',
+      powerMode: 'always-on',
+      maintenanceMode: false,
     };
   }
   if (normalizedType === 'environmental-sensor') {

@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <esp_camera.h>
+#include <esp_sleep.h>
 #include <mbedtls/base64.h>
 #include <time.h>
 
@@ -35,6 +36,7 @@
 constexpr size_t kMaxJpegBytes = 90 * 1024;
 constexpr uint32_t kMqttTimeoutMs = 15000;
 constexpr uint32_t kSettingsRefreshMs = 60000;
+constexpr uint32_t kSleepMaintenanceMinSeconds = 60;
 
 WiFiClientSecure secureClient;
 MqttClient mqttClient(secureClient);
@@ -43,6 +45,8 @@ CameraSettings settings;
 unsigned long nextCaptureMs = 0;
 unsigned long nextSettingsRefreshMs = 0;
 bool cameraReady = false;
+bool sleepMotionMode = false;
+bool maintenanceMode = false;
 bool lastPublishSucceeded = false;
 String lastError;
 size_t lastJpegBytes = 0;
@@ -50,6 +54,7 @@ size_t lastPayloadBytes = 0;
 bool lastPirHigh = false;
 unsigned long lastMotionCaptureMs = 0;
 String lastCaptureReason;
+String lastWakeReason;
 
 static void initializeOta() {
   ArduinoOTA.setHostname(DEVICE_HOSTNAME);
@@ -57,6 +62,22 @@ static void initializeOta() {
     ArduinoOTA.setPassword(OTA_PASSWORD);
   }
   ArduinoOTA.begin();
+}
+
+static bool ensureWifi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return true;
+  }
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(DEVICE_HOSTNAME);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  for (int attempt = 0; attempt < 80; ++attempt) {
+    if (WiFi.status() == WL_CONNECTED) {
+      return true;
+    }
+    delay(250);
+  }
+  return false;
 }
 
 static bool ensureTime() {
@@ -199,12 +220,15 @@ static void refreshSettingsIfDue() {
         next.contrast != settings.contrast || next.vflip != settings.vflip ||
         next.hmirror != settings.hmirror || next.motionEnabled != settings.motionEnabled ||
         next.motionCooldownSeconds != settings.motionCooldownSeconds ||
-        next.captureMode != settings.captureMode;
+        next.captureMode != settings.captureMode || next.powerMode != settings.powerMode ||
+        next.maintenanceMode != settings.maintenanceMode;
     if (changed) {
       settings = next;
       cameraSettingsApply(settings, cameraReady);
     }
   }
+  maintenanceMode = settings.maintenanceMode;
+  sleepMotionMode = cameraSettingsSleepMotion(settings) && !maintenanceMode;
 }
 
 static void handleStatus() {
@@ -217,6 +241,8 @@ static void handleStatus() {
   document["lastJpegBytes"] = lastJpegBytes;
   document["lastPayloadBytes"] = lastPayloadBytes;
   document["lastCaptureReason"] = lastCaptureReason;
+  document["lastWakeReason"] = lastWakeReason;
+  document["sleepMotionMode"] = sleepMotionMode;
   cameraSettingsToJson(settings, document);
   homehubPirToJson(document, homehubPirRead(), lastMotionCaptureMs);
   String body;
@@ -224,28 +250,120 @@ static void handleStatus() {
   statusServer.send(200, "application/json", body);
 }
 
+static bool shouldCaptureOnSleepWake() {
+  if (!settings.motionEnabled) {
+    return false;
+  }
+  const esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  if (homehubPirWakeupWasMotion()) {
+    lastWakeReason = "motion";
+    return true;
+  }
+  if (cause == ESP_SLEEP_WAKEUP_UNDEFINED && homehubPirRead()) {
+    lastWakeReason = "boot-motion";
+    return true;
+  }
+  if (homehubPirWakeupWasTimer() && homehubPirRead()) {
+    lastWakeReason = "timer-motion";
+    return true;
+  }
+  if (homehubPirWakeupWasTimer()) {
+    lastWakeReason = "timer";
+  } else if (cause == ESP_SLEEP_WAKEUP_UNDEFINED) {
+    lastWakeReason = "boot";
+  } else {
+    lastWakeReason = "unknown";
+  }
+  return false;
+}
+
+static void powerDownForSleep() {
+  if (cameraReady) {
+    esp_camera_deinit();
+    cameraReady = false;
+  }
+  statusServer.stop();
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+}
+
+static void runSleepMotionCycle() {
+  if (!ensureWifi()) {
+    homehubPirLightSleep(kSleepMaintenanceMinSeconds);
+    return;
+  }
+
+  statusServer.begin();
+  CameraSettings next = settings;
+  if (cameraSettingsFetchFromShadow(next)) {
+    settings = next;
+  }
+  maintenanceMode = settings.maintenanceMode;
+  if (maintenanceMode) {
+    sleepMotionMode = false;
+    if (!cameraReady) {
+      cameraSettingsApply(settings, cameraReady);
+    }
+    nextCaptureMs = millis();
+    nextSettingsRefreshMs = millis() + kSettingsRefreshMs;
+    return;
+  }
+  if (!cameraSettingsSleepMotion(settings)) {
+    sleepMotionMode = false;
+    if (!cameraReady) {
+      cameraSettingsApply(settings, cameraReady);
+    }
+    nextCaptureMs = millis();
+    nextSettingsRefreshMs = millis() + kSettingsRefreshMs;
+    return;
+  }
+
+  if (shouldCaptureOnSleepWake()) {
+    lastCaptureReason = "motion";
+    if (!cameraReady) {
+      cameraSettingsApply(settings, cameraReady);
+    }
+    runCloudCycle();
+    lastMotionCaptureMs = millis();
+    homehubPirWaitUntilLow(15000);
+    delay(settings.motionCooldownSeconds * 1000UL);
+  }
+
+  const uint32_t maintenanceWakeSeconds =
+      settings.reportingIntervalSeconds < kSleepMaintenanceMinSeconds
+          ? kSleepMaintenanceMinSeconds
+          : settings.reportingIntervalSeconds;
+  powerDownForSleep();
+  homehubPirLightSleep(maintenanceWakeSeconds);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1500);
-  WiFi.mode(WIFI_STA);
-  WiFi.setHostname(DEVICE_HOSTNAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(250);
-  }
+  cameraSettingsLoad(settings);
+  homehubPirBegin();
+  ensureWifi();
 
   initializeOta();
   statusServer.on("/status", handleStatus);
   statusServer.begin();
-  cameraSettingsLoad(settings);
   cameraSettingsFetchFromShadow(settings);
-  homehubPirBegin();
-  cameraSettingsApply(settings, cameraReady);
-  nextCaptureMs = millis();
-  nextSettingsRefreshMs = millis() + kSettingsRefreshMs;
+  maintenanceMode = settings.maintenanceMode;
+  sleepMotionMode = cameraSettingsSleepMotion(settings) && !maintenanceMode;
+
+  if (!sleepMotionMode) {
+    cameraSettingsApply(settings, cameraReady);
+    nextCaptureMs = millis();
+    nextSettingsRefreshMs = millis() + kSettingsRefreshMs;
+  }
 }
 
 void loop() {
+  if (sleepMotionMode) {
+    runSleepMotionCycle();
+    return;
+  }
+
   ArduinoOTA.handle();
   statusServer.handleClient();
   if (WiFi.status() != WL_CONNECTED) {

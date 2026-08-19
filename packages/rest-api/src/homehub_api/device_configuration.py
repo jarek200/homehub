@@ -12,7 +12,8 @@ from homehub_api.config import INPUT_LIMITS
 # Internal (Dynamo / shadow) may still be a JSON string; API payloads are objects only.
 ConfigInput = str | dict[str, Any] | BaseModel | None
 
-PowerMode = Literal["low-power-voc", "maintenance"]
+PowerMode = Literal["low-power-voc", "maintenance", "always-on", "sleep-motion"]
+CameraPowerMode = Literal["always-on", "sleep-motion"]
 CameraFrameSize = Literal[
     "qqvga",
     "qcif",
@@ -164,6 +165,8 @@ CAMERA_DEFAULT_CONFIGURATION: dict[str, Any] = {
     "motionEnabled": True,
     "motionCooldownSeconds": 15,
     "captureMode": "both",
+    "powerMode": "always-on",
+    "maintenanceMode": False,
 }
 
 ENVIRONMENTAL_DEFAULT_CONFIGURATION: dict[str, Any] = {
@@ -231,6 +234,12 @@ def _normalize_camera_configuration(data: dict[str, Any]) -> dict[str, Any]:
         merged["motionCooldownSeconds"] = CAMERA_DEFAULT_CONFIGURATION["motionCooldownSeconds"]
     else:
         merged["motionCooldownSeconds"] = max(5, min(300, cooldown))
+    power_mode = merged.get("powerMode")
+    if power_mode not in get_args(CameraPowerMode):
+        merged["powerMode"] = CAMERA_DEFAULT_CONFIGURATION["powerMode"]
+    maintenance_mode = merged.get("maintenanceMode")
+    if not isinstance(maintenance_mode, bool):
+        merged["maintenanceMode"] = CAMERA_DEFAULT_CONFIGURATION["maintenanceMode"]
     return _clamp_camera_reporting_interval(merged)
 
 
