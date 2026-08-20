@@ -216,22 +216,40 @@ export function metricShortLabel(key: string): string {
   return METRIC_SHORT_LABELS[key] ?? key;
 }
 
+function formatNumericMetric(value: number): string {
+  return value.toFixed(1);
+}
+
+export function formatBatteryReading(metrics: ReadingMetrics): string | null {
+  const percent = metrics.batteryPercent;
+  const voltage = metrics.batteryVoltage;
+  const hasPercent = typeof percent === 'number';
+  const hasVoltage = typeof voltage === 'number';
+  if (!hasPercent && !hasVoltage) return null;
+  if (hasPercent && hasVoltage) {
+    return `${Math.round(percent)}% / ${voltage.toFixed(1)} V`;
+  }
+  if (hasPercent) return `${Math.round(percent)}%`;
+  return `${voltage.toFixed(1)} V`;
+}
+
 export function formatMetricValue(key: string, value: number | boolean): string {
   if (typeof value === 'boolean') {
     if (key === 'heat') return value ? 'Heat alarm' : 'Normal';
     return value ? 'Yes' : 'No';
   }
-  if (key === 'temperature') return `${value}°C`;
-  if (key === 'humidity') return `${value}%`;
-  if (key === 'co') return `${value} ppm`;
-  if (key === 'co2') return `${value} ppm`;
-  if (key === 'pressureHpa') return `${value} hPa`;
-  if (key === 'lightLux') return `${value} lx`;
-  if (key === 'uvMwCm2') return `${value} mW/cm²`;
-  if (key === 'vocIndex') return String(value);
-  if (key === 'batteryVoltage') return `${value} V`;
-  if (key === 'batteryPercent') return `${value}%`;
-  return String(value);
+  const formatted = formatNumericMetric(value);
+  if (key === 'temperature') return `${formatted}°C`;
+  if (key === 'humidity') return `${formatted}%`;
+  if (key === 'co') return `${formatted} ppm`;
+  if (key === 'co2') return `${formatted} ppm`;
+  if (key === 'pressureHpa') return `${formatted} hPa`;
+  if (key === 'lightLux') return `${formatted} lx`;
+  if (key === 'uvMwCm2') return `${formatted} mW/cm²`;
+  if (key === 'vocIndex') return formatted;
+  if (key === 'batteryVoltage') return `${formatted} V`;
+  if (key === 'batteryPercent') return `${formatted}%`;
+  return formatted;
 }
 
 export function formatReadingSummary(reading: Reading, deviceType: string): string {
@@ -249,18 +267,27 @@ export function formatReadingSummary(reading: Reading, deviceType: string): stri
   return 'Normal';
 }
 
+export function primaryMetricKey(
+  deviceType: string,
+  reading: Reading | null | undefined
+): string | undefined {
+  if (!reading) return undefined;
+  const metrics = readingMetrics(reading, deviceType);
+  const profile = profileForDeviceType(deviceType);
+  return profile?.summaryKeys.find((key) => metrics[key] != null);
+}
+
 export function formatLastReadingPrimary(
   deviceType: string,
   reading: Reading | null | undefined
 ): string {
   if (!reading) return '—';
   const metrics = readingMetrics(reading, deviceType);
-  const profile = profileForDeviceType(deviceType);
-  const primaryKey = profile?.summaryKeys.find((key) => metrics[key] != null);
+  const primaryKey = primaryMetricKey(deviceType, reading);
   if (primaryKey) {
     const value = metrics[primaryKey];
     if (value != null) {
-      return `${metricLabel(primaryKey)}: ${formatMetricValue(primaryKey, value)}`;
+      return formatMetricValue(primaryKey, value);
     }
   }
   if (reading.alarm || reading.state === 'warning') return 'Warning';
@@ -308,6 +335,16 @@ export function summaryMetricKeys(deviceType: string, reading: Reading | null): 
   const keys = [...(profile?.summaryKeys ?? []), ...(profile?.detailKeys ?? [])];
   if (keys.length === 0) return Object.keys(metrics).filter((key) => metrics[key] != null);
   return keys.filter((key) => metrics[key] != null);
+}
+
+/** Stat tiles, excluding the Latest primary metric and separate battery fields. */
+export function tileMetricKeys(deviceType: string, reading: Reading | null): string[] {
+  const keys = summaryMetricKeys(deviceType, reading);
+  if (!reading) return keys;
+  const primaryKey = primaryMetricKey(deviceType, reading);
+  return keys.filter(
+    (key) => key !== primaryKey && key !== 'batteryVoltage' && key !== 'batteryPercent'
+  );
 }
 
 export function isBooleanMetric(key: string): boolean {

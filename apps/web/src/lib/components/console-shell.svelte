@@ -9,9 +9,10 @@ import { auth, type User } from '$lib/stores/auth';
 interface Props {
   children?: Snippet;
   actions?: Snippet;
+  dense?: boolean;
 }
 
-let { children, actions }: Props = $props();
+let { children, actions, dense = false }: Props = $props();
 
 let authState = $state({ user: null as User | null, isAuthenticated: false });
 
@@ -96,9 +97,9 @@ async function handleLogout() {
     </div>
   </header>
 
-  <main class="w-full px-6 py-10 md:px-10">
+  <main class="w-full px-6 md:px-10 {dense ? 'py-6' : 'py-10'}">
     {#if actions}
-      <div class="mb-8 flex w-full flex-wrap items-center justify-end gap-2">
+      <div class="flex w-full flex-wrap items-center justify-start gap-2 {dense ? 'mb-3' : 'mb-8'}">
         {@render actions()}
       </div>
     {/if}

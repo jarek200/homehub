@@ -4,7 +4,9 @@ import {
   type DeviceThresholds,
   defaultReportingIntervalSeconds,
   defaultThresholdsForType,
+  formatMetricThreshold,
   formatThresholdSummary,
+  isMetricWarning,
   parseThresholds,
 } from '$lib/device-thresholds';
 import { formatCameraSettingsSummary } from '$lib/device-camera-settings';
@@ -18,7 +20,9 @@ export {
   DEVICE_TYPES,
   type DeviceType,
   defaultThresholdsForType,
+  formatMetricThreshold,
   formatThresholdSummary,
+  isMetricWarning,
   normalizeDeviceType,
   parseThresholds,
 };
@@ -221,10 +225,6 @@ export function formatConfigurationSummary(
       const tilt = typeof parsed?.tilt === 'number' ? parsed.tilt : 90;
       parts.push(`Pan ${pan}° · Tilt ${tilt}°`);
       return parts.join(' · ');
-    }
-    if (deviceType) {
-      const thresholdSummary = formatThresholdSummary(configuration, deviceType);
-      if (thresholdSummary) parts.push(thresholdSummary);
     }
     return parts.length ? parts.join(' · ') : 'Default settings';
   } catch {

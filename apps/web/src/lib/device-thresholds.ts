@@ -142,6 +142,43 @@ export function defaultReportingIntervalSeconds(deviceType: string): number {
   return 10;
 }
 
+const METRIC_THRESHOLD_KEY: Partial<Record<string, ThresholdKey>> = {
+  temperature: 'temperatureWarning',
+  humidity: 'humidityWarning',
+  co: 'coAlarm',
+  vocIndex: 'vocIndexWarning',
+};
+
+export function formatMetricThreshold(
+  configuration: DeviceConfiguration | null | undefined,
+  deviceType: string,
+  metricKey: string
+): string | null {
+  const thresholdKey = METRIC_THRESHOLD_KEY[metricKey];
+  if (!thresholdKey) return null;
+  const field = thresholdFieldsForType(deviceType).find((item) => item.key === thresholdKey);
+  if (!field) return null;
+  const value = parseThresholds(configuration, deviceType)[field.key];
+  if (value == null) return null;
+  return `Warning ${value}${field.unit}`;
+}
+
+export function isMetricWarning(
+  metricKey: string,
+  value: number | boolean | undefined,
+  configuration: DeviceConfiguration | null | undefined,
+  deviceType: string
+): boolean {
+  if (typeof value !== 'number') return false;
+  const thresholdKey = METRIC_THRESHOLD_KEY[metricKey];
+  if (!thresholdKey) return false;
+  if (!thresholdFieldsForType(deviceType).some((field) => field.key === thresholdKey)) {
+    return false;
+  }
+  const limit = parseThresholds(configuration, deviceType)[thresholdKey];
+  return limit != null && value >= limit;
+}
+
 export function formatThresholdSummary(
   configuration: DeviceConfiguration | null | undefined,
   deviceType: string

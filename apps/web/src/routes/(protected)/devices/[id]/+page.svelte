@@ -93,30 +93,23 @@ async function loadDevice() {
 }
 </script>
 
-<ConsoleShell>
+<ConsoleShell dense>
   {#snippet actions()}
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      class="rounded-sm border-border"
-      aria-label="Back to devices"
-      onclick={() => goto('/devices')}
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        class="size-4"
-        aria-hidden="true"
-      >
-        <polyline points="15 18 9 12 15 6" />
-      </svg>
-    </Button>
+    <nav aria-label="Breadcrumb" class="min-w-0 text-[0.7rem] text-muted-foreground">
+      <ol class="flex min-w-0 items-center gap-2">
+        <li>
+          <a href="/devices" class="hover:text-foreground">Devices</a>
+        </li>
+        <li aria-hidden="true">/</li>
+        <li class="min-w-0 truncate text-foreground">
+          {#if loading}
+            …
+          {:else}
+            {device?.name ?? 'Device'}
+          {/if}
+        </li>
+      </ol>
+    </nav>
   {/snippet}
 
   {#if loading}
@@ -131,19 +124,16 @@ async function loadDevice() {
       Back to devices
     </Button>
   {:else}
-    <section class="space-y-3 border-border border-b pb-8">
-      <div>
-        <h2 class="font-display font-semibold text-lg tracking-tight">{device.name}</h2>
-        <p class="mt-1 text-[0.75rem] text-muted-foreground">
-          {formatDeviceType(device.type)}
-          {#if device.location}
-            · {device.location}
-          {/if}
-          ·
-          <span class={statusColorClass(device.status)}>{formatOperatingStatus(device.status)}</span>
-          · Last seen {formatWhen(device.lastSeenAt)}
-        </p>
-      </div>
+    <section class="space-y-1.5 border-border border-b pb-4">
+      <p class="text-[0.75rem] text-muted-foreground">
+        {formatDeviceType(device.type)}
+        {#if device.location}
+          · {device.location}
+        {/if}
+        ·
+        <span class={statusColorClass(device.status)}>{formatOperatingStatus(device.status)}</span>
+        · Last seen {formatWhen(device.lastSeenAt)}
+      </p>
 
       {#if device.lifecycleStatus === 'FAILED' && device.failureReason}
         <p class="text-[0.75rem] text-destructive">Provisioning failed: {device.failureReason}</p>
@@ -155,18 +145,14 @@ async function loadDevice() {
         </p>
       {/if}
 
-      <p class="break-all text-[0.7rem] text-muted-foreground">
-        {device.deviceId}
-        {#if device.thingName}
-          · {device.thingName}
-        {/if}
-        · Created {formatWhen(device.createdAt)}
+      <p class="text-[0.7rem] text-muted-foreground">
+        Created {formatWhen(device.createdAt)}
         · {formatConfigurationSummary(device.configuration, device.type)}
       </p>
     </section>
 
     {#if showCamera && device}
-      <section class="border-border border-b py-10">
+      <section class="border-border border-b py-6">
         <DeviceCameraPanel
           {device}
           onUpdated={(updated) => {
@@ -177,7 +163,7 @@ async function loadDevice() {
     {/if}
 
     {#if showReadings}
-      <section class="border-border border-b py-10">
+      <section class="border-border border-b py-6">
         <DeviceReadingsPanel
           deviceId={device.deviceId}
           deviceType={deviceType}
