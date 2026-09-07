@@ -9,6 +9,7 @@ import { onDestroy, onMount } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import ConsoleShell from '$lib/components/console-shell.svelte';
+import DeviceBatteryStatus from '$lib/components/device-battery-status.svelte';
 import DeviceCameraPanel from '$lib/components/device-camera-panel.svelte';
 import DeviceReadingsPanel from '$lib/components/device-readings-panel.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
@@ -124,31 +125,36 @@ async function loadDevice() {
       Back to devices
     </Button>
   {:else}
-    <section class="space-y-1.5 border-border border-b pb-4">
-      <p class="text-[0.75rem] text-muted-foreground">
-        {formatDeviceType(device.type)}
-        {#if device.location}
-          · {device.location}
-        {/if}
-        ·
-        <span class={statusColorClass(device.status)}>{formatOperatingStatus(device.status)}</span>
-        · Last seen {formatWhen(device.lastSeenAt)}
-      </p>
+    <section class="border-border border-b pb-4">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 space-y-1.5">
+          <p class="text-[0.75rem] text-muted-foreground">
+            {formatDeviceType(device.type)}
+            {#if device.location}
+              · {device.location}
+            {/if}
+            ·
+            <span class={statusColorClass(device.status)}>{formatOperatingStatus(device.status)}</span>
+            · Last seen {formatWhen(device.lastSeenAt)}
+          </p>
 
-      {#if device.lifecycleStatus === 'FAILED' && device.failureReason}
-        <p class="text-[0.75rem] text-destructive">Provisioning failed: {device.failureReason}</p>
-      {/if}
+          {#if device.lifecycleStatus === 'FAILED' && device.failureReason}
+            <p class="text-[0.75rem] text-destructive">Provisioning failed: {device.failureReason}</p>
+          {/if}
 
-      {#if isProvisioning}
-        <p class="text-[0.75rem] text-muted-foreground">
-          Provisioning IoT resources… this page refreshes automatically.
-        </p>
-      {/if}
+          {#if isProvisioning}
+            <p class="text-[0.75rem] text-muted-foreground">
+              Provisioning IoT resources… this page refreshes automatically.
+            </p>
+          {/if}
 
-      <p class="text-[0.7rem] text-muted-foreground">
-        Created {formatWhen(device.createdAt)}
-        · {formatConfigurationSummary(device.configuration, device.type)}
-      </p>
+          <p class="text-[0.7rem] text-muted-foreground">
+            Created {formatWhen(device.createdAt)}
+            · {formatConfigurationSummary(device.configuration, device.type)}
+          </p>
+        </div>
+        <DeviceBatteryStatus reading={readings[0] ?? null} {deviceType} />
+      </div>
     </section>
 
     {#if showCamera && device}

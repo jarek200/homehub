@@ -8,7 +8,6 @@ import { listDeviceReadingHistory } from '$lib/services/rest-api';
 import {
   chartMetricKeys,
   effectiveReadingState,
-  formatBatteryReading,
   formatLastReadingPrimary,
   formatMetricValue,
   isBooleanMetric,
@@ -46,8 +45,7 @@ const series = $derived(
 const latest = $derived(readings[0] ?? null);
 const totalReadings = $derived(readings.length);
 const latestMetrics = $derived(latest ? readingMetrics(latest, deviceType) : {});
-const batteryValue = $derived(formatBatteryReading(latestMetrics));
-const primaryKey = $derived(primaryMetricKey(deviceType, latest));
+const primaryKey = $derived(primaryMetricKey(deviceType, latest) ?? 'temperature');
 const statKeys = $derived(tileMetricKeys(deviceType, latest));
 const tableKeys = $derived(chartMetricKeys(deviceType, readings));
 const historyLimit = 50;
@@ -63,6 +61,9 @@ function readingState(reading: Reading) {
 }
 
 function metricValueClass(key: string, value: number | boolean | undefined) {
+  if (!formatMetricThreshold(configuration, deviceType, key)) {
+    return 'text-foreground';
+  }
   return readingStateClass({
     alarm: false,
     state: isMetricWarning(key, value, configuration, deviceType) ? 'warning' : 'normal',
@@ -109,41 +110,32 @@ async function selectRange(range: ChartRange) {
 
   <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
     <div class="rounded-sm border border-border px-4 py-3">
-      <dt class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
-        {metricLabel(primaryKey ?? 'temperature')}
-      </dt>
-      <dd
-        class="mt-2 text-sm font-medium {metricValueClass(
-          primaryKey ?? 'temperature',
-          latestMetrics[primaryKey ?? 'temperature']
-        )}"
+      <dt
+        class="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground uppercase tracking-widest"
       >
+        <span>{metricLabel(primaryKey)}</span>
+        {#if metricWarningHint(primaryKey)}
+          <span class="normal-case tracking-normal">{metricWarningHint(primaryKey)}</span>
+        {/if}
+      </dt>
+      <dd class="mt-2 text-sm font-medium {metricValueClass(primaryKey, latestMetrics[primaryKey])}">
         {formatLastReadingPrimary(deviceType, latest)}
       </dd>
       <dd class="mt-1 text-[0.7rem] text-muted-foreground">{formatWhen(latest?.recordedAt)}</dd>
-      {#if metricWarningHint(primaryKey ?? 'temperature')}
-        <dd class="mt-1 text-[0.7rem] text-muted-foreground">
-          {metricWarningHint(primaryKey ?? 'temperature')}
-        </dd>
-      {/if}
     </div>
-    {#if batteryValue}
-      <div class="rounded-sm border border-border px-4 py-3">
-        <dt class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">Battery</dt>
-        <dd class="mt-2 text-sm font-medium">{batteryValue}</dd>
-      </div>
-    {/if}
     {#each statKeys as key (key)}
       <div class="rounded-sm border border-border px-4 py-3">
-        <dt class="text-[0.65rem] text-muted-foreground uppercase tracking-widest">
-          {metricLabel(key)}
+        <dt
+          class="flex items-center justify-between gap-2 text-[0.65rem] text-muted-foreground uppercase tracking-widest"
+        >
+          <span>{metricLabel(key)}</span>
+          {#if metricWarningHint(key)}
+            <span class="normal-case tracking-normal">{metricWarningHint(key)}</span>
+          {/if}
         </dt>
         <dd class="mt-2 text-sm font-medium {metricValueClass(key, latestMetrics[key])}">
           {formatMetricValue(key, latestMetrics[key]!)}
         </dd>
-        {#if metricWarningHint(key)}
-          <dd class="mt-1 text-[0.7rem] text-muted-foreground">{metricWarningHint(key)}</dd>
-        {/if}
       </div>
     {/each}
   </dl>
