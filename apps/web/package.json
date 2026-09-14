@@ -20,7 +20,7 @@
   "dependencies": {
     "@sst-monorepo/core": "workspace:*",
     "aws-amplify": "^6.18.0",
-    "bits-ui": "^2.18.1"
+    "bits-ui": "^2.19.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
