@@ -15,9 +15,9 @@
     "@sst-monorepo/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.162",
-    "@types/node": "^24.13.3",
-    "typescript": "^6.0.3"
+    "@types/aws-lambda": "^8.10.163",
+    "@types/node": "^26.5.1",
+    "typescript": "^7.0.2"
   },
   "packageManager": "pnpm@10.20.0"
 }
