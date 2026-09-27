@@ -77,8 +77,24 @@ install -m 644 "$ROOT/firmware/cores3-gateway/components/homehub_aws/include/hom
 install -m 644 "$ROOT/firmware/cores3-gateway/main/include/homehub_matter.h" "${CONTROLLER}/main/homehub_matter.h"
 install -m 644 "$ROOT/firmware/cores3-gateway/main/homehub_matter.cpp" "${CONTROLLER}/main/homehub_matter.cpp"
 install -m 644 "$ROOT/firmware/cores3-gateway/main/app_main.cpp" "${CONTROLLER}/main/app_main.cpp"
+install -m 644 "$ROOT/firmware/cores3-gateway/main/esp_ot_config.h" "${CONTROLLER}/main/esp_ot_config.h"
 install -m 644 "$ROOT/firmware/cores3-gateway/overlays/controller_main_CMakeLists.txt" \
   "${CONTROLLER}/main/CMakeLists.txt"
+mkdir -p "${CONTROLLER}/paa_cert"
+install -m 644 "$ROOT"/firmware/cores3-gateway/paa_cert/*.der "${CONTROLLER}/paa_cert/"
+
+# The PAA store must mount the paa_cert SPIFFS partition, not the first one (rcp_fw).
+ESP_MATTER_ROOT="${ESP_MATTER_PATH:-$(cd "${CONTROLLER}/../.." && pwd)}"
+TRUST_STORE_PATCH="$ROOT/firmware/cores3-gateway/overlays/esp_matter_attestation_trust_store.patch"
+if git -C "$ESP_MATTER_ROOT" apply --reverse --check "$TRUST_STORE_PATCH" 2>/dev/null; then
+  echo "esp-matter trust store patch already applied"
+elif git -C "$ESP_MATTER_ROOT" apply --check "$TRUST_STORE_PATCH" 2>/dev/null; then
+  git -C "$ESP_MATTER_ROOT" apply "$TRUST_STORE_PATCH"
+  echo "Applied esp-matter trust store patch"
+else
+  echo "Cannot apply ${TRUST_STORE_PATCH} to ${ESP_MATTER_ROOT} (expected esp-matter release/v1.4)."
+  exit 1
+fi
 install -m 644 "$ROOT/firmware/cores3-gateway/sdkconfig.defaults.cores3" \
   "${CONTROLLER}/sdkconfig.defaults.cores3"
 # Keep sdkconfig filename partitions_br.csv; overlay the A/B 16 MB table.

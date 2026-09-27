@@ -1,7 +1,0 @@
-# Name,   Type, SubType, Offset,  Size, Flags
-# Overlay for esp-matter controller + OTBR on 16 MB CoreS3.
-nvs,        data, nvs,     ,      0x6000,
-phy_init,   data, phy,     ,      0x1000,
-factory,    app,  factory,   ,     3000K,
-rcp_fw,     data, spiffs,   ,      600K,
-paa_cert,   data, spiffs,   ,      0x20000,

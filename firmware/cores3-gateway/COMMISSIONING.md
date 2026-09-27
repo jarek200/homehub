@@ -1,8 +1,8 @@
 # Commission a Matter device on the CoreS3
 
-Reusable playbook for the next IKEA device and, later, other Matter-over-Thread vendors. This is the document a Cursor skill should follow.
+Reusable playbook for the next IKEA device and, later, other Matter-over-Thread vendors. A person or a coding agent can follow it step by step.
 
-History of the first bulb: [BRINGUP.md](./BRINGUP.md). Fabric inventory: [INVENTORY.md](./INVENTORY.md).
+History of the first bulb: [BRINGUP.md](./BRINGUP.md). Next node id: [INVENTORY.md](./INVENTORY.md). Devices registered in HomeHub: `fabricDevices` in [packages/catalog/homehub.json](../../packages/catalog/homehub.json).
 
 ---
 
@@ -153,7 +153,7 @@ matter esp controller read-attr <nodeid> 1 0x0045 0
 
 `ProductName` is `KLIPPBOK water leak sensor`. `StateValue` FALSE = dry; TRUE = leak (wet contacts). Catalog id `matter-7` / node 9.
 
-Then register the device in `cores3-fabric.ts` if it should appear in HomeHub. No setup codes.
+Then add the device to `fabricDevices` in `packages/catalog/homehub.json` if it should appear in HomeHub. No setup codes.
 
 ---
 
@@ -179,8 +179,8 @@ Hard reset does not wipe NVS. `erase-flash` does — you will form a **new** Thr
 
 1. Confirm Matter-over-Thread (not Wi-Fi-only Matter, not Zigbee).
 2. Find VID (QR / DCL / CHIP PAA filename `vid_0x….pem`).
-3. Add that PAA as DER to `~/esp/esp-matter/examples/controller/paa_cert/` **and** [paa_cert/](./paa_cert/).
-4. Keep `CONFIG_SPIFFS_ATTESTATION_TRUST_STORE=y`. Mount label is **`paa_cert`** (not the `rcp_fw` SPIFFS).
+3. Add that PAA as DER to [paa_cert/](./paa_cert/). `scripts/provisioning/provision-cores3-iot.sh` copies it into the controller.
+4. Keep `CONFIG_SPIFFS_ATTESTATION_TRUST_STORE=y`. Mount label is **`paa_cert`** (not the `rcp_fw` SPIFFS); [overlays/esp_matter_attestation_trust_store.patch](./overlays/esp_matter_attestation_trust_store.patch) does that.
 5. Rebuild and `idf.py -p /dev/cu.usbmodem101 flash` (no erase).
 6. Pair with `code-thread` as above.
 
@@ -201,13 +201,13 @@ idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults.otbr;sdkconfig.defaults.cores3"
 idf.py -p /dev/cu.usbmodem101 flash
 ```
 
-Copy overlay changes back into this package (`sdkconfig.defaults.cores3`, `partitions_br.csv`, `paa_cert/`, UART header).
+This package is the source of truth. Run `SST_STAGE=int bash scripts/provisioning/provision-cores3-iot.sh --no-flash` first to copy `sdkconfig.defaults.cores3`, `partitions_16mb.csv`, `main/esp_ot_config.h`, `paa_cert/`, and the trust store patch into the controller. Change files here, not in `~/esp`.
 
 ---
 
-## Skill
+## Automation checklist
 
-Project skill: [homehub-cores3-commission](../../.cursor/skills/homehub-cores3-commission/SKILL.md). Serial helper: [scripts/firmware/cores3-matter-console.py](../../scripts/firmware/cores3-matter-console.py). Buttons: [buttons.md](../../.cursor/skills/homehub-cores3-commission/buttons.md).
+Serial helper: [scripts/firmware/cores3-matter-console.py](../../scripts/firmware/cores3-matter-console.py).
 
 - Trigger on “pair / commission / add IKEA / add Matter device / add button / BILRESA / 11-digit code”.
 - Read this file + [INVENTORY.md](./INVENTORY.md).

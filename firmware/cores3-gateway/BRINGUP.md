@@ -1,9 +1,9 @@
 # CoreS3 Thread BR + IKEA — what we did
 
-This is the bench history for the M5Stack **K149** (CoreS3 + Module Gateway H2 + DIN). The add-device skill is `homehub-cores3-commission`.
+This is the bench history for the M5Stack **K149** (CoreS3 + Module Gateway H2 + DIN).
 
 **Add the next bulb or plug:** follow [COMMISSIONING.md](./COMMISSIONING.md).  
-**What is on the fabric now:** [INVENTORY.md](./INVENTORY.md).
+**Devices registered in HomeHub:** `fabricDevices` in [packages/catalog/homehub.json](../../packages/catalog/homehub.json). How to pick the next node id: [INVENTORY.md](./INVENTORY.md).
 
 Do not put Thread dataset TLVs, PSKc, Border Agent IDs, Wi-Fi passwords, or Matter setup codes in git.
 
@@ -91,15 +91,15 @@ idf.py -D SDKCONFIG_DEFAULTS="sdkconfig.defaults.otbr;sdkconfig.defaults.cores3"
 idf.py -p /dev/cu.usbmodem101 erase-flash flash   # first time only
 ```
 
-Serial port on this Mac: **`/dev/cu.usbmodem101`**.
+Serial port on the bench Mac: **`/dev/cu.usbmodem101`**. The scripts take `CORES3_PORT` for a different port.
 
-Overlays applied in the live tree (`~/esp/esp-matter/examples/controller`) and copied here:
+Overlays on top of `~/esp/esp-matter/examples/controller`. They live in this folder, and `scripts/provisioning/provision-cores3-iot.sh` copies them in:
 
 - [sdkconfig.defaults.cores3](./sdkconfig.defaults.cores3) — 16 MB, Quad PSRAM, RCP auto-update, **SPIFFS PAA store**
-- [main/esp_ot_config.h](./main/esp_ot_config.h) — UART RX=10, TX=17
-- Live firmware also sets RCP boot=**18** (not 8) and reset=7
-- [partitions_br.csv](./partitions_br.csv) — extra `paa_cert` SPIFFS slot after `rcp_fw`
-- [paa_cert/](./paa_cert/) — IKEA VID `0x117C` + DigiCert Matter PAA as `.der`
+- [main/esp_ot_config.h](./main/esp_ot_config.h) — the example header with K149 pins: UART RX=10, TX=17, RCP reset=7, boot=**18** (upstream uses 17/18 and boot 8)
+- [partitions_16mb.csv](./partitions_16mb.csv) — A/B OTA slots, `rcp_fw`, then the `paa_cert` SPIFFS slot. The script installs it as `partitions_br.csv`, the name the OTBR sdkconfig expects. The first bring-up used a single `factory` slot; moving to this table took one USB flash, and NVS at `0x9000` kept Wi-Fi and Thread.
+- [paa_cert/](./paa_cert/) — IKEA VID `0x117C` (production + test), DigiCert Matter PAA, plus the upstream Chip-Test and Espressif DCL roots, as `.der`
+- [overlays/esp_matter_attestation_trust_store.patch](./overlays/esp_matter_attestation_trust_store.patch) — patches esp-matter itself; see below
 
 After flash, the factory web GUI is gone. Rejoin Wi-Fi and form Thread over serial:
 
@@ -149,7 +149,7 @@ Long console lines (dataset + setup code) must be typed slowly (~3 ms/char) or t
 
 `CONFIG_TEST_ATTESTATION_TRUST_STORE` only has Chip-Test PAAs. IKEA production devices use VID **`0x117C`** (`IKEA of Sweden Matter PAA G1`). Without that root, commissioning dies at `AttestationVerification`.
 
-OTBR images already have an `rcp_fw` SPIFFS partition. Mount PAA SPIFFS **by label `paa_cert`**, not “first SPIFFS”. The live patch is in `~/esp/esp-matter/components/esp_matter_controller/attestation_store/esp_matter_attestation_trust_store.cpp`.
+OTBR images already have an `rcp_fw` SPIFFS partition. Mount PAA SPIFFS **by label `paa_cert`**, not “first SPIFFS”. That is a one-line change to esp-matter's `components/esp_matter_controller/attestation_store/esp_matter_attestation_trust_store.cpp`, kept in [overlays/esp_matter_attestation_trust_store.patch](./overlays/esp_matter_attestation_trust_store.patch). The provisioning script applies it to `release/v1.4` and skips it when it is already applied.
 
 Other vendors later: add their PAA `.der` from CSA DCL / CHIP `credentials/production/paa-root-certs`, rebuild the SPIFFS image, flash (no erase). See [COMMISSIONING.md](./COMMISSIONING.md#other-vendors).
 
@@ -167,9 +167,9 @@ Other vendors later: add their PAA `.der` from CSA DCL / CHIP `credentials/produ
 
 ---
 
-## Later (not done)
+## Since then
 
-- Remaining IKEA: other KAJPLATS, Matter plug, remotes, then battery sensors.
-- Skip Zigbee-only (PARASOLL / VALLHORN / old TRÅDFRI — no Matter logo).
-- HomeHub `matter-gateway` device + AWS MQTT (`homehub_aws` publishes state and accepts commands).
-- Cursor skill `homehub-cores3-commission` runs [COMMISSIONING.md](./COMMISSIONING.md) for each new device.
+- More IKEA devices joined the same fabric: a second KAJPLATS, two GRILLPLATS plugs, two TIMMERFLOTTE, MYGGSPRAY, MYGGBETT, ALPSTUGA, and KLIPPBOK. Node 8 is held for a BILRESA button that is not registered in HomeHub yet. The current list is `fabricDevices` in the catalog.
+- The CoreS3 is a `matter-gateway` device in HomeHub. `homehub_aws` publishes state over AWS IoT MQTT and accepts commands, and the website can start a pairing.
+- Firmware updates go over HTTPS OTA with the A/B table. See [docs/ota.md](./docs/ota.md).
+- Zigbee-only IKEA devices (PARASOLL / VALLHORN / old TRÅDFRI, no Matter logo) are out of scope.

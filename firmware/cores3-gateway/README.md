@@ -5,7 +5,7 @@ ESP-IDF firmware for the M5Stack CoreS3 Thread BR (K149) as a **local-first** Ma
 ESP-IDF overlay for the M5Stack CoreS3 Thread BR (K149). Hardware notes: [HARDWARE.md](./HARDWARE.md).
 
 - First-bulb bench notes: [BRINGUP.md](./BRINGUP.md)
-- Add the next Matter device: [COMMISSIONING.md](./COMMISSIONING.md) (Cursor skill `homehub-cores3-commission`)
+- Add the next Matter device: [COMMISSIONING.md](./COMMISSIONING.md)
 - How to pick the next Thread node id: [INVENTORY.md](./INVENTORY.md)
 
 ## Official starting points
@@ -22,20 +22,19 @@ Copy those examples into an ESP-IDF workspace, then overlay the files in this fo
 | Target | `esp32s3` |
 | PSRAM | Quad (`CONFIG_SPIRAM_MODE_QUAD=y`) — not Octal |
 | Flash | 16 MB |
-| H2 RCP UART | RX=GPIO10, TX=GPIO17, 460800 |
-| Attestation | SPIFFS PAA roots in [paa_cert/](./paa_cert/) (IKEA VID `0x117C`) |
+| H2 RCP UART | RX=GPIO10, TX=GPIO17, 460800; RCP reset=GPIO7, boot=GPIO18 |
+| Attestation | SPIFFS PAA roots in [paa_cert/](./paa_cert/) (IKEA VID `0x117C`), mounted by label via [the trust store patch](./overlays/esp_matter_attestation_trust_store.patch) |
 | If boot-loop | disable USB Serial JTAG console |
 
-See [sdkconfig.defaults.cores3](./sdkconfig.defaults.cores3) and [main/esp_ot_config.h](./main/esp_ot_config.h).
+See [sdkconfig.defaults.cores3](./sdkconfig.defaults.cores3) and [main/esp_ot_config.h](./main/esp_ot_config.h). `scripts/provisioning/provision-cores3-iot.sh` copies every overlay file into `~/esp/esp-matter/examples/controller` and applies the esp-matter patch.
 
 ## Bring-up order
 
 1. Factory Thread BR on the K149, then `esp-matter` controller + OTBR — done, see [BRINGUP.md](./BRINGUP.md).
 2. Commission devices with [COMMISSIONING.md](./COMMISSIONING.md). First KAJPLATS is node **1**.
 3. Toggle OnOff locally with AWS disconnected.
-4. Cursor skill `homehub-cores3-commission` runs the commissioning playbook.
-5. Provision a `matter-gateway` device in HomeHub and add AWS IoT MQTT/TLS.
-6. Measure `heap_caps_get_free_size(MALLOC_CAP_INTERNAL)` before adding UI or camera QR.
+4. Provision a `matter-gateway` device in HomeHub and add AWS IoT MQTT/TLS.
+5. Measure `heap_caps_get_free_size(MALLOC_CAP_INTERNAL)` before adding UI or camera QR.
 
 ## Local vs cloud
 
