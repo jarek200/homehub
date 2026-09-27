@@ -6,14 +6,14 @@ from typing import Any
 from boto3.dynamodb.conditions import Attr
 
 from homehub_api.household import (
+    HOME_POINTER_PK,
+    HOME_POINTER_SK,
     HOUSEHOLD_METADATA_SK,
     PROFILE_SK,
-    invite_pk,
-    invite_sk,
     member_sk,
     user_pk,
 )
-from homehub_api.store._mapping import _low_level_item, _now_iso
+from homehub_api.store._mapping import _now_iso
 from homehub_api.store._surface import StoreSurface
 
 
@@ -49,6 +49,21 @@ class MembershipMixin(StoreSurface):
         self._table.put_item(Item=item)
         return item
 
+    def get_household_metadata(self) -> dict[str, Any] | None:
+        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": HOUSEHOLD_METADATA_SK})
+        item = result.get("Item")
+        return dict(item) if item else None
+
+    def put_home_pointer(self, household_id: str) -> dict[str, Any]:
+        item = {
+            "PK": HOME_POINTER_PK,
+            "SK": HOME_POINTER_SK,
+            "householdId": household_id,
+            "updatedAt": _now_iso(),
+        }
+        self._table.put_item(Item=item)
+        return item
+
     def get_member(self, user_id: str) -> dict[str, Any] | None:
         result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": member_sk(user_id)})
         item = result.get("Item")
@@ -74,129 +89,6 @@ class MembershipMixin(StoreSurface):
     def list_members(self) -> list[dict[str, Any]]:
         result = self._query_sk_prefix(self.tenant_pk, "MEMBER#")
         return [dict(item) for item in result.get("Items") or []]
-
-    def list_invites(self) -> list[dict[str, Any]]:
-        result = self._query_sk_prefix(self.tenant_pk, "INVITE#")
-        return [dict(item) for item in result.get("Items") or []]
-
-    def get_invite(self, invite_id: str) -> dict[str, Any] | None:
-        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": invite_sk(invite_id)})
-        item = result.get("Item")
-        return dict(item) if item else None
-
-    def put_invite(self, record: dict[str, Any], token_hash: str | None = None) -> dict[str, Any]:
-        invite_id = str(record["inviteId"])
-        timestamp = _now_iso()
-        item = {
-            "PK": self.tenant_pk,
-            "SK": invite_sk(invite_id),
-            "householdId": self.household_id,
-            "createdAt": record.get("createdAt") or timestamp,
-            **record,
-            "updatedAt": timestamp,
-        }
-        self._table.put_item(Item=item)
-        if token_hash:
-            self._table.put_item(
-                Item={
-                    "PK": invite_pk(token_hash),
-                    "SK": HOUSEHOLD_METADATA_SK,
-                    "inviteId": invite_id,
-                    "householdId": self.household_id,
-                    "tenantPk": self.tenant_pk,
-                    "emailHash": record.get("emailHash"),
-                    "status": record.get("status", "pending"),
-                    "role": record.get("role", "MEMBER"),
-                    "expiresAt": record.get("expiresAt"),
-                    "updatedAt": timestamp,
-                }
-            )
-        return item
-
-    def delete_invite_token(self, token_hash: str) -> None:
-        self._table.delete_item(Key={"PK": invite_pk(token_hash), "SK": HOUSEHOLD_METADATA_SK})
-
-    def get_invite_by_token_hash(self, token_hash: str) -> dict[str, Any] | None:
-        result = self._table.get_item(
-            Key={"PK": invite_pk(token_hash), "SK": HOUSEHOLD_METADATA_SK}
-        )
-        item = result.get("Item")
-        return dict(item) if item else None
-
-    def accept_invite_transaction(
-        self,
-        *,
-        user_id: str,
-        email: str,
-        username: str,
-        invite: dict[str, Any],
-        token_hash: str,
-        profile: dict[str, Any] | None,
-    ) -> dict[str, Any]:
-        timestamp = _now_iso()
-        household_id = str(invite["householdId"])
-        role = str(invite.get("role") or "MEMBER")
-        invite_id = str(invite["inviteId"])
-        client = self._table.meta.client
-        profile_item = {
-            **(profile or {}),
-            "PK": user_pk(user_id),
-            "SK": PROFILE_SK,
-            "userId": user_id,
-            "email": email,
-            "username": username,
-            "householdId": household_id,
-            "role": role,
-            "createdAt": (profile or {}).get("createdAt") or timestamp,
-            "updatedAt": timestamp,
-        }
-        member_item = {
-            "PK": self.tenant_pk,
-            "SK": member_sk(user_id),
-            "userId": user_id,
-            "email": email,
-            "role": role,
-            "householdId": household_id,
-            "createdAt": timestamp,
-            "updatedAt": timestamp,
-        }
-        invite_item = {
-            **invite,
-            "PK": self.tenant_pk,
-            "SK": invite_sk(invite_id),
-            "status": "accepted",
-            "acceptedBy": user_id,
-            "updatedAt": timestamp,
-        }
-        token_item = {
-            "PK": invite_pk(token_hash),
-            "SK": HOUSEHOLD_METADATA_SK,
-            "inviteId": invite_id,
-            "householdId": household_id,
-            "tenantPk": self.tenant_pk,
-            "emailHash": invite.get("emailHash"),
-            "status": "accepted",
-            "role": role,
-            "expiresAt": invite.get("expiresAt"),
-            "updatedAt": timestamp,
-        }
-        client.transact_write_items(
-            TransactItems=[
-                {
-                    "Put": {
-                        "TableName": self.table_name,
-                        "Item": _low_level_item(token_item),
-                        "ConditionExpression": "attribute_exists(PK) AND #status = :pending",
-                        "ExpressionAttributeNames": {"#status": "status"},
-                        "ExpressionAttributeValues": {":pending": {"S": "pending"}},
-                    }
-                },
-                {"Put": {"TableName": self.table_name, "Item": _low_level_item(member_item)}},
-                {"Put": {"TableName": self.table_name, "Item": _low_level_item(profile_item)}},
-                {"Put": {"TableName": self.table_name, "Item": _low_level_item(invite_item)}},
-            ]
-        )
-        return {"householdId": household_id, "role": role, "profile": profile_item}
 
     def list_sensor_events(
         self,

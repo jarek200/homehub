@@ -70,7 +70,6 @@ export default $config({
     const { createIotTelemetry } = await import('./infra/iot-telemetry');
     const { createSnapshotStorage } = await import('./infra/device-runtime');
     const { createRealtime } = await import('./infra/realtime');
-    const { createEmail } = await import('./infra/email');
     const { stageConfig } = await import('./infra/stage-config');
 
     const { table } = createStorage();
@@ -88,7 +87,6 @@ export default $config({
         namespaceArn: realtime.householdNamespace.channelNamespaceArn,
       }
     );
-    const email = createEmail();
     const restApiKey = new sst.Secret('RestApiKey');
     const restApi = createRestApi(
       table,
@@ -96,7 +94,6 @@ export default $config({
       iotProvisioning,
       iotTelemetry,
       snapshotStorage.snapshotBucket,
-      email,
       restApiKey
     );
 

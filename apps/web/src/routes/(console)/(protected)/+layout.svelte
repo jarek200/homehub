@@ -1,23 +1,18 @@
 <script lang="ts">
 import { fetchAuthSession, getCurrentUser } from 'aws-amplify/auth';
+import { onMount } from 'svelte';
 import { browser } from '$app/environment';
 import { goto } from '$app/navigation';
 import { auth } from '$lib/auth.svelte';
-import { clearInviteToken, readInviteToken } from '$lib/household';
-import { acceptHouseholdInvite, bootstrapHousehold, getMyProfile } from '$lib/services/rest-api';
+import { bootstrapHousehold, getMyProfile } from '$lib/services/rest-api';
 
 const { children } = $props<{ children: import('svelte').Snippet }>();
 
 let checking = $state(true);
 const authLoading = $derived(auth.isLoading);
 
-$effect(() => {
-  if (!browser) {
-    checking = false;
-    return;
-  }
-
-  checkAuth();
+onMount(() => {
+  void checkAuth();
 });
 
 async function checkAuth() {
@@ -38,32 +33,17 @@ async function checkAuth() {
     let householdId: string | null = null;
     let role: 'OWNER' | 'MEMBER' | null = null;
 
-    const inviteToken = readInviteToken();
-    if (inviteToken) {
-      try {
-        const accepted = await acceptHouseholdInvite(inviteToken);
-        clearInviteToken();
-        householdId = accepted.householdId;
-        role = accepted.role;
+    try {
+      const household = await bootstrapHousehold();
+      householdId = household.householdId;
+      role = household.role;
+      if (household.tokenRefreshRequired) {
         await fetchAuthSession({ forceRefresh: true });
-      } catch {
-        // Keep the token for the invite page if acceptance is not possible yet.
       }
-    }
-
-    if (!householdId) {
-      try {
-        const household = await bootstrapHousehold();
-        householdId = household.householdId;
-        role = household.role;
-        if (household.tokenRefreshRequired) {
-          await fetchAuthSession({ forceRefresh: true });
-        }
-      } catch {
-        const profile = await getMyProfile().catch(() => null);
-        householdId = profile?.householdId ?? null;
-        role = profile?.role ?? null;
-      }
+    } catch {
+      const profile = await getMyProfile().catch(() => null);
+      householdId = profile?.householdId ?? null;
+      role = profile?.role ?? null;
     }
 
     try {

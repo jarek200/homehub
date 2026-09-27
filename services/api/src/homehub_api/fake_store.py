@@ -52,10 +52,9 @@ class FakeHubStore:
         self.revision = 0
         self.profiles: dict[str, dict[str, Any]] = {}
         self.members: dict[str, dict[str, Any]] = {}
-        self.invites: dict[str, dict[str, Any]] = {}
-        self.invite_tokens: dict[str, dict[str, Any]] = {}
         self.gateway_households: dict[str, dict[str, Any]] = {}
         self.household_metadata: dict[str, Any] | None = None
+        self.home_pointer: dict[str, Any] | None = None
         self.sensor_events: list[dict[str, str]] = []
 
     @property
@@ -297,6 +296,14 @@ class FakeHubStore:
         self.household_metadata = item
         return item
 
+    def get_household_metadata(self) -> dict[str, Any] | None:
+        return dict(self.household_metadata) if self.household_metadata else None
+
+    def put_home_pointer(self, household_id: str) -> dict[str, Any]:
+        item = {"householdId": household_id, "updatedAt": now_iso()}
+        self.home_pointer = item
+        return item
+
     def get_member(self, user_id: str) -> dict[str, Any] | None:
         item = self.members.get(user_id)
         return dict(item) if item else None
@@ -319,90 +326,12 @@ class FakeHubStore:
     def list_members(self) -> list[dict[str, Any]]:
         return [dict(item) for item in self.members.values()]
 
-    def list_invites(self) -> list[dict[str, Any]]:
-        return [dict(item) for item in self.invites.values()]
-
-    def get_invite(self, invite_id: str) -> dict[str, Any] | None:
-        item = self.invites.get(invite_id)
-        return dict(item) if item else None
-
-    def put_invite(self, record: dict[str, Any], token_hash: str | None = None) -> dict[str, Any]:
-        invite_id = str(record["inviteId"])
-        timestamp = now_iso()
-        item = {
-            "householdId": self.household_id,
-            "createdAt": record.get("createdAt") or timestamp,
-            **record,
-            "updatedAt": timestamp,
-        }
-        self.invites[invite_id] = item
-        if token_hash:
-            self.invite_tokens[token_hash] = {
-                "inviteId": invite_id,
-                "householdId": self.household_id,
-                "tenantPk": self.tenant_pk,
-                "emailHash": record.get("emailHash"),
-                "status": record.get("status", "pending"),
-                "role": record.get("role", "MEMBER"),
-                "expiresAt": record.get("expiresAt"),
-                "updatedAt": timestamp,
-            }
-        return item
-
-    def delete_invite_token(self, token_hash: str) -> None:
-        self.invite_tokens.pop(token_hash, None)
-
-    def get_invite_by_token_hash(self, token_hash: str) -> dict[str, Any] | None:
-        item = self.invite_tokens.get(token_hash)
-        return dict(item) if item else None
-
     def put_gateway_household(self, gateway_id: str, household_id: str | None = None) -> None:
         self.gateway_households[gateway_id] = {
             "householdId": household_id or self.household_id,
             "tenantPk": self.tenant_pk,
             "updatedAt": now_iso(),
         }
-
-    def accept_invite_transaction(
-        self,
-        *,
-        user_id: str,
-        email: str,
-        username: str,
-        invite: dict[str, Any],
-        token_hash: str,
-        profile: dict[str, Any] | None,
-    ) -> dict[str, Any]:
-        lookup = self.invite_tokens.get(token_hash)
-        if not lookup or lookup.get("status") != "pending":
-            raise ApiError("Invitation is no longer valid", 409, "Conflict")
-        timestamp = now_iso()
-        household_id = str(invite["householdId"])
-        role = str(invite.get("role") or "MEMBER")
-        lookup["status"] = "accepted"
-        lookup["updatedAt"] = timestamp
-        invite_id = str(invite["inviteId"])
-        stored = {
-            **invite,
-            "status": "accepted",
-            "acceptedBy": user_id,
-            "updatedAt": timestamp,
-        }
-        self.invites[invite_id] = stored
-        self.put_member(
-            {"userId": user_id, "email": email, "role": role, "householdId": household_id}
-        )
-        profile_item = self.put_profile(
-            user_id,
-            {
-                **(profile or {}),
-                "email": email,
-                "username": username,
-                "householdId": household_id,
-                "role": role,
-            },
-        )
-        return {"householdId": household_id, "role": role, "profile": profile_item}
 
     def list_sensor_events(
         self,

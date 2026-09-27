@@ -21,7 +21,7 @@ def test_decommission_device_deletes_registry_row(monkeypatch: Any) -> None:
     resource = MagicMock()
     resource.Table.return_value = fake_table
     monkeypatch.setenv("TABLE_NAME", "test-table")
-    monkeypatch.setattr("homehub_api.store.boto3.resource", lambda _service: resource)
+    monkeypatch.setattr("homehub_api.store.hub_store.boto3.resource", lambda _service: resource)
 
     store = HubStore("test-table", tenant_pk="HOUSEHOLD#user-1")
     store._decommission_device("dev-abc")

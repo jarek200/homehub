@@ -2,15 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   cognitoHouseholdGroup,
   DEMO_TENANT_PK,
-  emailsMatch,
+  HOME_POINTER_PK,
+  HOME_POINTER_SK,
   householdIdFromCognitoGroup,
   householdIdFromPk,
   householdPk,
-  inviteExpiresAt,
   isHouseholdPk,
-  isInviteExpired,
   normalizeCognitoGroups,
-  normalizeEmail,
   normalizeTenantPk,
   userPk,
 } from './household';
@@ -24,25 +22,14 @@ describe('household keys', () => {
     expect(isHouseholdPk('HOUSEHOLD#abc')).toBe(true);
     expect(normalizeTenantPk('abc')).toBe('HOUSEHOLD#abc');
     expect(DEMO_TENANT_PK).toBe('HOUSEHOLD#demo');
+    expect(HOME_POINTER_PK).toBe('HOMEHUB#HOME');
+    expect(HOME_POINTER_SK).toBe('HOUSEHOLD');
   });
 
   it('names Cognito household groups from the household id', () => {
     expect(cognitoHouseholdGroup('user-abc')).toBe('hh_user-abc');
     expect(householdIdFromCognitoGroup('hh_user-abc')).toBe('user-abc');
     expect(householdIdFromCognitoGroup('admin')).toBeNull();
-  });
-});
-
-describe('invitation helpers', () => {
-  it('normalizes and hashes emails, and hashes tokens', () => {
-    expect(normalizeEmail('  Alex@Example.com ')).toBe('alex@example.com');
-    expect(emailsMatch('Alex@Example.com', 'alex@example.com')).toBe(true);
-  });
-
-  it('expires invitations from a unix TTL', () => {
-    const expiresAt = inviteExpiresAt(1_000_000_000_000, 60);
-    expect(isInviteExpired(expiresAt, 1_000_000_000_000)).toBe(false);
-    expect(isInviteExpired(expiresAt, 1_000_000_070_000)).toBe(true);
   });
 });
 

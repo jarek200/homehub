@@ -46,7 +46,7 @@ Stage resources are named from the stage: the DynamoDB table contains `homehub-<
 pnpm verify
 ```
 
-That runs Biome, TypeScript, Vitest, pytest, and the production build. Python lint is `uv run ruff check services/api` and `uv run ruff format --check services/api`.
+That runs Biome, TypeScript, Vitest, pytest, and the production build. Python checks, the same ones as `pnpm lint:api`, are `uv run --directory services/api ruff check .`, `uv run --directory services/api ruff format --check .`, and `uv run --directory services/api mypy`.
 
 Firmware is an overlay for ESP-IDF and Arduino. It is not part of `pnpm verify`. See `firmware/cores3-gateway/README.md` and `docs/timer-camera-f-setup.md`.
 

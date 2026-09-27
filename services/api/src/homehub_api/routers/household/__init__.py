@@ -6,7 +6,7 @@ from homehub_api.models import HouseholdResponse
 from homehub_api.services.household import get_household as read_household
 from homehub_api.store import HubStore
 
-from . import bootstrap, invites, members, plan, rules, sensor_events, state
+from . import bootstrap, members, plan, rules, sensor_events, state
 
 router = APIRouter(prefix="/household", tags=["household"])
 
@@ -22,7 +22,6 @@ def get_household(
 router.include_router(bootstrap.router)
 router.include_router(sensor_events.router)
 router.include_router(members.router)
-router.include_router(invites.router)
 router.include_router(state.router)
 router.include_router(plan.router)
 router.include_router(rules.router)

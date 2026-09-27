@@ -211,42 +211,14 @@ class HouseholdMemberResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class HouseholdInviteResponse(BaseModel):
-    invite_id: str = Field(alias="inviteId")
-    email: str
-    role: Literal["OWNER", "MEMBER"] = "MEMBER"
-    status: Literal["pending", "accepted", "cancelled", "expired"]
-    expires_at: int = Field(alias="expiresAt")
-    created_at: str = Field(alias="createdAt")
-    updated_at: str = Field(alias="updatedAt")
-    email_sent: bool | None = Field(default=None, alias="emailSent")
-    email_error: str | None = Field(default=None, alias="emailError")
-
-    model_config = {"populate_by_name": True}
-
-
 class HouseholdResponse(BaseModel):
     household_id: str = Field(alias="householdId")
     role: Literal["OWNER", "MEMBER"]
     created: bool = False
     token_refresh_required: bool = Field(default=False, alias="tokenRefreshRequired")
     members: list[HouseholdMemberResponse] = Field(default_factory=list)
-    invites: list[HouseholdInviteResponse] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
-
-
-class CreateHouseholdInviteRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=254)
-
-    @field_validator("email", mode="before")
-    @classmethod
-    def normalize_email(cls, value: str) -> str:
-        return value.strip().lower()
-
-
-class AcceptHouseholdInviteRequest(BaseModel):
-    token: str = Field(min_length=8, max_length=256)
 
 
 class DeleteDeviceResponse(BaseModel):

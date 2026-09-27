@@ -1,6 +1,6 @@
 # HomeHub
 
-A serverless smart-home hub: a SvelteKit console, a FastAPI on Lambda, Cognito, DynamoDB, and AWS IoT Core. Matter devices join through a CoreS3 Thread gateway. A Timer Camera F can publish snapshots.
+A serverless smart-home hub: a SvelteKit console, a FastAPI on Lambda, Cognito, DynamoDB, and AWS IoT Core. The console is devices, a floor plan, and household members. Matter devices are commissioned from the API and join through a CoreS3 Thread gateway. A Timer Camera F can publish snapshots.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ flowchart LR
 
 The diagram source is [`docs/homehub-current-state-architecture.drawio`](docs/homehub-current-state-architecture.drawio).
 
-Stages are `int`, `prod`, and a personal `sst dev` stage. Custom domains come from `APP_URL` and `APP_DOMAIN`. Without them, CloudFront uses its default hostname and SES is skipped.
+Stages are `int`, `prod`, and a personal `sst dev` stage. Custom domains come from `APP_URL` and `APP_DOMAIN`. Without them, CloudFront uses its default hostname.
 
 ## Stack
 
@@ -35,7 +35,7 @@ Stages are `int`, `prod`, and a personal `sst dev` stage. Custom domains come fr
 - Data: DynamoDB for devices and recent readings; Athena over S3 Parquet for history
 - IoT: IoT Core things, X.509 certificates, MQTT
 - Infra: SST v4 modules in `infra/`
-- Tests: pytest for the API, Vitest for shared TypeScript
+- Tests: pytest for the API, Vitest for the TypeScript packages, web app, and infra
 
 ## Prerequisites
 
@@ -61,6 +61,8 @@ Copy `.env.example` and set `APP_URL` when you want a custom hostname. AWS SSO p
 
 ## What the API does
 
+### Devices and telemetry
+
 | Task | API |
 |------|-----|
 | Add a device | `POST /devices` |
@@ -71,8 +73,17 @@ Copy `.env.example` and set `APP_URL` when you want a custom hostname. AWS SSO p
 | Recent readings | `GET /devices/{deviceId}/readings` |
 | Older readings | `GET /devices/{deviceId}/readings/history` |
 | Camera snapshot | `GET /devices/{deviceId}/snapshot` |
+| Snapshot history | `GET /devices/{deviceId}/snapshots` |
 | Health check | `GET /health` |
 | Ready check | `GET /ready` |
+
+### Household and Matter
+
+| Area | API |
+|------|-----|
+| Profile | `GET /me` |
+| Household | `/household` — bootstrap, members, state, commands, plan, and rules |
+| Matter | `/matter/products` and `/matter/commission` |
 
 The web app sends a Cognito token. Other clients can send `X-Api-Key` when `RestApiKey` is set with `sst secret set`. `GET /devices` accepts `limit` (default 50, max 100) and `cursor`. Open `/api-docs` on the web origin for Swagger.
 

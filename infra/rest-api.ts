@@ -19,7 +19,6 @@ export function createRestApi(
     'firmwareBucket' | 'telemetryBucket' | 'athenaResultsBucket' | 'glueDatabase' | 'glueTable'
   >,
   snapshotBucket?: SnapshotBucket,
-  email?: { fromAddress: string },
   restApiKey?: { value: Output<string> }
 ) {
   const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '');
@@ -105,7 +104,6 @@ export function createRestApi(
       REST_API_KEY: restApiKey?.value ?? '',
       COGNITO_USER_POOL_ID: auth.id,
       APP_URL: process.env.APP_URL ?? '',
-      SES_FROM_ADDRESS: email?.fromAddress ?? '',
       POWERTOOLS_SERVICE_NAME: 'homehub-api',
       POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
       POWERTOOLS_LOG_LEVEL: 'INFO',
@@ -126,6 +124,7 @@ export function createRestApi(
       {
         actions: [
           'dynamodb:Query',
+          'dynamodb:Scan',
           'dynamodb:GetItem',
           'dynamodb:PutItem',
           'dynamodb:UpdateItem',
@@ -188,16 +187,6 @@ export function createRestApi(
         actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],
       },
-      ...(process.env.APP_DOMAIN?.trim()
-        ? [
-            {
-              actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-              resources: [
-                $interpolate`arn:aws:ses:${region}:${accountId}:identity/${process.env.APP_DOMAIN.trim().toLowerCase()}`,
-              ],
-            },
-          ]
-        : []),
       {
         actions: [
           'cognito-idp:AdminAddUserToGroup',
