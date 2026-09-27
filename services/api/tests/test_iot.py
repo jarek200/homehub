@@ -3,8 +3,6 @@
 import json
 
 from homehub_api.iot.sfn.common import (
-    _unwrap_pipe_input,
-    merge_provision_context,
     parse_stream_record,
     resolve_provision_context,
     shadow_desired,
@@ -20,22 +18,6 @@ def test_thing_name_for_prefixes_device_id() -> None:
 
 def test_ssm_prefix_for_device() -> None:
     assert ssm_prefix_for("abc123") == "/homehub/devices/abc123"
-
-
-def test_unwrap_pipe_input_accepts_eventbridge_pipe_array() -> None:
-    record = {
-        "eventName": "INSERT",
-        "dynamodb": {"Keys": {"SK": {"S": "DEVICE#dev1"}}},
-    }
-    assert _unwrap_pipe_input([record]) == record
-
-
-def test_unwrap_pipe_input_accepts_lambda_records_wrapper() -> None:
-    record = {
-        "eventName": "INSERT",
-        "dynamodb": {"Keys": {"SK": {"S": "DEVICE#dev1"}}},
-    }
-    assert _unwrap_pipe_input({"Records": [record]}) == record
 
 
 def test_parse_stream_record_filters_provisioning_inserts() -> None:
@@ -170,17 +152,6 @@ def test_resolve_provision_context_infers_device_id_from_cert_prefix() -> None:
         }
     )
     assert context["deviceId"] == "dev-co"
-
-
-def test_merge_provision_context_preserves_fields_across_tasks() -> None:
-    merged = merge_provision_context(
-        {"tenantPk": "HOUSEHOLD#demo", "deviceId": "dev-co", "type": "camera"},
-        certificateId="cert-1",
-        thingName="homehub-dev-co",
-    )
-    assert merged["deviceId"] == "dev-co"
-    assert merged["certificateId"] == "cert-1"
-    assert merged["thingName"] == "homehub-dev-co"
 
 
 def test_resolve_provision_context_from_stream_record() -> None:

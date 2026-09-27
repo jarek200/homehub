@@ -69,6 +69,7 @@ $RECYCLE.BIN/
 .Trash-*
 
 # IDE
+.cursor/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
@@ -87,6 +88,11 @@ $RECYCLE.BIN/
 
 # Misc
 *.pem
+*.key
+*.crt
+sdkconfig
+sdkconfig.old
+managed_components/
 firmware/timer-camera/**/generated/
 **/devices.conf
 !**/devices.conf.example

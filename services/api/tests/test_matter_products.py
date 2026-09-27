@@ -70,7 +70,7 @@ def test_commission_does_not_create_device_until_pair() -> None:
             "/matter/commission",
             json={
                 "productId": "kajplats",
-                "setupPayload": "34970112332",
+                "setupPayload": "00000000000",
                 "name": "KAJPLATS 2",
                 "location": "Kitchen",
             },
@@ -109,7 +109,7 @@ def test_get_commission_completes_from_pair_result() -> None:
     with TestClient(create_app(store=store)) as client:
         started = client.post(
             "/matter/commission",
-            json={"productId": "kajplats", "setupPayload": "34970112332"},
+            json={"productId": "kajplats", "setupPayload": "00000000000"},
         ).json()
         store.put_pair_result("cores3-gateway", started["nodeId"], "commissioned")
         polled = client.get(f"/matter/commission/{started['commissionId']}")
@@ -123,7 +123,7 @@ def test_commission_failure_leaves_devices_unchanged() -> None:
     with TestClient(create_app(store=store)) as client:
         response = client.post(
             "/matter/commission",
-            json={"productId": "kajplats", "setupPayload": "34970112332"},
+            json={"productId": "kajplats", "setupPayload": "00000000000"},
         )
         complete_commission(store, response.json()["commissionId"], "commission-failed", "timeout")
         assert store.get_device("matter-2") is None
@@ -136,7 +136,7 @@ def test_unknown_product_is_rejected() -> None:
     with TestClient(create_app(store=FakeHubStore())) as client:
         response = client.post(
             "/matter/commission",
-            json={"productId": "not-a-product", "setupPayload": "34970112332"},
+            json={"productId": "not-a-product", "setupPayload": "00000000000"},
         )
         assert response.status_code == 400
 

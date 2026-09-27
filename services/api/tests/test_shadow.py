@@ -3,7 +3,6 @@ import os
 from unittest.mock import MagicMock, patch
 
 from homehub_api.iot.shadow import (
-    apply_shadow_state,
     merge_configuration,
     push_device_shadow_desired,
 )
@@ -21,27 +20,6 @@ def test_merge_configuration_deep_merges_thresholds() -> None:
     assert merged["reportingIntervalSeconds"] == 10
     assert merged["thresholds"]["humidityWarning"] == 65
     assert merged["thresholds"]["temperatureWarning"] == 28
-
-
-def test_apply_shadow_state_updates_configuration_json() -> None:
-    current = json.dumps(
-        {
-            "reportingIntervalSeconds": 10,
-            "thresholds": {"humidityWarning": 70},
-        }
-    )
-
-    configuration, reported = apply_shadow_state(
-        configuration=current,
-        device_type="environmental-sensor",
-        state={"configuration": {"thresholds": {"humidityWarning": 62}}},
-    )
-
-    assert configuration is not None
-    parsed = json.loads(configuration)
-    assert parsed["thresholds"]["humidityWarning"] == 62
-    assert reported["configuration"]["thresholds"]["humidityWarning"] == 62
-    assert reported["type"] == "environmental-sensor"
 
 
 @patch.dict(os.environ, {"IOT_DATA_ENDPOINT": "https://iot.example.com"})
@@ -64,20 +42,3 @@ def test_push_device_shadow_desired_updates_shadow(mock_boto_client: MagicMock) 
     payload = json.loads(call["payload"].decode())
     assert payload["state"]["desired"]["type"] == "environmental-sensor"
     assert payload["state"]["desired"]["configuration"]["thresholds"]["temperatureWarning"] == 30
-
-
-def test_apply_shadow_state_merges_capture_now() -> None:
-    current = json.dumps({"frameSize": "qvga", "motionEnabled": True})
-
-    configuration, reported = apply_shadow_state(
-        configuration=current,
-        device_type="camera",
-        state={"configuration": {"captureNow": "manual-1"}},
-    )
-
-    assert configuration is not None
-    parsed = json.loads(configuration)
-    assert parsed["frameSize"] == "qvga"
-    assert parsed["captureNow"] == "manual-1"
-    assert reported["configuration"]["captureNow"] == "manual-1"
-    assert reported["type"] == "camera"

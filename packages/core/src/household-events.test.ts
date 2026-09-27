@@ -7,7 +7,7 @@ import {
   channelForHouseholdPk,
   hasHouseholdSequenceGap,
   householdChannelForId,
-  householdChannelPathForSub,
+  householdChannelPathForId,
   isHouseholdSubscribeAllowed,
   isNewerHouseholdEvent,
   parseCameraSnapshotEvent,
@@ -22,7 +22,7 @@ describe('household event channels', () => {
   it('derives a tenant channel from a household partition', () => {
     expect(channelForHouseholdPk('HOUSEHOLD#user-abc')).toBe('household/user-abc');
     expect(householdChannelForId('user-abc')).toBe('household/user-abc');
-    expect(householdChannelPathForSub('user-abc')).toBe('/household/user-abc');
+    expect(householdChannelPathForId('user-abc')).toBe('/household/user-abc');
     expect(channelForHouseholdPk('USER#abc')).toBeNull();
   });
 

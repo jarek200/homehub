@@ -36,11 +36,6 @@ class MembershipMixin(StoreSurface):
         self._table.put_item(Item=item)
         return item
 
-    def get_household_metadata(self) -> dict[str, Any] | None:
-        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": HOUSEHOLD_METADATA_SK})
-        item = result.get("Item")
-        return dict(item) if item else None
-
     def put_household_metadata(self, record: dict[str, Any]) -> dict[str, Any]:
         timestamp = _now_iso()
         item = {

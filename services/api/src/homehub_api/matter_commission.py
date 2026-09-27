@@ -11,6 +11,7 @@ from ulid import new as new_ulid
 from homehub_api.cores3_fabric import CORES3_GATEWAY_ID
 from homehub_api.cores3_products import next_matter_node_id, product_by_id
 from homehub_api.errors import ApiError
+from homehub_api.household import now_iso
 from homehub_api.matter_devices import add_matter_product, devices_for_gateway
 
 COMMISSION_TIMEOUT = timedelta(seconds=180)
@@ -19,10 +20,6 @@ _SETUP_CODE = re.compile(r"^\d{11}$")
 
 def _now() -> datetime:
     return datetime.now(UTC)
-
-
-def _now_iso() -> str:
-    return _now().isoformat().replace("+00:00", "Z")
 
 
 def normalize_setup_payload(raw: str | None) -> str:
@@ -74,7 +71,7 @@ def start_commission(
     devices = devices_for_gateway(store, gateway)
     reserved = list(store.list_pairing_node_ids(gateway))
     node_id = next_matter_node_id([device.node_id for device in devices] + reserved)
-    timestamp = _now_iso()
+    timestamp = now_iso()
     job = {
         "commissionId": str(new_ulid()),
         "status": "pairing",

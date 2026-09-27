@@ -57,7 +57,7 @@ pnpm dev
 
 `pnpm dev:local` runs only the web app against an already deployed backend.
 
-Copy `.env.example` and set `APP_URL` when you want a custom hostname. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Copy `.env.example` and set `APP_URL` when you want a custom hostname. AWS SSO profiles, optional cross-account DNS, and stage resource names are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## What the API does
 

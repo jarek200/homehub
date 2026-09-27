@@ -2,7 +2,6 @@ import {
   airQualityLabel,
   type Device,
   type FloorPlanSensor,
-  type FloorPlanSensorKind,
   type HubHouseholdState,
   householdSensorClimate,
   householdSensorHasPower,
@@ -11,16 +10,6 @@ import {
   householdSensorStatus,
   isClimateSensorKind,
 } from '@homehub/core';
-
-/** Contact, motion, leak, lock, climate, and camera sensors report a battery percentage. */
-const BATTERY_SENSOR_KINDS: FloorPlanSensorKind[] = [
-  'leak',
-  'contact',
-  'lock',
-  'climate',
-  'motion',
-  'camera',
-];
 
 export function cameraStatusFromDevice(device?: Device | null): string {
   if (device?.status !== 'ONLINE') {
@@ -84,7 +73,7 @@ export function sensorIsUnavailable(
   );
 }
 
-export function sensorClimate(
+function sensorClimate(
   sensor: FloorPlanSensor,
   household: HubHouseholdState,
   roomName?: string | null
@@ -153,12 +142,4 @@ export function sensorReadingText(
   roomName?: string | null
 ): string {
   return sensorReadingLines(sensor, household, roomName).join(' · ');
-}
-
-export function sensorAlert(status: string): boolean {
-  return sensorIsActive(status);
-}
-
-export function sensorReportsBattery(kind: FloorPlanSensorKind): boolean {
-  return BATTERY_SENSOR_KINDS.includes(kind);
 }

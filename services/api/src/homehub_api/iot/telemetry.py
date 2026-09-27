@@ -12,7 +12,7 @@ from ulid import new as new_ulid
 
 from homehub_api.config import DEMO_TENANT_PK
 from homehub_api.dynamo import set_update
-from homehub_api.household import channel_for_household_pk, normalize_tenant_pk
+from homehub_api.household import channel_for_household_pk, device_sk, normalize_tenant_pk, now_iso
 from homehub_api.household_events import (
     build_camera_snapshot_event,
     build_device_updated_event,
@@ -25,10 +25,6 @@ from homehub_api.telemetry_model import (
 RECENT_READINGS_LIMIT = 10
 READING_TTL_SECONDS = 3600
 SNAPSHOT_TTL_SECONDS = 90 * 24 * 60 * 60
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def reading_expires_at(recorded_at: str | None = None) -> int:
@@ -75,7 +71,7 @@ def _tenant_pk_for_device(table: Any, device_id: str, event: dict[str, Any]) -> 
 
 
 def _device_record(table: Any, tenant_pk: str, device_id: str) -> dict[str, Any] | None:
-    return table.get_item(Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"}).get("Item")
+    return table.get_item(Key={"PK": tenant_pk, "SK": device_sk(device_id)}).get("Item")
 
 
 def _reading_snapshot(
@@ -133,7 +129,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
     device_item = _device_record(table, tenant_pk, device_id)
     configuration = device_item.get("configuration") if device_item else None
     device_type = str(device_item["type"]) if device_item and device_item.get("type") else None
-    timestamp = _now_iso()
+    timestamp = now_iso()
     recorded_at = str(event.get("recordedAt") or timestamp)
     reading_id = _new_id()
 
@@ -202,7 +198,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
         fields["status"] = "ONLINE"
 
     table.update_item(
-        Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"},
+        Key={"PK": tenant_pk, "SK": device_sk(device_id)},
         **set_update(fields),
     )
     next_status = "OFFLINE" if device_status == "OFFLINE" else "ONLINE"

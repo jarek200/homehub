@@ -14,12 +14,6 @@ from homehub_api.iot.sfn.common import shadow_desired, thing_name_for
 logger = logging.getLogger(__name__)
 
 
-def parse_configuration(configuration: str | dict[str, Any] | None) -> dict[str, Any]:
-    from homehub_api.device_configuration import as_config_dict
-
-    return as_config_dict(configuration)
-
-
 def merge_configuration(base: dict[str, Any], patch: Any) -> dict[str, Any]:
     if isinstance(patch, str):
         try:
@@ -36,30 +30,6 @@ def merge_configuration(base: dict[str, Any], patch: Any) -> dict[str, Any]:
         else:
             merged[key] = value
     return merged
-
-
-def apply_shadow_state(
-    *,
-    configuration: str | dict[str, Any] | None,
-    device_type: str,
-    state: dict[str, Any],
-) -> tuple[str | None, dict[str, Any]]:
-    """Apply a shadow delta desired state and build the reported payload."""
-    reported: dict[str, Any] = {}
-    merged = parse_configuration(configuration)
-
-    configuration_patch = state.get("configuration")
-    if configuration_patch is not None:
-        merged = merge_configuration(merged, configuration_patch)
-        reported["configuration"] = merged
-
-    if "type" in state:
-        reported["type"] = state["type"]
-    elif device_type:
-        reported["type"] = device_type
-
-    configuration_json = json.dumps(merged) if merged else None
-    return configuration_json, reported
 
 
 def push_device_shadow_desired(

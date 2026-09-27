@@ -1,4 +1,4 @@
-export const INVITE_TOKEN_KEY = 'homehub.inviteToken';
+const INVITE_TOKEN_KEY = 'homehub.inviteToken';
 
 export function readInviteToken(search?: URLSearchParams | null): string | null {
   const fromQuery = search?.get('token')?.trim();

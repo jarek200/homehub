@@ -12,10 +12,6 @@ source "$ROOT/scripts/lib/aws-stage.sh"
 ALIAS="${1:-timer-cam-f}"
 DEVICE_ID="${2:-}"
 export SST_STAGE="${SST_STAGE:-int}"
-case "$SST_STAGE" in
-  prod) export AWS_PROFILE="${AWS_PROFILE_PROD:-homehub-prod}" ;;
-  int) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
-esac
 TMP_DIR=""
 GENERATED_DIR=""
 TARGET_SKETCH=""
@@ -51,21 +47,12 @@ GENERATED_DIR="${ROOT}/firmware/timer-camera/${TARGET_SKETCH}/generated"
 esp_require_wifi_creds
 esp_require_ota_password
 esp_require_tools
+homehub_aws_force_stage_profile "$SST_STAGE"
 homehub_aws_stage_env "${SST_STAGE:-int}"
 homehub_aws_check_auth
 
-TABLE_NAME="${HOMEHUB_TABLE_NAME:-}"
-if [[ -z "$TABLE_NAME" ]]; then
-  TABLE_NAME="$(aws dynamodb list-tables --query "TableNames[?contains(@, 'homehub-${SST_STAGE}') && contains(@, 'AppTable')]" --output text | awk '{print $1}')"
-fi
-if [[ -z "$TABLE_NAME" || "$TABLE_NAME" == "None" ]]; then
-  TABLE_NAME="$(cd "$ROOT" && AWS_PROFILE="${AWS_PROFILE:-}" pnpm exec sst shell --stage "$SST_STAGE" -- node --input-type=module -e "
-import { Resource } from 'sst';
-const table = Resource.AppTable?.name;
-if (!table) process.exit(1);
-console.log(table);
-" 2>/dev/null || true)"
-fi
+TABLE_NAME="$(homehub_app_table "$SST_STAGE" || true)"
+export TABLE_NAME
 if [[ -z "$TABLE_NAME" || "$TABLE_NAME" == "None" ]]; then
   echo "Could not resolve DynamoDB table for stage ${SST_STAGE} (is the stack deployed?)"
   exit 1

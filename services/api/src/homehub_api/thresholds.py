@@ -23,7 +23,3 @@ def parse_thresholds(configuration: ConfigInput = None) -> dict[str, float]:
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             thresholds[str(key)] = float(value)
     return thresholds
-
-
-def humidity_warning_threshold(configuration: ConfigInput = None) -> float:
-    return parse_thresholds(configuration)["humidityWarning"]

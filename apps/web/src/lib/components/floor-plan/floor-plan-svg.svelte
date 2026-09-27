@@ -34,7 +34,6 @@ import {
 import type { MouseEventHandler, PointerEventHandler } from 'svelte/elements';
 import FloorPlanSensorMark from '$lib/components/floor-plan/floor-plan-sensor-mark.svelte';
 import {
-  sensorAlert,
   sensorIsActive,
   sensorIsUnavailable,
   sensorReadingLines,
@@ -475,7 +474,7 @@ function handlePointerLeave(event: PointerEvent & { currentTarget: EventTarget &
       ? sensorReadingLines(sensor, household, room?.name)
       : []}
     {@const unavailable = sensorIsUnavailable(sensor, household, room?.name, linked)}
-    {@const alert = !unavailable && sensorAlert(status)}
+    {@const alert = !unavailable && sensorIsActive(status)}
     <g
       transform="translate({sensor.x} {sensor.y})"
       class="floor-plan-sensor-wrap"

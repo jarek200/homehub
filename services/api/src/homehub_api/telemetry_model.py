@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import random
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -29,44 +28,6 @@ def _coerce_state(
 
 def _is_environmental_sensor(device_type: str | None) -> bool:
     return device_type == "environmental-sensor"
-
-
-def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, float | bool]:
-    if _is_environmental_sensor(device_type):
-        return {
-            "temperature": round(random.uniform(20.0, 24.0), 1),
-            "humidity": round(random.uniform(45.0, 60.0), 1),
-            "pressureHpa": round(random.uniform(990.0, 1020.0), 0),
-            "lightLux": round(random.uniform(80.0, 400.0), 1),
-            "uvMwCm2": round(random.uniform(0.0, 2.0), 2),
-            "vocIndex": round(random.uniform(80.0, 140.0), 0),
-            "batteryVoltage": round(random.uniform(3.8, 4.1), 2),
-            "batteryPercent": round(random.uniform(55.0, 85.0), 0),
-        }
-
-    if device_type == "camera":
-        return {
-            "pan": 90.0,
-            "tilt": 90.0,
-        }
-
-    if device_type == "leak-sensor":
-        return {
-            "leak": False,
-            "batteryPercent": round(random.uniform(55.0, 95.0), 0),
-        }
-
-    if device_type in {"contact-sensor", "motion-sensor", "lock"}:
-        return {
-            "batteryPercent": round(random.uniform(55.0, 95.0), 0),
-        }
-
-    if device_type == "plug":
-        return {
-            "on": True,
-        }
-
-    return {}
 
 
 def derive_alarm_state(

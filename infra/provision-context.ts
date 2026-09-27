@@ -1,6 +1,9 @@
 /** Parity helpers for the DeviceProvision JSONata state machine. */
 
-export const DEMO_TENANT_PK = 'HOUSEHOLD#demo';
+import { DEMO_TENANT_PK } from '@homehub/core';
+
+export { DEMO_TENANT_PK };
+
 const HOUSEHOLD_PREFIX = 'HOUSEHOLD#';
 const DEVICE_SK_PREFIX = 'DEVICE#';
 

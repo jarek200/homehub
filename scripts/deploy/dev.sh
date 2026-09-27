@@ -18,7 +18,7 @@ fi
 
 export SST_STAGE="$STAGE"
 # Personal stages deploy to the int workload account; ignore a stray AWS_PROFILE=prod.
-export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}"
+homehub_aws_force_stage_profile int
 homehub_aws_stage_env "$STAGE"
 homehub_aws_check_auth
 

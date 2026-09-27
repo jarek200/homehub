@@ -11,12 +11,9 @@ source "$ROOT/scripts/lib/aws-stage.sh"
 DEVICE_ID="${CORES3_DEVICE_ID:-cores3-gateway}"
 CONTROLLER="${ESP_MATTER_CONTROLLER:-$HOME/esp/esp-matter/examples/controller}"
 export SST_STAGE="${SST_STAGE:-int}"
-case "$SST_STAGE" in
-  prod) export AWS_PROFILE="${AWS_PROFILE_PROD:-homehub-prod}" ;;
-  *) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
-esac
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 
+homehub_aws_force_stage_profile "$SST_STAGE"
 homehub_aws_stage_env "$SST_STAGE"
 homehub_aws_check_auth
 

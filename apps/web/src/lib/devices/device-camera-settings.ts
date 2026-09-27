@@ -16,7 +16,7 @@ export const CAMERA_FRAME_SIZES = [
 
 export type CameraFrameSizeId = (typeof CAMERA_FRAME_SIZES)[number]['id'];
 
-export const CAMERA_FRAME_SIZE_IDS = new Set<string>(CAMERA_FRAME_SIZES.map((item) => item.id));
+const CAMERA_FRAME_SIZE_IDS = new Set<string>(CAMERA_FRAME_SIZES.map((item) => item.id));
 
 export const CAMERA_JPEG_QUALITY_MIN = 4;
 export const CAMERA_JPEG_QUALITY_MAX = 63;
@@ -71,7 +71,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function normalizeCameraFrameSize(value: unknown): CameraFrameSizeId {
+function normalizeCameraFrameSize(value: unknown): CameraFrameSizeId {
   if (typeof value === 'string' && CAMERA_FRAME_SIZE_IDS.has(value)) {
     return value as CameraFrameSizeId;
   }

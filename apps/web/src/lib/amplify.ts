@@ -77,5 +77,3 @@ if (typeof window !== 'undefined') {
     console.error('[Amplify] Auto-initialization failed:', err);
   });
 }
-
-export default Amplify;

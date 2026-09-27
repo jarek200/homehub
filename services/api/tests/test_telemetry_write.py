@@ -6,6 +6,7 @@ from datetime import UTC
 from typing import Any
 from unittest.mock import MagicMock
 
+from homehub_api.household import device_sk
 from homehub_api.iot.telemetry import (
     _tenant_pk_for_device,
     reading_expires_at,
@@ -40,7 +41,7 @@ def test_write_telemetry_denormalizes_last_and_recent_readings(
     device_id = "dev-1"
     device_item = {
         "PK": "HOUSEHOLD#demo",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "name": "Kitchen",
         "type": "environmental-sensor",
@@ -94,7 +95,7 @@ def test_write_telemetry_honors_explicit_tenant(monkeypatch: Any) -> None:
     device_id = "matter-2"
     device_item = {
         "PK": "HOUSEHOLD#user-1",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "name": "TIMMERFLOTTE 1",
         "type": "environmental-sensor",
@@ -128,7 +129,7 @@ def test_write_telemetry_keeps_offline_devices_offline(monkeypatch: Any) -> None
     device_id = "dev-offline"
     device_item = {
         "PK": "HOUSEHOLD#demo",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "name": "Basement",
         "type": "environmental-sensor",
@@ -164,7 +165,7 @@ def test_write_telemetry_stores_snapshot_key(monkeypatch: Any) -> None:
     device_id = "cam-1"
     device_item = {
         "PK": "HOUSEHOLD#demo",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "name": "Hallway",
         "type": "camera",
@@ -203,7 +204,7 @@ def test_write_telemetry_stores_occupied_and_household_snapshot_key(monkeypatch:
     device_id = "cam-1"
     device_item = {
         "PK": "HOUSEHOLD#family-1",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "name": "Hallway",
         "type": "camera",
@@ -241,7 +242,7 @@ def test_write_telemetry_publishes_camera_snapshot_event(monkeypatch: Any) -> No
     device_id = "cam-1"
     device_item = {
         "PK": "HOUSEHOLD#family-1",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "type": "camera",
         "status": "UNKNOWN",
@@ -294,7 +295,7 @@ def test_write_telemetry_publishes_camera_device_update(monkeypatch: Any) -> Non
     device_id = "cam-1"
     device_item = {
         "PK": "HOUSEHOLD#family-1",
-        "SK": f"DEVICE#{device_id}",
+        "SK": device_sk(device_id),
         "deviceId": device_id,
         "type": "camera",
         "status": "UNKNOWN",

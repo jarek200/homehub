@@ -11,6 +11,21 @@ export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 export const RUNTIME_KINDS = ['physical', 'matter'] as const;
 export type RuntimeKind = (typeof RUNTIME_KINDS)[number];
 
+export const DEVICE_TYPE_IDS = [
+  'environmental-sensor',
+  'camera',
+  'matter-gateway',
+  'light',
+  'plug',
+  'contact-sensor',
+  'leak-sensor',
+  'motion-sensor',
+  'button',
+  'lock',
+  'blind',
+] as const;
+export type DeviceType = (typeof DEVICE_TYPE_IDS)[number];
+
 export const POWER_MODES = catalog.powerModes;
 export type PowerMode = (typeof POWER_MODES)[number];
 

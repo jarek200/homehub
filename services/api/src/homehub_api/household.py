@@ -16,12 +16,13 @@ INVITE_PREFIX = "INVITE#"
 
 HOUSEHOLD_METADATA_SK = "METADATA"
 HOUSEHOLD_LOOKUP_SK = "HOUSEHOLD"
+HUB_STATE_SK = "HUB_STATE"
+HUB_RULES_SK = "HUB_RULES"
 PROFILE_SK = "PROFILE"
 MEMBER_SK_PREFIX = "MEMBER#"
 INVITE_SK_PREFIX = "INVITE#"
+DEVICE_SK_PREFIX = "DEVICE#"
 
-HOUSEHOLD_ROLES = ("OWNER", "MEMBER")
-INVITE_STATUSES = ("pending", "accepted", "cancelled", "expired")
 INVITE_TTL_SECONDS = 7 * 24 * 60 * 60
 STATE_WRITE_MAX_ATTEMPTS = 5
 
@@ -37,6 +38,10 @@ def now_iso() -> str:
 
 def household_pk(household_id: str) -> str:
     return f"{HOUSEHOLD_PREFIX}{household_id}"
+
+
+def device_sk(device_id: str) -> str:
+    return f"{DEVICE_SK_PREFIX}{device_id}"
 
 
 def user_pk(user_id: str) -> str:
@@ -105,10 +110,6 @@ def normalize_email(email: str) -> str:
 
 def is_valid_email(email: str) -> bool:
     return bool(_EMAIL_RE.match(normalize_email(email)))
-
-
-def emails_match(left: str, right: str) -> bool:
-    return bool(left and right and normalize_email(left) == normalize_email(right))
 
 
 def hash_invite_token(token: str) -> str:
@@ -194,11 +195,6 @@ def resolve_household_pk_for_gateway(
                 return normalize_tenant_pk(tenant_pk)
     hid = household_id_from_pk(str(event_hub_id or DEMO_TENANT_ID))
     return household_pk(hid)
-
-
-def snapshot_object_key(device_id: str, recorded_at: str, household_id: str) -> str:
-    stamp = recorded_at.replace(":", "").replace("+00:00", "Z")
-    return f"snapshots/{household_id}/{device_id}/{stamp}.jpg"
 
 
 def snapshot_prefixes(

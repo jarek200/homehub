@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, cast
 
 from ulid import new as new_ulid
@@ -10,7 +10,7 @@ from ulid import new as new_ulid
 from homehub_api.config import DEMO_TENANT_PK
 from homehub_api.device_configuration import DeviceConfiguration, configuration_for_create
 from homehub_api.errors import ApiError
-from homehub_api.household import household_id_from_pk
+from homehub_api.household import DEVICE_SK_PREFIX, device_sk, household_id_from_pk, now_iso
 from homehub_api.hub_state import (
     apply_hub_command,
     apply_hub_device,
@@ -29,10 +29,6 @@ from homehub_api.pagination import (
     decode_device_cursor,
     encode_device_cursor,
 )
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _new_id() -> str:
@@ -74,7 +70,7 @@ class FakeHubStore:
         start_idx = 0
         if cursor:
             key = decode_device_cursor(cursor)
-            after_id = key["SK"].removeprefix("DEVICE#")
+            after_id = key["SK"].removeprefix(DEVICE_SK_PREFIX)
             for index, device in enumerate(sorted_devices):
                 if device.device_id == after_id:
                     start_idx = index + 1
@@ -85,7 +81,7 @@ class FakeHubStore:
         if start_idx + limit < len(sorted_devices) and page:
             last = page[-1]
             next_cursor = encode_device_cursor(
-                {"PK": DEMO_TENANT_PK, "SK": f"DEVICE#{last.device_id}"}
+                {"PK": DEMO_TENANT_PK, "SK": device_sk(last.device_id)}
             )
         return DeviceListPage(items=page, next_cursor=next_cursor)
 
@@ -98,7 +94,7 @@ class FakeHubStore:
         device_id = device_id or _new_id()
         if device_id in self.devices:
             raise ApiError("Device already exists", 409, "Conflict")
-        timestamp = _now_iso()
+        timestamp = now_iso()
         is_matter_child = payload.runtime_kind == "matter"
         device = DeviceResponse(
             deviceId=device_id,
@@ -145,7 +141,7 @@ class FakeHubStore:
 
         data = existing.model_dump(by_alias=True)
         data.update(updates)
-        data["updatedAt"] = _now_iso()
+        data["updatedAt"] = now_iso()
         updated = DeviceResponse.model_validate(data)
         self.devices[device_id] = updated
         return updated
@@ -189,15 +185,9 @@ class FakeHubStore:
         current = self.get_hub_state()
         next_state = mutator(current)
         self.revision += 1
-        next_state = {**next_state, "stateVersion": self.revision, "updatedAt": _now_iso()}
+        next_state = {**next_state, "stateVersion": self.revision, "updatedAt": now_iso()}
         self.hub_state = next_state
         return next_state
-
-    def put_hub_state(self, state: dict[str, Any]) -> dict[str, Any]:
-        return self.update_hub_state(lambda _current: state)
-
-    def get_floor_plan(self) -> dict[str, Any] | None:
-        return self.hub_plan
 
     def get_floor_plan_library(self) -> dict[str, Any] | None:
         return self.hub_library
@@ -244,7 +234,7 @@ class FakeHubStore:
 
     def put_commission_job(self, job: dict[str, Any]) -> dict[str, Any]:
         stored = dict(job)
-        stored["updatedAt"] = stored.get("updatedAt") or _now_iso()
+        stored["updatedAt"] = stored.get("updatedAt") or now_iso()
         self.commissions[str(stored["commissionId"])] = stored
         self.pair_index[(str(stored["gatewayId"]), int(stored["nodeId"]))] = {
             "commissionId": stored["commissionId"],
@@ -262,14 +252,8 @@ class FakeHubStore:
         if job is None:
             raise ApiError("Commission job not found", 404, "NotFound")
         job.update(updates)
-        job["updatedAt"] = _now_iso()
+        job["updatedAt"] = now_iso()
         return self.put_commission_job(job)
-
-    def get_commission_by_node(self, gateway_id: str, node_id: int) -> dict[str, Any] | None:
-        pointer = self.pair_index.get((gateway_id, node_id))
-        if pointer is None:
-            return None
-        return self.get_commission_job(str(pointer["commissionId"]))
 
     def list_pairing_node_ids(self, gateway_id: str) -> list[int]:
         return [
@@ -281,7 +265,7 @@ class FakeHubStore:
     def put_pair_result(
         self, gateway_id: str, node_id: int, event: str, error: str | None = None
     ) -> dict[str, Any]:
-        item = {"event": event, "error": error, "updatedAt": _now_iso()}
+        item = {"event": event, "error": error, "updatedAt": now_iso()}
         self.pair_results[(gateway_id, node_id)] = item
         return item
 
@@ -296,17 +280,14 @@ class FakeHubStore:
     def put_profile(self, user_id: str, updates: dict[str, Any]) -> dict[str, Any]:
         existing = self.get_profile(user_id) or {
             "userId": user_id,
-            "createdAt": _now_iso(),
+            "createdAt": now_iso(),
         }
-        item = {**existing, **updates, "userId": user_id, "updatedAt": _now_iso()}
+        item = {**existing, **updates, "userId": user_id, "updatedAt": now_iso()}
         self.profiles[user_id] = item
         return item
 
-    def get_household_metadata(self) -> dict[str, Any] | None:
-        return dict(self.household_metadata) if self.household_metadata else None
-
     def put_household_metadata(self, record: dict[str, Any]) -> dict[str, Any]:
-        timestamp = _now_iso()
+        timestamp = now_iso()
         item = {
             "householdId": self.household_id,
             "createdAt": record.get("createdAt") or timestamp,
@@ -322,7 +303,7 @@ class FakeHubStore:
 
     def put_member(self, record: dict[str, Any]) -> dict[str, Any]:
         user_id = str(record["userId"])
-        timestamp = _now_iso()
+        timestamp = now_iso()
         item = {
             "householdId": self.household_id,
             "createdAt": record.get("createdAt") or timestamp,
@@ -347,7 +328,7 @@ class FakeHubStore:
 
     def put_invite(self, record: dict[str, Any], token_hash: str | None = None) -> dict[str, Any]:
         invite_id = str(record["inviteId"])
-        timestamp = _now_iso()
+        timestamp = now_iso()
         item = {
             "householdId": self.household_id,
             "createdAt": record.get("createdAt") or timestamp,
@@ -379,7 +360,7 @@ class FakeHubStore:
         self.gateway_households[gateway_id] = {
             "householdId": household_id or self.household_id,
             "tenantPk": self.tenant_pk,
-            "updatedAt": _now_iso(),
+            "updatedAt": now_iso(),
         }
 
     def accept_invite_transaction(
@@ -395,7 +376,7 @@ class FakeHubStore:
         lookup = self.invite_tokens.get(token_hash)
         if not lookup or lookup.get("status") != "pending":
             raise ApiError("Invitation is no longer valid", 409, "Conflict")
-        timestamp = _now_iso()
+        timestamp = now_iso()
         household_id = str(invite["householdId"])
         role = str(invite.get("role") or "MEMBER")
         lookup["status"] = "accepted"

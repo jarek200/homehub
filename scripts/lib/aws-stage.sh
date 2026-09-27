@@ -48,6 +48,60 @@ homehub_aws_stage_env() {
   fi
 }
 
+# Set AWS_PROFILE for a stage even when the shell already has one.
+# Personal stages share the int account. Environment credentials (CI) are left alone.
+homehub_aws_force_stage_profile() {
+  local stage="${1:-int}"
+  if homehub_aws_using_env_credentials; then
+    unset AWS_PROFILE
+    return 0
+  fi
+  case "$stage" in
+    prod) export AWS_PROFILE="${AWS_PROFILE_PROD:-homehub-prod}" ;;
+    *) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
+  esac
+}
+
+# Resolve the stage AppTable. Honors TABLE_NAME and HOMEHUB_TABLE_NAME when set.
+homehub_app_table() {
+  local stage="${1:-${SST_STAGE:-int}}"
+  if [[ -n "${TABLE_NAME:-}" && "${TABLE_NAME}" != "None" ]]; then
+    printf '%s' "$TABLE_NAME"
+    return 0
+  fi
+  if [[ -n "${HOMEHUB_TABLE_NAME:-}" && "${HOMEHUB_TABLE_NAME}" != "None" ]]; then
+    printf '%s' "$HOMEHUB_TABLE_NAME"
+    return 0
+  fi
+
+  local table
+  table="$(
+    aws dynamodb list-tables --query \
+      "TableNames[?contains(@, 'homehub-${stage}') && contains(@, 'AppTable')]|[0]" \
+      --output text
+  )"
+  if [[ -n "$table" && "$table" != "None" ]]; then
+    printf '%s' "$table"
+    return 0
+  fi
+
+  local root
+  root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  table="$(
+    cd "$root" && AWS_PROFILE="${AWS_PROFILE:-}" pnpm exec sst shell --stage "$stage" -- node --input-type=module -e "
+import { Resource } from 'sst';
+const table = Resource.AppTable?.name;
+if (!table) process.exit(1);
+console.log(table);
+" 2>/dev/null || true
+  )"
+  if [[ -n "$table" && "$table" != "None" ]]; then
+    printf '%s' "$table"
+    return 0
+  fi
+  return 1
+}
+
 homehub_aws_check_auth() {
   if aws sts get-caller-identity --output text >/dev/null 2>&1; then
     return 0

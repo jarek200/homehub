@@ -48,10 +48,6 @@ export function householdChannelPathForId(householdId: string): string {
   return `/${householdChannelForId(householdId)}`;
 }
 
-export function householdChannelPathForSub(sub: string): string {
-  return householdChannelPathForId(sub);
-}
-
 export function householdIdFromChannelPath(channelPath: string): string | null {
   const normalized = channelPath.startsWith('/') ? channelPath : `/${channelPath}`;
   const prefix = `/${HOUSEHOLD_CHANNEL_NAMESPACE}/`;

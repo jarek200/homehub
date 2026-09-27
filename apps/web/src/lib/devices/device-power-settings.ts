@@ -1,11 +1,11 @@
 import type { DeviceConfiguration } from '@homehub/core';
 
-export const PHYSICAL_REPORTING_MIN_MINUTES = 1;
-export const PHYSICAL_REPORTING_MAX_MINUTES = 60;
+const PHYSICAL_REPORTING_MIN_MINUTES = 1;
+const PHYSICAL_REPORTING_MAX_MINUTES = 60;
 
 export const REPORTING_INTERVAL_PRESETS_MINUTES = [1, 5, 10, 15, 30, 60] as const;
 
-export function clampPhysicalReportingMinutes(minutes: number): number {
+function clampPhysicalReportingMinutes(minutes: number): number {
   return Math.min(
     PHYSICAL_REPORTING_MAX_MINUTES,
     Math.max(PHYSICAL_REPORTING_MIN_MINUTES, Math.round(minutes))

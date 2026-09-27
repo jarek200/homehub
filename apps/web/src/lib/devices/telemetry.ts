@@ -1,4 +1,4 @@
-import type { DeviceConfiguration, Reading } from '@homehub/core';
+import type { DeviceConfiguration, Reading, ReadingMetrics, ReadingState } from '@homehub/core';
 import {
   DEFAULT_THRESHOLDS,
   type DeviceThresholds,
@@ -6,8 +6,6 @@ import {
 } from '$lib/devices/device-thresholds';
 import { normalizeDeviceType } from '$lib/devices/device-type';
 
-export type ReadingState = 'normal' | 'warning';
-export type ReadingMetrics = Record<string, number | boolean>;
 type ConfigArg = DeviceConfiguration | null | undefined;
 
 const METRIC_LABELS: Record<string, string> = {
@@ -247,7 +245,7 @@ export function metricLabel(key: string): string {
   return METRIC_LABELS[key] ?? key;
 }
 
-export function metricShortLabel(key: string): string {
+function metricShortLabel(key: string): string {
   return METRIC_SHORT_LABELS[key] ?? key;
 }
 
@@ -298,7 +296,7 @@ export function formatMetricValue(key: string, value: number | boolean): string 
   return formatted;
 }
 
-export function primaryMetricKey(
+function primaryMetricKey(
   deviceType: string,
   reading: Reading | null | undefined
 ): string | undefined {
@@ -359,14 +357,6 @@ export function chartMetricKeys(deviceType: string, readings: Reading[]): string
   return preferred.filter((key) => available.has(key));
 }
 
-export function summaryMetricKeys(deviceType: string, reading: Reading | null): string[] {
-  const profile = profileForDeviceType(deviceType);
-  const metrics = reading ? readingMetrics(reading, deviceType) : {};
-  const keys = [...(profile?.summaryKeys ?? []), ...(profile?.detailKeys ?? [])];
-  if (keys.length === 0) return Object.keys(metrics).filter((key) => metrics[key] != null);
-  return keys.filter((key) => metrics[key] != null);
-}
-
 export function isBooleanMetric(key: string): boolean {
   return BOOLEAN_METRICS.has(key);
 }
@@ -374,7 +364,7 @@ export function isBooleanMetric(key: string): boolean {
 export type DerivedReadingState = { alarm: boolean; state: ReadingState };
 
 /** Re-derive state from metrics using the device's current thresholds. */
-export function effectiveReadingState(
+function effectiveReadingState(
   reading: Reading,
   deviceType: string,
   configuration?: ConfigArg
@@ -383,11 +373,11 @@ export function effectiveReadingState(
   return deriveAlarmState(readingMetrics(reading, deviceType), thresholds, deviceType);
 }
 
-export const READING_DOT_LIMIT = 10;
+const READING_DOT_LIMIT = 10;
 
 export type ReadingDotTone = 'normal' | 'alert';
 
-export function readingDotTone(state: DerivedReadingState): ReadingDotTone {
+function readingDotTone(state: DerivedReadingState): ReadingDotTone {
   if (state.state === 'warning') {
     return 'alert';
   }

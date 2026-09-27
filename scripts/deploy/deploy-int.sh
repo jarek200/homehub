@@ -67,7 +67,7 @@ fi
 load_github_vars
 
 # Always target the int workload account, even if the shell has AWS_PROFILE=prod.
-export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}"
+homehub_aws_force_stage_profile int
 homehub_aws_stage_env int
 homehub_aws_check_auth
 

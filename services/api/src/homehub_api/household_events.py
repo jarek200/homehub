@@ -5,13 +5,12 @@ from __future__ import annotations
 import re
 from typing import Any, cast
 
+from homehub_api.household import HUB_STATE_SK
 from homehub_api.sensor_history import SENSOR_HISTORY_KEY, sanitize_sensor_history
 
 HOUSEHOLD_STATE_EVENT_TYPE = "household.state.v1"
 CAMERA_SNAPSHOT_EVENT_TYPE = "camera.snapshot.v1"
 DEVICE_UPDATED_EVENT_TYPE = "device.updated.v1"
-HOUSEHOLD_CHANNEL_NAMESPACE = "household"
-HUB_STATE_SK = "HUB_STATE"
 
 _SECRET_KEY = re.compile(
     r"(password|secret|token|apikey|api_key|credential|setupcode|setup_code|"

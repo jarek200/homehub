@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import Any
 
 from homehub_api.config import DEMO_TENANT_PK
+from homehub_api.household import DEVICE_SK_PREFIX
 
 PROVISION_CONTEXT_KEYS = (
     "tenantPk",
@@ -22,10 +22,6 @@ PROVISION_CONTEXT_KEYS = (
 )
 
 NESTED_STEP_RESULT_KEYS = ("cert", "certResult", "thing", "thingResult")
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def thing_name_for(device_id: str) -> str:
@@ -72,13 +68,6 @@ def _flatten_step_results(event: dict[str, Any]) -> dict[str, Any]:
     return flattened
 
 
-def merge_provision_context(event: dict[str, Any], **updates: Any) -> dict[str, Any]:
-    """Carry provisioning identifiers through each Step Functions task."""
-    context = resolve_provision_context(event)
-    context.update(updates)
-    return context
-
-
 def resolve_provision_context(event: dict[str, Any]) -> dict[str, Any]:
     """Normalize the Step Functions payload into a provisioning context dict."""
     if not isinstance(event, dict):
@@ -108,27 +97,6 @@ def resolve_provision_context(event: dict[str, Any]) -> dict[str, Any]:
     raise KeyError("deviceId")
 
 
-def _unwrap_pipe_input(event: dict[str, Any] | list[Any]) -> dict[str, Any]:
-    if isinstance(event, list):
-        if not event:
-            raise ValueError("Pipe input array is empty")
-        first = event[0]
-        if not isinstance(first, dict):
-            raise ValueError("Pipe input array must contain stream record objects")
-        return first
-
-    if "dynamodb" in event:
-        return event
-
-    records = event.get("Records")
-    if isinstance(records, list) and records:
-        first = records[0]
-        if isinstance(first, dict):
-            return first
-
-    return event
-
-
 def parse_stream_record(record: dict[str, Any]) -> dict[str, Any] | None:
     if record.get("eventName") != "INSERT":
         return None
@@ -136,7 +104,7 @@ def parse_stream_record(record: dict[str, Any]) -> dict[str, Any] | None:
     dynamodb = record.get("dynamodb", {})
     keys = dynamodb.get("Keys", {})
     sk = keys.get("SK", {}).get("S", "")
-    if not sk.startswith("DEVICE#"):
+    if not sk.startswith(DEVICE_SK_PREFIX):
         return None
 
     new_image = dynamodb.get("NewImage", {})
@@ -144,7 +112,7 @@ def parse_stream_record(record: dict[str, Any]) -> dict[str, Any] | None:
     if lifecycle != "PROVISIONING":
         return None
 
-    device_id = new_image.get("deviceId", {}).get("S", sk.removeprefix("DEVICE#"))
+    device_id = new_image.get("deviceId", {}).get("S", sk.removeprefix(DEVICE_SK_PREFIX))
     runtime_kind = new_image.get("runtimeKind", {}).get("S", "physical")
     return {
         "tenantPk": new_image.get("PK", {}).get("S", DEMO_TENANT_PK),

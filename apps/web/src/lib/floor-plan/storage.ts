@@ -28,7 +28,7 @@ function normalizeStoredPlan(plan: FloorPlan): FloorPlan {
   return rebuildPlanWalls({ ...plan, doors });
 }
 
-export function loadStoredFloorPlanLibrary(): FloorPlanLibrary | null {
+function loadStoredFloorPlanLibrary(): FloorPlanLibrary | null {
   if (typeof localStorage === 'undefined') return null;
   try {
     const raw = localStorage.getItem(LIBRARY_KEY);

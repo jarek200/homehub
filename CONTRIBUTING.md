@@ -9,7 +9,36 @@ uv sync --all-packages
 cp .env.example .env.local
 ```
 
-Fill in `.env.local` for your own AWS account. `pnpm sso` logs in when you use the sample AWS profiles.
+Fill in `.env.local` for your own AWS account.
+
+### AWS profiles
+
+`pnpm sso` runs `aws sso login --sso-session=homehub`. Local deploys use the `homehub-int` profile for `int` and for personal `sst dev` stages, and `homehub-prod` for `prod`. A sample `~/.aws/config`:
+
+```ini
+[sso-session homehub]
+sso_start_url = https://your-org.awsapps.com/start
+sso_region = eu-west-1
+sso_registration_scopes = sso:account:access
+
+[profile homehub-int]
+sso_session = homehub
+sso_account_id = 123456789012
+sso_role_name = YourRole
+region = eu-west-1
+
+[profile homehub-prod]
+sso_session = homehub
+sso_account_id = 210987654321
+sso_role_name = YourRole
+region = eu-west-1
+```
+
+Those names are defaults. Override them with `AWS_PROFILE_INT` and `AWS_PROFILE_PROD` (see `.env.example`) instead of editing the scripts. Without `APP_URL`, a deploy uses the CloudFront hostname SST assigns.
+
+Custom DNS is optional. `APPS_HOSTED_ZONE_ID` is the Route 53 zone for `APP_DOMAIN`. When that zone lives in another account, set `DNS_ROLE_ARN` to a role that can change its records, and `DNS_SOURCE_PROFILE` (default `admin`) to the local profile used to assume it.
+
+Stage resources are named from the stage: the DynamoDB table contains `homehub-<stage>` and `AppTable`, camera snapshots use `homehub-snapshots-<stage>`, and the camera IoT role alias is `homehub-<stage>-camera-s3`.
 
 ## Checks
 

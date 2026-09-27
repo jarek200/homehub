@@ -2,7 +2,6 @@ from homehub_api.household import (
     DEMO_TENANT_PK,
     channel_for_household_pk,
     cognito_household_group,
-    emails_match,
     hash_email,
     hash_invite_token,
     household_id_from_pk,
@@ -15,7 +14,6 @@ from homehub_api.household import (
     normalize_tenant_pk,
     resolve_household_pk_for_gateway,
     resolve_household_pk_for_user,
-    snapshot_object_key,
     snapshot_prefixes,
 )
 
@@ -43,7 +41,6 @@ def test_household_keys_and_channels() -> None:
 
 def test_invite_email_and_token_hashing() -> None:
     assert normalize_email("  Pat@Example.com ") == "pat@example.com"
-    assert emails_match("Pat@Example.com", "pat@example.com")
     assert is_valid_email("pat@example.com")
     assert not is_valid_email("not-an-email")
     assert hash_email("Pat@Example.com") == hash_email("pat@example.com")
@@ -81,10 +78,7 @@ def test_resolve_gateway_uses_lookup_without_scan() -> None:
     assert resolve_household_pk_for_gateway(fallback, "missing", "demo") == "HOUSEHOLD#demo"
 
 
-def test_snapshot_keys_use_the_household_prefix() -> None:
-    assert snapshot_object_key("cam-1", "2026-08-19T11:30:00Z", "family-1") == (
-        "snapshots/family-1/cam-1/2026-08-19T113000Z.jpg"
-    )
+def test_snapshot_prefixes_include_household_and_thing() -> None:
     assert snapshot_prefixes("cam-1", "family-1") == [
         "snapshots/family-1/cam-1/",
         "snapshots/homehub-cam-1/",
