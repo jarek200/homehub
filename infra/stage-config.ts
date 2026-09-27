@@ -3,8 +3,8 @@
 /**
  * Stage-aware configuration for all infrastructure resources.
  *
- * This is the single place to tune resource sizes, timeouts, and
- * feature flags per environment. Every infra module imports from here
+ * This is the single place to tune resource sizes and timeouts
+ * per environment. Every infra module imports from here
  * rather than hardcoding values or branching on $app.stage individually.
  *
  * Usage:

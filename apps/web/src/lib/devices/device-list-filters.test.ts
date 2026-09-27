@@ -26,12 +26,6 @@ describe('device list filters', () => {
     ).toBe(true);
     expect(
       deviceMatchesListFilters(
-        { type: 'humidity-sensor' },
-        { power: false, env: true, security: false, leak: false }
-      )
-    ).toBe(true);
-    expect(
-      deviceMatchesListFilters(
         { type: 'leak-sensor' },
         { power: false, env: true, security: false, leak: false }
       )

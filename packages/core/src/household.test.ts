@@ -9,8 +9,6 @@ import {
   inviteExpiresAt,
   isHouseholdPk,
   isInviteExpired,
-  isLegacyHubPk,
-  LEGACY_DEMO_TENANT_PK,
   normalizeCognitoGroups,
   normalizeEmail,
   normalizeTenantPk,
@@ -19,17 +17,13 @@ import {
 import { isHouseholdSubscribeAllowed } from './household-events';
 
 describe('household keys', () => {
-  it('builds household and user keys and reads both prefixes', () => {
+  it('builds household and user keys', () => {
     expect(householdPk('abc')).toBe('HOUSEHOLD#abc');
     expect(userPk('abc')).toBe('USER#abc');
     expect(householdIdFromPk('HOUSEHOLD#abc')).toBe('abc');
-    expect(householdIdFromPk('HUB#abc')).toBe('abc');
     expect(isHouseholdPk('HOUSEHOLD#abc')).toBe(true);
-    expect(isLegacyHubPk('HUB#abc')).toBe(true);
     expect(normalizeTenantPk('abc')).toBe('HOUSEHOLD#abc');
-    expect(normalizeTenantPk('HUB#abc')).toBe('HOUSEHOLD#abc');
     expect(DEMO_TENANT_PK).toBe('HOUSEHOLD#demo');
-    expect(LEGACY_DEMO_TENANT_PK).toBe('HUB#demo');
   });
 
   it('names Cognito household groups from the household id', () => {

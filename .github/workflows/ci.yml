@@ -42,6 +42,7 @@ jobs:
         with:
           python-version: '3.13'
           enable-cache: true
+      - run: pnpm --filter @homehub/web exec svelte-kit sync
       - run: pnpm test
 
   build:

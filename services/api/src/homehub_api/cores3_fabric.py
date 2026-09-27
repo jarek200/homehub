@@ -8,7 +8,6 @@ from homehub_api.catalog_data import catalog
 
 _CATALOG = catalog()
 CORES3_GATEWAY_ID = str(_CATALOG["gatewayId"])
-LEGACY_DUMMY_IDS = set(_CATALOG["legacyDummyIds"])
 CORES3_FABRIC_DEVICES: list[dict[str, Any]] = list(_CATALOG["fabricDevices"])
 
 
@@ -50,24 +49,3 @@ def empty_household_state(now: str) -> dict[str, Any]:
         "scene": None,
         "updatedAt": now,
     }
-
-
-def _ids_from_state(state: dict[str, Any]) -> list[str]:
-    ids: list[str] = []
-    lock = state.get("lock")
-    if isinstance(lock, dict) and lock.get("id"):
-        ids.append(str(lock["id"]))
-    for key in ("lights", "plugs", "contacts", "motions", "leaks", "buttons"):
-        items = state.get(key)
-        if not isinstance(items, list):
-            continue
-        for item in items:
-            if isinstance(item, dict) and item.get("id"):
-                ids.append(str(item["id"]))
-    return ids
-
-
-def is_legacy_dummy_household_state(state: Any) -> bool:
-    if not isinstance(state, dict):
-        return False
-    return any(item_id in LEGACY_DUMMY_IDS for item_id in _ids_from_state(state))

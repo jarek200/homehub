@@ -2,7 +2,6 @@
 # Tear down an SST stage and remove leftover runtime resources so the next deploy starts clean.
 #
 # Usage:
-#   pnpm reset:int
 #   bash scripts/deploy/reset-stage.sh int
 #
 # After reset, redeploy with: pnpm deploy:int
@@ -30,9 +29,6 @@ homehub_aws_check_auth
 echo "Removing SST stage '$STAGE' (profile=${AWS_PROFILE:-default})..."
 cd "$ROOT"
 pnpm exec sst remove --stage "$STAGE"
-
-echo "Removing leftover AWS resources not tracked in SST state..."
-HOMEHUB_CLEAN_RUNTIME_IAM=true bash "$ROOT/scripts/deploy/cleanup-orphans.sh" "$STAGE"
 
 echo ""
 echo "Reset complete for stage '$STAGE'."

@@ -16,19 +16,18 @@ class _FakeTable:
         self.deleted_keys.append(Key)
 
 
-def test_decommission_device_deletes_simulator_registry(monkeypatch: Any) -> None:
+def test_decommission_device_deletes_registry_row(monkeypatch: Any) -> None:
     fake_table = _FakeTable()
     resource = MagicMock()
     resource.Table.return_value = fake_table
     monkeypatch.setenv("TABLE_NAME", "test-table")
     monkeypatch.setattr("homehub_api.store.boto3.resource", lambda _service: resource)
 
-    store = HubStore("test-table", tenant_pk="HUB#user-1")
+    store = HubStore("test-table", tenant_pk="HOUSEHOLD#user-1")
     store._decommission_device("dev-abc")
 
     assert fake_table.deleted_keys == [
         {"PK": "DEVICE_REGISTRY", "SK": "DEVICE#dev-abc"},
-        {"PK": "SIMULATOR", "SK": "DEVICE#dev-abc"},
     ]
 
 

@@ -59,12 +59,12 @@ function formatAxisLabel(iso: string): string {
   }
 }
 
-export function sortReadingsOldestFirst(readings: Reading[]): Reading[] {
+function sortReadingsOldestFirst(readings: Reading[]): Reading[] {
   return [...readings].sort((a, b) => readingTime(a) - readingTime(b));
 }
 
 /** Average (or max for boolean) points into ~maxPoints time buckets. */
-export function downsamplePoints(
+function downsamplePoints(
   points: ChartPoint[],
   maxPoints: number,
   options: { booleanScale?: boolean } = {}

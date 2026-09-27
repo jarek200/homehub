@@ -3,7 +3,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { provisionStateMachineDefinition } from './provision-state-machine';
-import { pythonLambdaEnv } from './python-lambda';
+import { pythonCatalogCopy, pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -65,12 +65,6 @@ export function createIotProvisioning(table: StorageTable, cameraAccess?: Camera
     'DeviceIotPolicy',
     `${$app.name}-${$app.stage}-device`
   );
-  // Prod certificates are still attached to the previous policy. IoT will not
-  // delete an attached policy, so keep it until migrate-iot-policy.sh prod runs.
-  const legacyIotPolicy =
-    $app.stage === 'prod'
-      ? createDeviceConnectPolicy('SimulatorIotPolicy', `${$app.name}-${$app.stage}-simulator`)
-      : undefined;
 
   const gatewayIotPolicy = new aws.iot.Policy('GatewayIotPolicy', {
     name: `${$app.name}-${$app.stage}-gateway`,
@@ -141,6 +135,7 @@ export function createIotProvisioning(table: StorageTable, cameraAccess?: Camera
   const createCertFn = new sst.aws.Function('SfnCreateCert', {
     handler: 'services/api/src/homehub_api/iot/sfn/create_cert.handler',
     runtime: 'python3.13',
+    copyFiles: pythonCatalogCopy,
     memory: stageConfig.lambda.memory,
     timeout: '120 seconds',
     // Provisioning is triggered by DynamoDB → Pipe → Step Functions. Live/dev
@@ -308,7 +303,6 @@ export function createIotProvisioning(table: StorageTable, cameraAccess?: Camera
 
   return {
     iotPolicy,
-    legacyIotPolicy,
     gatewayIotPolicy,
     cameraIotPolicy: cameraAccess?.cameraIotPolicy,
     iotEndpoint,

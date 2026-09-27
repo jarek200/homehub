@@ -2,7 +2,7 @@
 
 import * as aws from '@pulumi/aws';
 import { IamPropagationDelay } from './iam-wait';
-import { pythonLambdaEnv } from './python-lambda';
+import { pythonCatalogCopy, pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -213,6 +213,7 @@ export function createIotTelemetry(
   const telemetryWriter = new sst.aws.Function('TelemetryWriter', {
     handler: 'services/api/src/homehub_api/iot/telemetry.handler',
     runtime: 'python3.13',
+    copyFiles: pythonCatalogCopy,
     memory: stageConfig.lambda.memory,
     timeout: stageConfig.lambda.timeout,
     link: [table],
@@ -389,6 +390,7 @@ export function createIotTelemetry(
   const gatewayStateWriter = new sst.aws.Function('GatewayStateWriter', {
     handler: 'services/api/src/homehub_api/iot/gateway_state.handler',
     runtime: 'python3.13',
+    copyFiles: pythonCatalogCopy,
     memory: stageConfig.lambda.memory,
     timeout: stageConfig.lambda.timeout,
     link: [table],

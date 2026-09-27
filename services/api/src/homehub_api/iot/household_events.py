@@ -15,9 +15,9 @@ from boto3.dynamodb.types import TypeDeserializer
 from botocore.auth import SigV4Auth
 from botocore.awsrequest import AWSRequest
 
+from homehub_api.household import channel_for_household_pk
 from homehub_api.household_events import (
     build_household_state_event,
-    channel_for_hub_pk,
     is_hub_state_record,
     tenant_pk_from_record,
 )
@@ -72,7 +72,7 @@ def household_event_from_record(record: dict[str, Any]) -> tuple[str, dict[str, 
     tenant_pk = tenant_pk_from_record(record)
     if not tenant_pk:
         return None
-    channel = channel_for_hub_pk(tenant_pk)
+    channel = channel_for_household_pk(tenant_pk)
     if not channel:
         return None
     item = unmarshal_image((record.get("dynamodb") or {}).get("NewImage"))

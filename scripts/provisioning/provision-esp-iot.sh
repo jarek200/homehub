@@ -12,10 +12,6 @@ source "$ROOT/scripts/lib/aws-stage.sh"
 ALIAS="${1:-timer-cam-f}"
 DEVICE_ID="${2:-}"
 export SST_STAGE="${SST_STAGE:-int}"
-case "$SST_STAGE" in
-  prod) export AWS_PROFILE="${AWS_PROFILE_PROD:-homehub-prod}" ;;
-  int) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
-esac
 TMP_DIR=""
 GENERATED_DIR=""
 TARGET_SKETCH=""
@@ -51,21 +47,12 @@ GENERATED_DIR="${ROOT}/firmware/timer-camera/${TARGET_SKETCH}/generated"
 esp_require_wifi_creds
 esp_require_ota_password
 esp_require_tools
+homehub_aws_force_stage_profile "$SST_STAGE"
 homehub_aws_stage_env "${SST_STAGE:-int}"
 homehub_aws_check_auth
 
-TABLE_NAME="${HOMEHUB_TABLE_NAME:-}"
-if [[ -z "$TABLE_NAME" ]]; then
-  TABLE_NAME="$(aws dynamodb list-tables --query "TableNames[?contains(@, 'homehub-${SST_STAGE}') && contains(@, 'AppTable')]" --output text | awk '{print $1}')"
-fi
-if [[ -z "$TABLE_NAME" || "$TABLE_NAME" == "None" ]]; then
-  TABLE_NAME="$(cd "$ROOT" && AWS_PROFILE="${AWS_PROFILE:-}" pnpm exec sst shell --stage "$SST_STAGE" -- node --input-type=module -e "
-import { Resource } from 'sst';
-const table = Resource.AppTable?.name;
-if (!table) process.exit(1);
-console.log(table);
-" 2>/dev/null || true)"
-fi
+TABLE_NAME="$(homehub_app_table "$SST_STAGE" || true)"
+export TABLE_NAME
 if [[ -z "$TABLE_NAME" || "$TABLE_NAME" == "None" ]]; then
   echo "Could not resolve DynamoDB table for stage ${SST_STAGE} (is the stack deployed?)"
   exit 1
@@ -93,7 +80,7 @@ if [[ -z "$DEVICE_ITEM" || "$DEVICE_ITEM" == "null" ]]; then
 fi
 
 LIFECYCLE="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("lifecycleStatus",{}).get("S",""))')"
-RUNTIME_KIND="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("runtimeKind",{}).get("S","simulated"))')"
+RUNTIME_KIND="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("runtimeKind",{}).get("S","physical"))')"
 DEVICE_TYPE="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("type",{}).get("S",""))')"
 if [[ "$LIFECYCLE" != "READY" ]]; then
   echo "Device ${DEVICE_ID} lifecycle is ${LIFECYCLE}; wait until READY."
@@ -115,7 +102,6 @@ AWS_REGION_NAME="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo eu
 SNAPSHOT_BUCKET="${HOMEHUB_SNAPSHOT_BUCKET:-homehub-snapshots-${SST_STAGE}}"
 IOT_ROLE_ALIAS="${HOMEHUB_IOT_ROLE_ALIAS:-homehub-${SST_STAGE}-camera-s3}"
 HOUSEHOLD_ID="${HUB_ID#HOUSEHOLD#}"
-HOUSEHOLD_ID="${HOUSEHOLD_ID#HUB#}"
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/homehub-iot.XXXXXX")"
 chmod 700 "$TMP_DIR"

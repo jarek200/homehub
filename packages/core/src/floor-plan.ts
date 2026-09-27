@@ -628,70 +628,6 @@ export function mirrorFloorPlanHorizontal(plan: FloorPlan): FloorPlan {
   });
 }
 
-/** Portrait canvases drawn at 820×860 rotate once to landscape. */
-export function migratePortraitCanvas(plan: FloorPlan): FloorPlan {
-  if (plan.width !== 820 || plan.height !== 860) return plan;
-  return rotateFloorPlanCounterClockwise(plan);
-}
-
-/** Early side-by-side sample, distinct from the later stacked plan. */
-export function isLegacySideBySideLayout(plan: {
-  rooms?: Array<{ id?: string; w?: number; h?: number; x?: number; y?: number }>;
-}): boolean {
-  // Exact side-by-side signature (landscape living room is also 230 × 280,
-  // so the x positions disambiguate).
-  if (isPublishedSideBySideLayout(plan)) return true;
-  // Simplified stacked draft: sideways bathroom, no store cupboards yet.
-  const living = plan.rooms?.find((room) => room.id === 'living');
-  const bath = plan.rooms?.find((room) => room.id === 'bath');
-  const store = plan.rooms?.find((room) => room.id === 'store');
-  // Hand-drawn 680×400 draft: kitchen on the right, two store cupboards.
-  const store1 = plan.rooms?.find((room) => room.id === 'store-1');
-  if (living?.x === 410 && living?.w === 230 && living?.h === 280 && store1 != null) {
-    return true;
-  }
-  return (
-    living?.w === 280 &&
-    living?.h === 230 &&
-    bath?.w === 120 &&
-    bath?.h === 80 &&
-    store === undefined
-  );
-}
-
-/** @deprecated Use isLegacySideBySideLayout. */
-export function isPublishedSideBySideLayout(plan: {
-  rooms?: Array<{ id?: string; x?: number; w?: number; h?: number }>;
-}): boolean {
-  const living = plan.rooms?.find((room) => room.id === 'living');
-  const bed1 = plan.rooms?.find((room) => room.id === 'bed-1');
-  return living?.x === 40 && living?.w === 230 && bed1?.x === 420 && bed1?.w === 180;
-}
-
-/** Portrait stacked sample (400 × 700): rotate it to the landscape drawing. */
-export function isPortraitStackedPlan(plan: {
-  width?: number;
-  height?: number;
-  rooms?: Array<{ id?: string }>;
-}): boolean {
-  if (plan.width !== 400 || plan.height !== 700) return false;
-  const ids = new Set(plan.rooms?.map((room) => room.id));
-  return ids.has('living') && ids.has('hall') && ids.has('bed-1');
-}
-
-export function migratePortraitStackedPlan(plan: FloorPlan): FloorPlan {
-  if (isPortraitStackedPlan(plan)) {
-    const rotated = rotateFloorPlanCounterClockwise(plan);
-    return {
-      ...rotated,
-      rooms: rotated.rooms.map((room) =>
-        room.id === 'bath' ? { ...room, labelAngle: undefined } : room
-      ),
-    };
-  }
-  return plan;
-}
-
 export function snapPenPoint(
   point: FloorPlanPoint,
   from?: FloorPlanPoint | null,
@@ -1551,37 +1487,32 @@ export function parseFloorPlan(value: unknown): FloorPlan | null {
     return null;
   }
 
-  const rooms = raw.rooms.filter(isRoom).map(stripLegacyRoomIcon);
+  const rooms = raw.rooms.filter(isRoom);
   if (rooms.length !== raw.rooms.length) return null;
 
-  return migratePortraitStackedPlan(
-    migratePortraitCanvas(
-      normalizeFloorPlan({
-        id: typeof raw.id === 'string' ? raw.id : 'user-plan',
-        name: typeof raw.name === 'string' ? raw.name : 'My plan',
-        beds: typeof raw.beds === 'number' ? raw.beds : 0,
-        baths: typeof raw.baths === 'number' ? raw.baths : 0,
-        width: raw.width,
-        height: raw.height,
-        rooms,
-        walls: Array.isArray(raw.walls) ? raw.walls.filter(isWall) : [],
-        doors: raw.doors.filter(isDoor),
-        windows: raw.windows.filter(isWindow),
-        sensors: Array.isArray(raw.sensors) ? raw.sensors.filter(isSensor) : [],
-        traces: Array.isArray(raw.traces) ? raw.traces.filter(isTrace) : [],
-        sensorScale:
-          typeof raw.sensorScale === 'number'
-            ? planSensorScale({ sensorScale: raw.sensorScale })
-            : undefined,
-        showSensorLabels:
-          typeof raw.showSensorLabels === 'boolean' ? raw.showSensorLabels : undefined,
-        updatedAt:
-          typeof raw.updatedAt === 'string' && Number.isFinite(Date.parse(raw.updatedAt))
-            ? raw.updatedAt
-            : undefined,
-      })
-    )
-  );
+  return normalizeFloorPlan({
+    id: typeof raw.id === 'string' ? raw.id : 'user-plan',
+    name: typeof raw.name === 'string' ? raw.name : 'My plan',
+    beds: typeof raw.beds === 'number' ? raw.beds : 0,
+    baths: typeof raw.baths === 'number' ? raw.baths : 0,
+    width: raw.width,
+    height: raw.height,
+    rooms,
+    walls: Array.isArray(raw.walls) ? raw.walls.filter(isWall) : [],
+    doors: raw.doors.filter(isDoor),
+    windows: raw.windows.filter(isWindow),
+    sensors: Array.isArray(raw.sensors) ? raw.sensors.filter(isSensor) : [],
+    traces: Array.isArray(raw.traces) ? raw.traces.filter(isTrace) : [],
+    sensorScale:
+      typeof raw.sensorScale === 'number'
+        ? planSensorScale({ sensorScale: raw.sensorScale })
+        : undefined,
+    showSensorLabels: typeof raw.showSensorLabels === 'boolean' ? raw.showSensorLabels : undefined,
+    updatedAt:
+      typeof raw.updatedAt === 'string' && Number.isFinite(Date.parse(raw.updatedAt))
+        ? raw.updatedAt
+        : undefined,
+  });
 }
 
 export function stampFloorPlan(plan: FloorPlan, at = new Date().toISOString()): FloorPlan {
@@ -1982,12 +1913,6 @@ function closestInsidePoint(
   }
   const t = lo * inset;
   return { x: from.x + (x - from.x) * t, y: from.y + (y - from.y) * t };
-}
-
-function stripLegacyRoomIcon(room: FloorPlanRoom): FloorPlanRoom {
-  if (!('icon' in room)) return room;
-  const { icon: _icon, ...rest } = room as FloorPlanRoom & { icon?: unknown };
-  return rest;
 }
 
 function isRoom(value: unknown): value is FloorPlanRoom {

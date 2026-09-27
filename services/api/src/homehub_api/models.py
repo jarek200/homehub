@@ -12,7 +12,7 @@ from homehub_api.device_configuration import (
 DeviceStatus = Literal["ONLINE", "OFFLINE", "UNKNOWN"]
 LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
 ReadingState = Literal["normal", "warning"]
-RuntimeKind = Literal["simulated", "physical", "matter"]
+RuntimeKind = Literal["physical", "matter"]
 DeviceType = Literal[
     "environmental-sensor",
     "camera",
@@ -323,22 +323,6 @@ class MatterProductResponse(BaseModel):
 
 class MatterProductListResponse(BaseModel):
     items: list[MatterProductResponse]
-
-
-class CreateMatterDeviceRequest(BaseModel):
-    product_id: str = Field(alias="productId", min_length=1, max_length=64)
-    name: str | None = Field(default=None, max_length=INPUT_LIMITS["name"])
-    location: str | None = Field(default=None, max_length=INPUT_LIMITS["location"])
-
-    model_config = {"populate_by_name": True}
-
-    @field_validator("name", "location", mode="before")
-    @classmethod
-    def strip_optional(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        stripped = value.strip()
-        return stripped or None
 
 
 class CreateMatterCommissionRequest(BaseModel):

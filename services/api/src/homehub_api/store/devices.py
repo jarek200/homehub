@@ -9,6 +9,7 @@ from homehub_api.device_configuration import (
 )
 from homehub_api.dynamo import set_update
 from homehub_api.errors import ApiError
+from homehub_api.household import DEVICE_SK_PREFIX, device_sk
 from homehub_api.models import (
     CreateDeviceRequest,
     DeviceResponse,
@@ -26,7 +27,7 @@ class DeviceMixin(StoreSurface):
         if cursor:
             query_kwargs["ExclusiveStartKey"] = decode_device_cursor(cursor)
 
-        result = self._query_sk_prefix(self.tenant_pk, "DEVICE#", **query_kwargs)
+        result = self._query_sk_prefix(self.tenant_pk, DEVICE_SK_PREFIX, **query_kwargs)
         devices: list[DeviceResponse] = []
         for item in result.get("Items", []):
             device = _safe_to_device(item)
@@ -38,7 +39,7 @@ class DeviceMixin(StoreSurface):
         return DeviceListPage(items=devices, next_cursor=next_cursor)
 
     def get_device(self, device_id: str) -> DeviceResponse | None:
-        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": f"DEVICE#{device_id}"})
+        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": device_sk(device_id)})
         item = result.get("Item")
         return _safe_to_device(item) if item else None
 
@@ -63,7 +64,7 @@ class DeviceMixin(StoreSurface):
         is_matter_child = payload.runtime_kind == "matter"
         item: dict[str, Any] = {
             "PK": self.tenant_pk,
-            "SK": f"DEVICE#{device_id}",
+            "SK": device_sk(device_id),
             "deviceId": device_id,
             "name": payload.name,
             "type": payload.type,
@@ -118,7 +119,7 @@ class DeviceMixin(StoreSurface):
             )
 
         result = self._table.update_item(
-            Key={"PK": self.tenant_pk, "SK": f"DEVICE#{device_id}"},
+            Key={"PK": self.tenant_pk, "SK": device_sk(device_id)},
             ReturnValues="ALL_NEW",
             **set_update({**updates, "updatedAt": _now_iso()}),
         )
@@ -154,7 +155,7 @@ class DeviceMixin(StoreSurface):
             thing_name=device.thing_name,
         )
         self._decommission_device(device_id)
-        self._table.delete_item(Key={"PK": self.tenant_pk, "SK": f"DEVICE#{device_id}"})
+        self._table.delete_item(Key={"PK": self.tenant_pk, "SK": device_sk(device_id)})
         if device.runtime_kind == "matter":
             self.remove_household_device(device_id)
             from homehub_api.matter_devices import publish_store_fabric

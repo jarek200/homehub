@@ -21,8 +21,7 @@
  *
  * Stages:
  *   pnpm dev        → personal stage (OS username); never int/prod
- *   pnpm deploy:int → shared int demo (CloudFront)
- *   pnpm deploy:prod → production
+ *   pnpm deploy:int → live stack; the public hostname comes from APP_URL
  *
  * Log in first: pnpm sso
  */

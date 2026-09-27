@@ -3,21 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
 
 from homehub_api.errors import ApiError
-from homehub_api.household import STATE_WRITE_MAX_ATTEMPTS
-from homehub_api.hub_state import HUB_STATE_SK, default_household_state, dynamo_safe
+from homehub_api.household import HUB_STATE_SK, STATE_WRITE_MAX_ATTEMPTS, now_iso
+from homehub_api.hub_state import default_household_state, dynamo_safe
 
 Mutator = Callable[[dict[str, Any]], dict[str, Any]]
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def revision_of(item: dict[str, Any] | None, state: dict[str, Any] | None = None) -> int:
@@ -60,7 +55,7 @@ def commit_hub_state(
         next_state = mutator(previous)
         if not isinstance(next_state, dict):
             next_state = default_household_state()
-        timestamp = _now_iso()
+        timestamp = now_iso()
         next_revision = current_revision + 1
         next_state = {
             **next_state,

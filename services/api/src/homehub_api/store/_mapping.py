@@ -6,7 +6,7 @@ from typing import Any
 from boto3.dynamodb.types import TypeSerializer
 from ulid import new as new_ulid
 
-from homehub_api.household import now_iso
+from homehub_api.household import DEVICE_SK_PREFIX, now_iso
 from homehub_api.models import DeviceResponse, ReadingResponse
 from homehub_api.telemetry_model import reading_from_dynamo
 
@@ -30,8 +30,8 @@ def _device_id_from_item(item: dict[str, Any]) -> str:
     if device_id:
         return str(device_id)
     sk = str(item.get("SK", ""))
-    if sk.startswith("DEVICE#"):
-        return sk.removeprefix("DEVICE#")
+    if sk.startswith(DEVICE_SK_PREFIX):
+        return sk.removeprefix(DEVICE_SK_PREFIX)
     raise KeyError("deviceId")
 
 
@@ -125,7 +125,7 @@ def _to_device(item: dict[str, Any]) -> DeviceResponse:
         name=str(item["name"]),
         type=device_type,
         location=item.get("location"),
-        runtimeKind=item.get("runtimeKind", "simulated"),
+        runtimeKind=item.get("runtimeKind", "physical"),
         gatewayId=item.get("gatewayId"),
         nodeId=int(item["nodeId"]) if item.get("nodeId") is not None else None,
         endpoint=int(item["endpoint"]) if item.get("endpoint") is not None else None,

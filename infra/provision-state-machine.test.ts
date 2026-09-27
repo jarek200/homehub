@@ -35,7 +35,7 @@ describe('provision context parity', () => {
       tenantPk: 'HOUSEHOLD#demo',
       deviceId: 'dev1',
       type: 'environmental-sensor',
-      runtimeKind: 'simulated',
+      runtimeKind: 'physical',
       thingName: 'homehub-dev1',
       ssmCertPrefix: '/homehub/devices/dev1',
       hubId: 'demo',
@@ -50,7 +50,7 @@ describe('provision context parity', () => {
       dynamodb: {
         Keys: { SK: { S: 'DEVICE#fb1' } },
         NewImage: {
-          PK: { S: 'HUB#user-abc' },
+          PK: { S: 'HOUSEHOLD#user-abc' },
           deviceId: { S: 'fb1' },
           runtimeKind: { S: 'physical' },
           type: { S: 'environmental-sensor' },
@@ -65,9 +65,8 @@ describe('provision context parity', () => {
     expect(parseProvisionContext({ dynamodb: { NewImage: {} } })).toBeNull();
   });
 
-  it('strips HOUSEHOLD# and HUB# prefixes', () => {
+  it('strips the HOUSEHOLD# prefix', () => {
     expect(hubIdFromPk('HOUSEHOLD#demo')).toBe('demo');
-    expect(hubIdFromPk('HUB#demo')).toBe('demo');
     expect(hubIdFromPk('plain')).toBe('plain');
   });
 
@@ -119,7 +118,7 @@ describe('provision state machine definition', () => {
     expect(JSON.stringify(definition)).not.toContain('updateThingShadow');
     expect(JSON.stringify(definition)).toContain("'Bool'");
     expect(JSON.stringify(definition)).not.toContain("'BOOL'");
-    expect(JSON.stringify(definition)).toContain("$replace($replace($tenantPk, 'HOUSEHOLD#', '')");
+    expect(JSON.stringify(definition)).toContain("$replace($tenantPk, 'HOUSEHOLD#', '')");
     expect(JSON.stringify(definition)).toContain('$deviceType');
     expect(JSON.stringify(definition)).toContain('$states.errorOutput');
     expect(JSON.stringify(definition)).not.toContain('$states.error.');

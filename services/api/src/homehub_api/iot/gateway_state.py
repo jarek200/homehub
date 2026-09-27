@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
 from typing import Any, cast
 
 import boto3
 
 from homehub_api.config import DEMO_TENANT_PK
 from homehub_api.dynamo import sk_begins_with
-from homehub_api.household import resolve_household_pk_for_gateway
+from homehub_api.household import (
+    DEVICE_SK_PREFIX,
+    device_sk,
+    now_iso,
+    resolve_household_pk_for_gateway,
+)
 from homehub_api.hub_state import (
     drop_mismatched_household_cards,
     merge_household_state,
@@ -24,10 +28,6 @@ from homehub_api.sensor_history import SENSOR_HISTORY_KEY, apply_sensor_history
 from homehub_api.store import HubStore
 
 _table = None
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _table_resource():
@@ -61,7 +61,7 @@ def apply_gateway_readings(
         if not device_id or not isinstance(metrics, dict) or not metrics:
             continue
         for tenant_pk in tenant_pks:
-            if not dynamo.get_item(Key={"PK": tenant_pk, "SK": f"DEVICE#{device_id}"}).get("Item"):
+            if not dynamo.get_item(Key={"PK": tenant_pk, "SK": device_sk(device_id)}).get("Item"):
                 continue
             write_telemetry(
                 {
@@ -116,14 +116,15 @@ def apply_commission_event(event: dict[str, Any]) -> dict[str, str]:
 
 def device_types_for_tenant(table: Any, tenant_pk: str) -> dict[str, str]:
     try:
-        response = table.query(KeyConditionExpression=sk_begins_with(tenant_pk, "DEVICE#"))
+        response = table.query(KeyConditionExpression=sk_begins_with(tenant_pk, DEVICE_SK_PREFIX))
     except (AttributeError, TypeError):
         return {}
     types: dict[str, str] = {}
     for item in response.get("Items") or []:
         if not isinstance(item, dict) or not item.get("type"):
             continue
-        device_id = str(item.get("deviceId") or str(item.get("SK") or "").removeprefix("DEVICE#"))
+        raw_id = item.get("deviceId") or str(item.get("SK") or "").removeprefix(DEVICE_SK_PREFIX)
+        device_id = str(raw_id)
         if device_id:
             types[device_id] = str(item["type"])
     return types
@@ -155,7 +156,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, str]:
     table = _table_resource()
     event_hub = str(event.get("hubId") or event.get("tenantPk") or "")
     tenant_pk = resolve_household_pk_for_gateway(table, gateway_id or None, event_hub or None)
-    timestamp = str(event.get("recordedAt") or _now_iso())
+    timestamp = str(event.get("recordedAt") or now_iso())
     incoming = {**state, "updatedAt": state.get("updatedAt") or timestamp}
     incoming.pop(SENSOR_HISTORY_KEY, None)
     types = device_types_for_tenant(table, tenant_pk)

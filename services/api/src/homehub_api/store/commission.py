@@ -45,18 +45,6 @@ class CommissionMixin(StoreSurface):
         job["updatedAt"] = _now_iso()
         return self.put_commission_job(job)
 
-    def get_commission_by_node(self, gateway_id: str, node_id: int) -> dict[str, Any] | None:
-        result = self._table.get_item(Key={"PK": f"GATEWAY#{gateway_id}", "SK": f"PAIR#{node_id}"})
-        item = result.get("Item")
-        if not item:
-            return None
-        tenant_pk = str(item.get("tenantPk") or self.tenant_pk)
-        commission_id = str(item.get("commissionId") or "")
-        if tenant_pk == self.tenant_pk:
-            return self.get_commission_job(commission_id)
-        other = type(self)(self.table_name, tenant_pk=tenant_pk)
-        return other.get_commission_job(commission_id)
-
     def list_pairing_node_ids(self, gateway_id: str) -> list[int]:
         nodes: list[int] = []
         result = self._query_sk_prefix(f"GATEWAY#{gateway_id}", "PAIR#")

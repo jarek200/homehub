@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as aws from '@pulumi/aws';
-import { pythonLambdaEnv } from './python-lambda';
+import { pythonCatalogCopy, pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -61,6 +61,7 @@ export function createRealtime(table: StorageTable, auth: AuthPool) {
   const publisher = new sst.aws.Function('HouseholdEventPublisher', {
     handler: 'services/api/src/homehub_api/iot/household_events.handler',
     runtime: 'python3.13',
+    copyFiles: pythonCatalogCopy,
     memory: stageConfig.lambda.memory,
     timeout: stageConfig.lambda.timeout,
     dev: false,

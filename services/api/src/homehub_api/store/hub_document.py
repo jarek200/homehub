@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from homehub_api.household import HUB_RULES_SK
 from homehub_api.models import DeviceResponse
 from homehub_api.revisions import commit_hub_state, read_hub_state_item, revision_of
 from homehub_api.store._mapping import _now_iso
@@ -10,7 +11,6 @@ from homehub_api.store._surface import StoreSurface
 
 class HubDocumentMixin(StoreSurface):
     def get_hub_state(self) -> dict[str, Any]:
-        from homehub_api.cores3_fabric import is_legacy_dummy_household_state
         from homehub_api.hub_state import (
             default_household_state,
             jsonable_plan,
@@ -23,8 +23,6 @@ class HubDocumentMixin(StoreSurface):
             state = normalize_household_state(raw)
             if item.get("revision") is not None and state.get("stateVersion") is None:
                 state["stateVersion"] = revision_of(item, raw)
-            if is_legacy_dummy_household_state(raw):
-                return self.update_hub_state(lambda _current: state)
             converted = jsonable_plan(state)
             return converted if isinstance(converted, dict) else state
         return self.update_hub_state(lambda current: current or default_household_state())
@@ -46,25 +44,12 @@ class HubDocumentMixin(StoreSurface):
         converted = jsonable_plan(state)
         return converted if isinstance(converted, dict) else state
 
-    def put_hub_state(self, state: dict[str, Any]) -> dict[str, Any]:
-        return self.update_hub_state(lambda _current: state)
-
     def _floor_plan_item(self) -> dict[str, Any] | None:
         from homehub_api.hub_state import FLOOR_PLAN_SK
 
         result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": FLOOR_PLAN_SK})
         item = result.get("Item")
         return item if isinstance(item, dict) else None
-
-    def get_floor_plan(self) -> dict[str, Any] | None:
-        item = self._floor_plan_item()
-        plan = item.get("plan") if item else None
-        if not isinstance(plan, dict):
-            return None
-        from homehub_api.hub_state import jsonable_plan
-
-        converted = jsonable_plan(plan)
-        return converted if isinstance(converted, dict) else None
 
     def get_floor_plan_library(self) -> dict[str, Any] | None:
         item = self._floor_plan_item()
@@ -145,7 +130,7 @@ class HubDocumentMixin(StoreSurface):
         return None
 
     def get_hub_rules(self) -> list[dict[str, Any]]:
-        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": "HUB_RULES"})
+        result = self._table.get_item(Key={"PK": self.tenant_pk, "SK": HUB_RULES_SK})
         item = result.get("Item")
         rules = item.get("rules") if item else None
         return list(rules) if isinstance(rules, list) else []
@@ -154,7 +139,7 @@ class HubDocumentMixin(StoreSurface):
         self._table.put_item(
             Item={
                 "PK": self.tenant_pk,
-                "SK": "HUB_RULES",
+                "SK": HUB_RULES_SK,
                 "rules": rules,
                 "updatedAt": _now_iso(),
             }

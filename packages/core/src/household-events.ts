@@ -3,7 +3,6 @@ import {
   cognitoHouseholdGroup,
   householdIdFromPk,
   isHouseholdPk,
-  isLegacyHubPk,
   normalizeCognitoGroups,
 } from './household';
 import type { HubHouseholdState } from './hub';
@@ -49,10 +48,6 @@ export function householdChannelPathForId(householdId: string): string {
   return `/${householdChannelForId(householdId)}`;
 }
 
-export function householdChannelPathForSub(sub: string): string {
-  return householdChannelPathForId(sub);
-}
-
 export function householdIdFromChannelPath(channelPath: string): string | null {
   const normalized = channelPath.startsWith('/') ? channelPath : `/${channelPath}`;
   const prefix = `/${HOUSEHOLD_CHANNEL_NAMESPACE}/`;
@@ -72,7 +67,7 @@ export function isHouseholdSubscribeAllowed(
 }
 
 export function channelForHouseholdPk(tenantPk: string): string | null {
-  if (!isHouseholdPk(tenantPk) && !isLegacyHubPk(tenantPk)) return null;
+  if (!isHouseholdPk(tenantPk)) return null;
   const householdId = householdIdFromPk(tenantPk);
   return householdId ? householdChannelForId(householdId) : null;
 }

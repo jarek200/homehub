@@ -24,8 +24,6 @@ import {
   hitTestPlan,
   householdDevicePlace,
   isClimateSensorKind,
-  isLegacySideBySideLayout,
-  isPublishedSideBySideLayout,
   MIN_ROOM_SIZE,
   mirrorFloorPlanHorizontal,
   moveRoom,
@@ -583,7 +581,6 @@ describe('floor plan editor geometry', () => {
       windows: [],
       walls: [],
     };
-    expect(isPublishedSideBySideLayout(published)).toBe(true);
     const parsed = parseFloorPlan(published);
     expect(parsed?.rooms).toHaveLength(2);
     expect(parsed?.width).toBe(680);
@@ -615,7 +612,6 @@ describe('floor plan editor geometry', () => {
       windows: [],
       walls: [],
     };
-    expect(isLegacySideBySideLayout(draft)).toBe(true);
     const parsed = parseFloorPlan(draft);
     expect(parsed?.rooms.find((room) => room.id === 'living')).toMatchObject({
       x: 410,
@@ -626,65 +622,6 @@ describe('floor plan editor geometry', () => {
     expect(parsed?.rooms).toHaveLength(7);
     expect(parsed?.width).toBe(680);
     expect(parsed?.height).toBe(400);
-  });
-
-  it('rotates a stored portrait stacked draft in place without rebuilding rooms', () => {
-    const draft = {
-      ...createEmptyFloorPlan('Home A'),
-      id: 'sample-home-a',
-      width: 400,
-      height: 700,
-      rooms: [
-        { id: 'living', name: 'Kitchen / Living', x: 50, y: 50, w: 280, h: 230 },
-        { id: 'bed-2', name: 'Bedroom 2', x: 50, y: 280, w: 140, h: 140 },
-        { id: 'bed-1', name: 'Bedroom 1', x: 50, y: 420, w: 140, h: 180 },
-        { id: 'bath', name: 'Bathroom', x: 190, y: 520, w: 120, h: 80 },
-        { id: 'hall', name: 'Hallway', x: 190, y: 280, w: 140, h: 320 },
-      ],
-      doors: [],
-      windows: [],
-      walls: [],
-    };
-    const parsed = parseFloorPlan(draft);
-    expect(parsed?.rooms).toHaveLength(5);
-    expect(parsed?.width).toBe(700);
-    expect(parsed?.height).toBe(400);
-    expect(parsed?.rooms.some((room) => room.id === 'store')).toBe(false);
-  });
-
-  it('rotates a stored portrait stacked plan counterclockwise to landscape', () => {
-    const portrait = {
-      ...createEmptyFloorPlan('Home A'),
-      id: 'sample-home-a',
-      width: 400,
-      height: 700,
-      rooms: [
-        { id: 'living', name: 'Kitchen / Living', x: 50, y: 50, w: 280, h: 230 },
-        { id: 'bed-2', name: 'Bedroom 2', x: 50, y: 280, w: 140, h: 140 },
-        { id: 'bed-1', name: 'Bedroom 1', x: 50, y: 420, w: 140, h: 180 },
-        { id: 'bath', name: 'Bathroom', x: 190, y: 480, w: 80, h: 120, labelAngle: 90 as const },
-        { id: 'store', name: 'Store', x: 250, y: 280, w: 80, h: 60 },
-        { id: 'hall', name: 'Hallway', x: 190, y: 280, w: 140, h: 320 },
-      ],
-      doors: [],
-      windows: [],
-      walls: [],
-      sensors: [{ id: 's1', kind: 'light' as const, label: 'Lamp', x: 100, y: 100 }],
-    };
-    const parsed = parseFloorPlan(portrait);
-    expect(parsed?.width).toBe(700);
-    expect(parsed?.height).toBe(400);
-    expect(parsed?.rooms.find((room) => room.id === 'living')).toMatchObject({
-      x: 50,
-      y: 70,
-      w: 230,
-      h: 280,
-    });
-    // Bathroom label is horizontal again in the landscape drawing.
-    expect(parsed?.rooms.find((room) => room.id === 'bath')?.labelAngle).toBeUndefined();
-    // Sensors rotate with the drawing.
-    expect(parsed?.sensors[0]).toMatchObject({ x: 100, y: 300 });
-    expect(parsed?.rooms).toHaveLength(6);
   });
 
   it('builds the fictional Home B three-bed sample', () => {
@@ -764,26 +701,6 @@ describe('floor plan editor geometry', () => {
       parseFloorPlan(JSON.parse(JSON.stringify(rotateRoomLabel(plan, roomId))))?.rooms[0]
         ?.labelAngle
     ).toBe(90);
-  });
-
-  it('rotates a stored portrait sample plan when parsing', () => {
-    const stored = {
-      id: 'sample-portrait',
-      name: 'Home B',
-      beds: 1,
-      baths: 0,
-      width: 820,
-      height: 860,
-      rooms: [{ id: 'living', name: 'Living', x: 200, y: 120, w: 280, h: 340 }],
-      walls: [],
-      doors: [],
-      windows: [],
-      sensors: [],
-    };
-    const parsed = parseFloorPlan(stored);
-    expect(parsed?.width).toBe(860);
-    expect(parsed?.height).toBe(820);
-    expect(parsed?.rooms[0]).toMatchObject({ x: 120, y: 340, w: 340, h: 280 });
   });
 
   it('crops the view box to the rooms instead of the empty canvas', () => {

@@ -1,9 +1,9 @@
 import { normalizeDeviceType } from '$lib/devices/device-type';
 
 const POWER_DEVICE_TYPES = new Set(['light', 'plug']);
-export const ENV_DEVICE_TYPES = new Set(['environmental-sensor']);
-export const SECURITY_DEVICE_TYPES = new Set(['contact-sensor', 'motion-sensor']);
-export const LEAK_DEVICE_TYPES = new Set(['leak-sensor']);
+const ENV_DEVICE_TYPES = new Set(['environmental-sensor']);
+const SECURITY_DEVICE_TYPES = new Set(['contact-sensor', 'motion-sensor']);
+const LEAK_DEVICE_TYPES = new Set(['leak-sensor']);
 
 export function deviceMatchesListFilters(
   device: { type: string },

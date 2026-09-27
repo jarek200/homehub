@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the shared int stack with custom domain (same settings as GitHub Actions).
+# Deploy the live stack at the APP_URL hostname (same settings as GitHub Actions).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -67,7 +67,7 @@ fi
 load_github_vars
 
 # Always target the int workload account, even if the shell has AWS_PROFILE=prod.
-export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}"
+homehub_aws_force_stage_profile int
 homehub_aws_stage_env int
 homehub_aws_check_auth
 

@@ -1,4 +1,4 @@
-import type { DeviceConfiguration } from '@homehub/core';
+import type { DeviceConfiguration, LifecycleStatus } from '@homehub/core';
 import { formatCameraSettingsSummary } from '$lib/devices/device-camera-settings';
 import { formatReportingIntervalSummary } from '$lib/devices/device-power-settings';
 import {
@@ -6,9 +6,7 @@ import {
   type DeviceThresholds,
   defaultReportingIntervalSeconds,
   defaultThresholdsForType,
-  formatMetricThreshold,
   formatThresholdSummary,
-  isMetricWarning,
   parseThresholds,
 } from '$lib/devices/device-thresholds';
 import {
@@ -21,12 +19,8 @@ import {
 export type { DeviceThresholds };
 export {
   CREATE_DEVICE_TYPES,
-  DEVICE_TYPES,
   type DeviceType,
-  defaultThresholdsForType,
-  formatMetricThreshold,
   formatThresholdSummary,
-  isMetricWarning,
   normalizeDeviceType,
   parseThresholds,
 };
@@ -37,12 +31,12 @@ const DEVICE_STATUSES = [
   { value: 'UNKNOWN', label: 'Unknown' },
 ] as const;
 
-export const LIFECYCLE_STATUSES = [
-  { value: 'PROVISIONING', label: 'Provisioning' },
-  { value: 'READY', label: 'Ready' },
-  { value: 'FAILED', label: 'Failed' },
-  { value: 'DECOMMISSIONED', label: 'Decommissioned' },
-] as const;
+const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
+  PROVISIONING: 'Provisioning',
+  READY: 'Ready',
+  FAILED: 'Failed',
+  DECOMMISSIONED: 'Decommissioned',
+};
 
 export function getDefaultConfiguration(deviceType?: string): DeviceConfiguration {
   const normalizedType = normalizeDeviceType(deviceType ?? 'environmental-sensor');
@@ -131,7 +125,7 @@ export function configurationForType(
   };
 }
 
-export function isEnvironmentalSensor(type: string): boolean {
+function isEnvironmentalSensor(type: string): boolean {
   return normalizeDeviceType(type) === 'environmental-sensor';
 }
 
@@ -172,8 +166,10 @@ export function operatingStatusAriaLabel(isOn: boolean, deviceName: string): str
 }
 
 export function formatLifecycleStatus(status: string): string {
-  const match = LIFECYCLE_STATUSES.find((item) => item.value === status);
-  return match?.label ?? formatStatus(status);
+  if (status in LIFECYCLE_LABELS) {
+    return LIFECYCLE_LABELS[status as LifecycleStatus];
+  }
+  return formatStatus(status);
 }
 
 /** Text color for device power status — green on, red off. */

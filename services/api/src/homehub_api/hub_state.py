@@ -4,18 +4,13 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from homehub_api.cores3_fabric import (
-    cores3_household_state,
-    empty_household_state,
-    is_legacy_dummy_household_state,
-)
+from homehub_api.cores3_fabric import cores3_household_state, empty_household_state
 from homehub_api.cores3_products import HOUSEHOLD_KEYS, TYPE_TO_HOUSEHOLD
+from homehub_api.household import now_iso
 
-HUB_STATE_SK = "HUB_STATE"
 FLOOR_PLAN_SK = "FLOOR_PLAN"
 
 
@@ -53,10 +48,6 @@ def _decimal_default(value: Any) -> float | int:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
-
-
 def dynamo_safe(value: Any) -> Any:
     """Drop None and convert floats so boto3 put_item accepts the document."""
     if isinstance(value, dict):
@@ -69,16 +60,12 @@ def dynamo_safe(value: Any) -> Any:
 
 
 def default_household_state(now: str | None = None) -> dict[str, Any]:
-    return cores3_household_state(now or _now_iso())
+    return cores3_household_state(now or now_iso())
 
 
 def normalize_household_state(state: dict[str, Any]) -> dict[str, Any]:
-    if is_legacy_dummy_household_state(state):
-        return default_household_state(
-            state.get("updatedAt") if isinstance(state.get("updatedAt"), str) else None
-        )
     updated_at = state.get("updatedAt")
-    empty = empty_household_state(updated_at if isinstance(updated_at, str) else _now_iso())
+    empty = empty_household_state(updated_at if isinstance(updated_at, str) else now_iso())
     next_state = {**empty, **state}
     for key in ("lights", "plugs", "contacts", "motions", "climates", "leaks", "buttons"):
         if not isinstance(next_state.get(key), list):
@@ -168,7 +155,7 @@ def drop_mismatched_household_cards(
 
 def apply_hub_command(state: dict[str, Any], command: str) -> dict[str, Any]:
     next_state = deepcopy(state)
-    next_state["updatedAt"] = _now_iso()
+    next_state["updatedAt"] = now_iso()
     lights = list(next_state.get("lights") or [])
     lock = next_state.get("lock")
     lock = dict(lock) if isinstance(lock, dict) else None
@@ -226,7 +213,7 @@ def apply_hub_device(
     brightness: int | None = None,
 ) -> dict[str, Any]:
     next_state = deepcopy(state)
-    next_state["updatedAt"] = _now_iso()
+    next_state["updatedAt"] = now_iso()
     if kind == "light":
         lights: list[dict[str, Any]] = []
         for light in next_state.get("lights") or []:

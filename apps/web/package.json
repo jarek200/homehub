@@ -7,8 +7,6 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "pnpm --dir ../.. exec biome check apps/web",
     "lint:fix": "pnpm --dir ../.. exec biome check apps/web --write",
     "format": "pnpm --dir ../.. exec biome format apps/web --write"

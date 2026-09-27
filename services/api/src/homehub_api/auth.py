@@ -56,14 +56,6 @@ def _token_payload(token: str) -> dict:
     return payload
 
 
-def _verify_bearer_token(token: str) -> str:
-    payload = _token_payload(token)
-    user_id = payload.get("sub")
-    if not user_id:
-        raise ApiError("Invalid token", 401, "Unauthorized")
-    return str(user_id)
-
-
 def _auth_from_token(token: str) -> AuthContext:
     payload = _token_payload(token)
     user_id = payload.get("sub")

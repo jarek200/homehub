@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upsert CoreS3 fabric devices into real households only — never demo or HUB#."""
+"""Upsert CoreS3 fabric devices into real households only — never the demo household."""
 
 from __future__ import annotations
 
@@ -19,13 +19,14 @@ from homehub_api.cores3_fabric import (  # noqa: E402
     CORES3_GATEWAY_ID,
     cores3_household_state,
 )
+from homehub_api.device_configuration import configuration_for_create  # noqa: E402
 from homehub_api.household import (  # noqa: E402
     HOUSEHOLD_LOOKUP_SK,
+    HUB_STATE_SK,
     gateway_pk,
     household_pk,
 )
-from homehub_api.device_configuration import configuration_for_create  # noqa: E402
-from homehub_api.hub_state import HUB_STATE_SK, dynamo_safe, merge_household_state  # noqa: E402
+from homehub_api.hub_state import dynamo_safe, merge_household_state  # noqa: E402
 
 
 def _now_iso() -> str:

@@ -13,10 +13,6 @@ DEVICE_ID="${CORES3_DEVICE_ID:-cores3-gateway}"
 PORT="${CORES3_PORT:-/dev/cu.usbmodem101}"
 CONTROLLER="${ESP_MATTER_CONTROLLER:-$HOME/esp/esp-matter/examples/controller}"
 export SST_STAGE="${SST_STAGE:-int}"
-case "$SST_STAGE" in
-  prod) export AWS_PROFILE="${AWS_PROFILE_PROD:-homehub-prod}" ;;
-  *) export AWS_PROFILE="${AWS_PROFILE_INT:-homehub-int}" ;;
-esac
 
 for arg in "$@"; do
   case "$arg" in
@@ -30,17 +26,12 @@ for arg in "$@"; do
   esac
 done
 
+homehub_aws_force_stage_profile "$SST_STAGE"
 homehub_aws_stage_env "$SST_STAGE"
 homehub_aws_check_auth
 
-if [[ -z "${TABLE_NAME:-}" ]]; then
-  TABLE_NAME="$(
-    aws dynamodb list-tables --query \
-      "TableNames[?contains(@, 'homehub-${SST_STAGE}') && contains(@, 'AppTable')]|[0]" \
-      --output text
-  )"
-  export TABLE_NAME
-fi
+TABLE_NAME="$(homehub_app_table "$SST_STAGE" || true)"
+export TABLE_NAME
 if [[ -z "${TABLE_NAME}" || "${TABLE_NAME}" == "None" ]]; then
   echo "Could not resolve TABLE_NAME for stage ${SST_STAGE}."
   exit 1
@@ -82,7 +73,7 @@ install -m 644 "$ROOT/firmware/cores3-gateway/components/homehub_status/homehub_
   "${STATUS_COMPONENT}/homehub_status.cpp"
 install -m 644 "$ROOT/firmware/cores3-gateway/components/homehub_status/include/homehub_status.h" \
   "${STATUS_COMPONENT}/include/homehub_status.h"
-install -m 644 "$ROOT/firmware/cores3-gateway/main/include/homehub_aws.h" "${CONTROLLER}/main/homehub_aws.h"
+install -m 644 "$ROOT/firmware/cores3-gateway/components/homehub_aws/include/homehub_aws.h" "${CONTROLLER}/main/homehub_aws.h"
 install -m 644 "$ROOT/firmware/cores3-gateway/main/include/homehub_matter.h" "${CONTROLLER}/main/homehub_matter.h"
 install -m 644 "$ROOT/firmware/cores3-gateway/main/homehub_matter.cpp" "${CONTROLLER}/main/homehub_matter.cpp"
 install -m 644 "$ROOT/firmware/cores3-gateway/main/app_main.cpp" "${CONTROLLER}/main/app_main.cpp"

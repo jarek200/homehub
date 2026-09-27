@@ -41,11 +41,10 @@ def test_root_lists_endpoints(client: TestClient) -> None:
     assert "POST /bootstrap" not in endpoints
 
 
-def test_hub_pk_for_user() -> None:
-    from homehub_api.household import household_id_from_pk, hub_pk_for_user
+def test_household_pk_for_user() -> None:
+    from homehub_api.household import household_id_from_pk, household_pk
 
-    assert hub_pk_for_user("user-abc") == "HOUSEHOLD#user-abc"
-    assert household_id_from_pk("HUB#user-abc") == "user-abc"
+    assert household_pk("user-abc") == "HOUSEHOLD#user-abc"
     assert household_id_from_pk("HOUSEHOLD#user-abc") == "user-abc"
 
 

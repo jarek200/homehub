@@ -10,3 +10,9 @@ export const PYTHON_API_SRC = 'services/api/src';
 export const pythonLambdaEnv = {
   PYTHONPATH: `/var/task/${PYTHON_API_SRC}`,
 } as const;
+
+/**
+ * The Python bundle only contains the handler tree under services/.
+ * catalog_data.py still reads packages/catalog/homehub.json from the zip root.
+ */
+export const pythonCatalogCopy = [{ from: 'packages/catalog/homehub.json' }];

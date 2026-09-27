@@ -6,7 +6,6 @@ from homehub_api.telemetry_model import (
     derive_alarm_state,
     metrics_to_dynamo,
     normalize_telemetry_event,
-    sample_metrics,
 )
 from homehub_api.thresholds import parse_thresholds
 
@@ -55,20 +54,6 @@ def test_custom_temperature_threshold() -> None:
         configuration=configuration,
     )
     assert normalized["state"] == "warning"
-
-
-def test_camera_sample_metrics() -> None:
-    metrics = sample_metrics("camera")
-    assert metrics["pan"] == 90.0
-    assert metrics["tilt"] == 90.0
-
-
-def test_environmental_sensor_sample_metrics() -> None:
-    metrics = sample_metrics("environmental-sensor")
-    assert "humidity" in metrics
-    assert "temperature" in metrics
-    assert "vocIndex" in metrics
-    assert "pressureHpa" in metrics
 
 
 def test_voc_threshold_moves_state_to_warning() -> None:

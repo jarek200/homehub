@@ -7,6 +7,7 @@
 import {
   addNamedPlan,
   applyDeviceUpdatedEvent,
+  applyHubCommand,
   applyHubDevice,
   createCores3HouseholdState,
   type Device,
@@ -173,19 +174,7 @@ function addPlan(name: string) {
 async function setScene(
   command: Extract<HubCommand, 'home' | 'away' | 'all-lights-off' | 'all-plugs-off'>
 ) {
-  if (command === 'home' || command === 'away') {
-    household = { ...household, scene: command };
-  } else if (command === 'all-lights-off') {
-    household = {
-      ...household,
-      lights: household.lights.map((light) => ({ ...light, on: false })),
-    };
-  } else {
-    household = {
-      ...household,
-      plugs: household.plugs.map((plug) => ({ ...plug, on: false })),
-    };
-  }
+  household = applyHubCommand(household, command);
   try {
     household = await postHouseholdCommand(command);
   } catch {

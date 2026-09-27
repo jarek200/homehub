@@ -8,14 +8,8 @@ stage="${1:-int}"
 homehub_aws_stage_env "$stage"
 homehub_aws_check_auth
 
-if [[ -z "${TABLE_NAME:-}" ]]; then
-  TABLE_NAME="$(
-    AWS_PROFILE="${AWS_PROFILE:-}" aws dynamodb list-tables --query \
-      "TableNames[?contains(@, 'AppTable')]|[0]" --output text
-  )"
-  export TABLE_NAME
-fi
-
+TABLE_NAME="$(homehub_app_table "$stage" || true)"
+export TABLE_NAME
 if [[ -z "${TABLE_NAME}" || "${TABLE_NAME}" == "None" ]]; then
   echo "Could not resolve TABLE_NAME. Pass it explicitly."
   exit 1

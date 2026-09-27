@@ -83,7 +83,7 @@ async function acceptInvite() {
       <Button class="rounded-sm" onclick={() => goto('/login')}>Sign in</Button>
     {:else}
       <p class="text-muted-foreground text-sm leading-relaxed">
-        Sign in with the invited email to join this household. New accounts must verify email first.
+        Sign in with the invited email to join this household. The account has to exist in Cognito already.
       </p>
       <Button class="rounded-sm" onclick={() => goto(loginRedirectForInvite(token))}>
         Continue

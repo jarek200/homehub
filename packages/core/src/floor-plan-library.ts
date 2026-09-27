@@ -4,9 +4,7 @@ import {
   createPlanItemId,
   type FloorPlan,
   floorPlanUpdatedAt,
-  isLegacySideBySideLayout,
   parseFloorPlan,
-  pickNewerFloorPlan,
   planDeviceRoomLocation,
   planRoomAt,
 } from './floor-plan';
@@ -33,8 +31,8 @@ export function emptyFloorPlanLibrary(): FloorPlanLibrary {
   return { activePlanId: plan.id, plans: [plan] };
 }
 
-/** Wrap a pre-library singleton. Keep the stored name; default only if blank. */
-export function libraryFromLegacyPlan(plan: FloorPlan): FloorPlanLibrary {
+/** Wrap one plan in a library. Keep the stored name; default only if blank. */
+export function libraryFromPlan(plan: FloorPlan): FloorPlanLibrary {
   const named = { ...plan, name: plan.name.trim() || DEFAULT_HOME_PLAN_NAME };
   return { activePlanId: named.id, plans: [named] };
 }
@@ -74,14 +72,14 @@ export function parseFloorPlanLibrary(value: unknown): FloorPlanLibrary | null {
       ? raw.activePlanId
       : first.id;
 
-  return collapseDuplicatePlanNames({
+  return {
     activePlanId,
     plans,
     updatedAt:
       typeof raw.updatedAt === 'string' && Number.isFinite(Date.parse(raw.updatedAt))
         ? raw.updatedAt
         : undefined,
-  });
+  };
 }
 
 export function upsertLibraryPlan(library: FloorPlanLibrary, plan: FloorPlan): FloorPlanLibrary {
@@ -117,65 +115,13 @@ export function switchActivePlan(library: FloorPlanLibrary, planId: string): Flo
   return stampFloorPlanLibrary({ ...library, activePlanId: planId });
 }
 
-function preferRicherPlan(left: FloorPlan, right: FloorPlan): FloorPlan {
-  const leftLegacy = isLegacySideBySideLayout(left);
-  const rightLegacy = isLegacySideBySideLayout(right);
-  if (leftLegacy !== rightLegacy) return leftLegacy ? right : left;
-  if (left.sensors.length !== right.sensors.length) {
-    return left.sensors.length > right.sensors.length ? left : right;
-  }
-  if (left.rooms.length !== right.rooms.length) {
-    return left.rooms.length > right.rooms.length ? left : right;
-  }
-  return pickNewerFloorPlan(left, right) ?? left;
-}
-
-/** Drop leftover singleton copies that share a name after the first migration. */
-export function collapseDuplicatePlanNames(library: FloorPlanLibrary): FloorPlanLibrary {
-  const kept: FloorPlan[] = [];
-  for (const plan of library.plans) {
-    const index = kept.findIndex(
-      (item) => item.name.trim().toLowerCase() === plan.name.trim().toLowerCase()
-    );
-    if (index < 0) {
-      kept.push(plan);
-      continue;
-    }
-    const current = kept[index];
-    if (current) kept[index] = preferRicherPlan(current, plan);
-  }
-
-  if (kept.length === library.plans.length) return library;
-
-  const ids = new Set(kept.map((plan) => plan.id));
-  const fallback = kept[0];
-  return stampFloorPlanLibrary({
-    ...library,
-    plans: kept,
-    activePlanId: ids.has(library.activePlanId)
-      ? library.activePlanId
-      : (fallback?.id ?? library.activePlanId),
-  });
-}
-
 export function mergeFloorPlanLibraries(
   local: FloorPlanLibrary,
   remote: FloorPlanLibrary | null
 ): FloorPlanLibrary {
-  if (!remote) return collapseDuplicatePlanNames(local);
-  if (!libraryHasContent(local) && libraryHasContent(remote)) {
-    return collapseDuplicatePlanNames(remote);
-  }
-  if (!libraryHasContent(remote)) return collapseDuplicatePlanNames(local);
-
-  const localPlan = local.plans[0];
-  const remotePlan = remote.plans[0];
-  if (local.plans.length === 1 && remote.plans.length === 1 && localPlan && remotePlan) {
-    if (localPlan.id !== remotePlan.id) {
-      const winner = preferRicherPlan(localPlan, remotePlan);
-      return stampFloorPlanLibrary({ activePlanId: winner.id, plans: [winner] });
-    }
-  }
+  if (!remote) return local;
+  if (!libraryHasContent(local) && libraryHasContent(remote)) return remote;
+  if (!libraryHasContent(remote)) return local;
 
   const byId = new Map<string, FloorPlan>();
   for (const plan of remote.plans) byId.set(plan.id, plan);
@@ -188,14 +134,14 @@ export function mergeFloorPlanLibraries(
 
   const plans = [...byId.values()];
   const fallback = plans[0];
-  if (!fallback) return collapseDuplicatePlanNames(local);
+  if (!fallback) return local;
   const activePlanId = byId.has(local.activePlanId)
     ? local.activePlanId
     : byId.has(remote.activePlanId)
       ? remote.activePlanId
       : fallback.id;
 
-  return collapseDuplicatePlanNames(stampFloorPlanLibrary({ activePlanId, plans }));
+  return stampFloorPlanLibrary({ activePlanId, plans });
 }
 
 export function deviceIdsOnPlan(plan: FloorPlan): Set<string> {
