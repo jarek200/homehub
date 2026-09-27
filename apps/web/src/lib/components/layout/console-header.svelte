@@ -7,7 +7,6 @@ import { Button } from '$lib/components/ui/button/index.js';
 
 const isDevices = $derived(page.url.pathname.startsWith('/devices'));
 const isPlan = $derived(page.url.pathname.startsWith('/plan'));
-const isMembers = $derived(page.url.pathname.startsWith('/settings/members'));
 const isApiDocs = $derived(page.url.pathname.startsWith('/api-docs'));
 
 const navLink = 'text-xs uppercase tracking-widest transition-colors';
@@ -48,13 +47,6 @@ async function handleLogout() {
           onclick={() => goto('/devices')}
         >
           Devices
-        </button>
-        <button
-          type="button"
-          class="{navLink} {isMembers ? navActive : navInactive}"
-          onclick={() => goto('/settings/members')}
-        >
-          Members
         </button>
         <a href="/api-docs" class="{navLink} {isApiDocs ? navActive : navInactive}">API docs</a>
       </nav>

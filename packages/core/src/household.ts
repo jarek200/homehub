@@ -1,12 +1,13 @@
-/** Shared household keys, membership roles, and invitation helpers. */
+/** Shared household keys and membership roles. */
 
 export const HOUSEHOLD_PREFIX = 'HOUSEHOLD#';
 export const USER_PREFIX = 'USER#';
 export const GATEWAY_PREFIX = 'GATEWAY#';
-export const INVITE_PREFIX = 'INVITE#';
 
 export const HOUSEHOLD_METADATA_SK = 'METADATA';
 export const HOUSEHOLD_LOOKUP_SK = 'HOUSEHOLD';
+export const HOME_POINTER_PK = 'HOMEHUB#HOME';
+export const HOME_POINTER_SK = 'HOUSEHOLD';
 export const PROFILE_SK = 'PROFILE';
 export const HUB_STATE_SK = 'HUB_STATE';
 export const FLOOR_PLAN_SK = 'FLOOR_PLAN';
@@ -15,10 +16,6 @@ export const HUB_RULES_SK = 'HUB_RULES';
 export const HOUSEHOLD_ROLES = ['OWNER', 'MEMBER'] as const;
 export type HouseholdRole = (typeof HOUSEHOLD_ROLES)[number];
 
-export const INVITE_STATUSES = ['pending', 'accepted', 'cancelled', 'expired'] as const;
-export type InviteStatus = (typeof INVITE_STATUSES)[number];
-
-export const INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const STATE_WRITE_MAX_ATTEMPTS = 5;
 
 export const DEMO_TENANT_ID = 'demo';
@@ -36,16 +33,8 @@ export function gatewayPk(gatewayId: string): string {
   return `${GATEWAY_PREFIX}${gatewayId}`;
 }
 
-export function invitePk(tokenHash: string): string {
-  return `${INVITE_PREFIX}${tokenHash}`;
-}
-
 export function memberSk(userId: string): string {
   return `MEMBER#${userId}`;
-}
-
-export function inviteSk(inviteId: string): string {
-  return `INVITE#${inviteId}`;
 }
 
 export function deviceSk(deviceId: string): string {
@@ -105,36 +94,10 @@ export function normalizeCognitoGroups(raw: unknown): string[] {
     .filter(Boolean);
 }
 
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
-
-export function emailsMatch(left: string, right: string): boolean {
-  return Boolean(left && right && normalizeEmail(left) === normalizeEmail(right));
-}
-
-export function inviteExpiresAt(now = Date.now(), ttlSeconds = INVITE_TTL_SECONDS): number {
-  return Math.floor(now / 1000) + ttlSeconds;
-}
-
-export function isInviteExpired(expiresAt: number, now = Date.now()): boolean {
-  return expiresAt <= Math.floor(now / 1000);
-}
-
 export interface HouseholdMember {
   userId: string;
   email: string;
   role: HouseholdRole;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface HouseholdInvite {
-  inviteId: string;
-  email: string;
-  role: HouseholdRole;
-  status: InviteStatus;
-  expiresAt: number;
   createdAt: string;
   updatedAt: string;
 }

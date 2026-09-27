@@ -19,15 +19,34 @@ export function createRestApi(
     'firmwareBucket' | 'telemetryBucket' | 'athenaResultsBucket' | 'glueDatabase' | 'glueTable'
   >,
   snapshotBucket?: SnapshotBucket,
-  email?: { fromAddress: string },
-  restApiKey?: { value: Output<string> }
+  restApiKey?: { value: Output<string> },
+  userPoolClientId?: Output<string>
 ) {
   const appUrl = (process.env.APP_URL ?? '').replace(/\/$/, '');
+  const localOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+  const restApiKeyParameter = restApiKey
+    ? new aws.ssm.Parameter('RestApiKeyParameter', {
+        name: `/${$app.name}/${$app.stage}/rest-api-key`,
+        type: 'SecureString',
+        value: restApiKey.value,
+      })
+    : undefined;
   const api = new sst.aws.ApiGatewayV2('DeviceRestApi', {
+    accessLog: {
+      retention: '1 month',
+    },
     cors: {
-      allowOrigins: appUrl ? [appUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'] : ['*'],
+      allowOrigins: appUrl ? [appUrl, ...localOrigins] : localOrigins,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'X-Api-Key', 'Authorization'],
+    },
+    transform: {
+      stage: (args) => {
+        args.defaultRouteSettings = {
+          throttlingBurstLimit: 100,
+          throttlingRateLimit: 50,
+        };
+      },
     },
   });
 
@@ -102,10 +121,10 @@ export function createRestApi(
     environment: {
       ...pythonLambdaEnv,
       TABLE_NAME: table.name,
-      REST_API_KEY: restApiKey?.value ?? '',
+      REST_API_KEY_PARAMETER: restApiKeyParameter?.name ?? '',
       COGNITO_USER_POOL_ID: auth.id,
+      COGNITO_APP_CLIENT_ID: userPoolClientId ?? '',
       APP_URL: process.env.APP_URL ?? '',
-      SES_FROM_ADDRESS: email?.fromAddress ?? '',
       POWERTOOLS_SERVICE_NAME: 'homehub-api',
       POWERTOOLS_METRICS_NAMESPACE: 'HomeHub',
       POWERTOOLS_LOG_LEVEL: 'INFO',
@@ -188,16 +207,6 @@ export function createRestApi(
         actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
         resources: ['*'],
       },
-      ...(process.env.APP_DOMAIN?.trim()
-        ? [
-            {
-              actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-              resources: [
-                $interpolate`arn:aws:ses:${region}:${accountId}:identity/${process.env.APP_DOMAIN.trim().toLowerCase()}`,
-              ],
-            },
-          ]
-        : []),
       {
         actions: [
           'cognito-idp:AdminAddUserToGroup',
@@ -208,6 +217,14 @@ export function createRestApi(
         ],
         resources: [auth.arn, $interpolate`${auth.arn}/*`],
       },
+      ...(restApiKeyParameter
+        ? [
+            {
+              actions: ['ssm:GetParameter'],
+              resources: [restApiKeyParameter.arn],
+            },
+          ]
+        : []),
     ],
     transform: {
       function: {

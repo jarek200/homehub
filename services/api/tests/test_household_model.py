@@ -1,14 +1,11 @@
 from homehub_api.household import (
     DEMO_TENANT_PK,
+    HOME_POINTER_PK,
+    HOME_POINTER_SK,
     channel_for_household_pk,
     cognito_household_group,
-    hash_email,
-    hash_invite_token,
     household_id_from_pk,
     household_pk,
-    invite_expires_at,
-    is_invite_expired,
-    is_valid_email,
     normalize_cognito_groups,
     normalize_email,
     normalize_tenant_pk,
@@ -26,8 +23,22 @@ class FakeTable:
         item = self.items.get((Key["PK"], Key["SK"]))
         return {"Item": item} if item else {}
 
-    def scan(self, **_kwargs):
-        raise AssertionError("request paths must not scan")
+    def put_item(self, Item, **kwargs):
+        key = (Item["PK"], Item["SK"])
+        condition = str(kwargs.get("ConditionExpression") or "")
+        if "attribute_not_exists" in condition and key in self.items:
+            from botocore.exceptions import ClientError
+
+            raise ClientError(
+                {"Error": {"Code": "ConditionalCheckFailedException", "Message": "exists"}},
+                "PutItem",
+            )
+        self.items[key] = dict(Item)
+
+    def scan(self, **kwargs):
+        if kwargs.get("ExclusiveStartKey"):
+            return {"Items": []}
+        return {"Items": [dict(item) for item in self.items.values()]}
 
 
 def test_household_keys_and_channels() -> None:
@@ -37,17 +48,7 @@ def test_household_keys_and_channels() -> None:
     assert channel_for_household_pk("HOUSEHOLD#abc") == "household/abc"
     assert DEMO_TENANT_PK == "HOUSEHOLD#demo"
     assert cognito_household_group("abc") == "hh_abc"
-
-
-def test_invite_email_and_token_hashing() -> None:
     assert normalize_email("  Pat@Example.com ") == "pat@example.com"
-    assert is_valid_email("pat@example.com")
-    assert not is_valid_email("not-an-email")
-    assert hash_email("Pat@Example.com") == hash_email("pat@example.com")
-    assert hash_invite_token("a") != hash_invite_token("b")
-    expires = invite_expires_at()
-    assert not is_invite_expired(expires)
-    assert is_invite_expired(1)
 
 
 def test_cognito_group_claim_parsing() -> None:
@@ -60,14 +61,54 @@ def test_cognito_group_claim_parsing() -> None:
 def test_resolve_user_uses_profile_household() -> None:
     table = FakeTable(
         {
-            ("USER#u1", "PROFILE"): {"householdId": "u1"},
-            ("HOUSEHOLD#u1", "METADATA"): {"householdId": "u1"},
+            ("USER#u1", "PROFILE"): {"PK": "USER#u1", "SK": "PROFILE", "householdId": "u1"},
+            ("HOUSEHOLD#u1", "METADATA"): {
+                "PK": "HOUSEHOLD#u1",
+                "SK": "METADATA",
+                "householdId": "u1",
+            },
         }
     )
     assert resolve_household_pk_for_user(table, "u1") == "HOUSEHOLD#u1"
+    assert (HOME_POINTER_PK, HOME_POINTER_SK) not in table.items
 
-    missing_profile = FakeTable({("HOUSEHOLD#u2", "HUB_STATE"): {"state": {"scene": "home"}}})
+    missing_profile = FakeTable(
+        {("HOUSEHOLD#u2", "HUB_STATE"): {"PK": "HOUSEHOLD#u2", "SK": "HUB_STATE", "state": {}}}
+    )
     assert resolve_household_pk_for_user(missing_profile, "u2") == "HOUSEHOLD#u2"
+    assert (HOME_POINTER_PK, HOME_POINTER_SK) not in missing_profile.items
+
+
+def test_resolve_user_uses_home_pointer() -> None:
+    table = FakeTable(
+        {
+            (HOME_POINTER_PK, HOME_POINTER_SK): {
+                "PK": HOME_POINTER_PK,
+                "SK": HOME_POINTER_SK,
+                "householdId": "family-1",
+            }
+        }
+    )
+    assert resolve_household_pk_for_user(table, "new-user") == "HOUSEHOLD#family-1"
+
+
+def test_resolve_user_without_pointer_uses_own_id() -> None:
+    table = FakeTable(
+        {
+            ("HOUSEHOLD#demo", "METADATA"): {
+                "PK": "HOUSEHOLD#demo",
+                "SK": "METADATA",
+                "householdId": "demo",
+            },
+            ("HOUSEHOLD#family-1", "METADATA"): {
+                "PK": "HOUSEHOLD#family-1",
+                "SK": "METADATA",
+                "householdId": "family-1",
+            },
+        }
+    )
+    assert resolve_household_pk_for_user(table, "new-user") == "HOUSEHOLD#new-user"
+    assert (HOME_POINTER_PK, HOME_POINTER_SK) not in table.items
 
 
 def test_resolve_gateway_uses_lookup_without_scan() -> None:

@@ -4,12 +4,8 @@ from typing import Literal, cast
 
 from homehub_api.auth import AuthContext
 from homehub_api.errors import ApiError
-from homehub_api.household import is_invite_expired, now_iso
-from homehub_api.models import (
-    HouseholdInviteResponse,
-    HouseholdMemberResponse,
-    HouseholdResponse,
-)
+from homehub_api.household import now_iso
+from homehub_api.models import HouseholdMemberResponse, HouseholdResponse
 from homehub_api.store import HubStore
 
 
@@ -20,27 +16,6 @@ def member_response(item: dict) -> HouseholdMemberResponse:
         role=item.get("role") or "MEMBER",
         createdAt=str(item.get("createdAt") or now_iso()),
         updatedAt=str(item.get("updatedAt") or now_iso()),
-    )
-
-
-def invite_response(item: dict, extra: dict | None = None) -> HouseholdInviteResponse:
-    payload = {**item, **(extra or {})}
-    status = str(payload.get("status") or "pending")
-    if status == "pending" and is_invite_expired(payload.get("expiresAt")):
-        status = "expired"
-    email_sent = payload.get("emailSent")
-    if isinstance(email_sent, str):
-        email_sent = email_sent == "true"
-    return HouseholdInviteResponse(
-        inviteId=str(payload.get("inviteId") or ""),
-        email=str(payload.get("email") or ""),
-        role=payload.get("role") or "MEMBER",
-        status=cast(Literal["pending", "accepted", "cancelled", "expired"], status),
-        expiresAt=int(payload.get("expiresAt") or 0),
-        createdAt=str(payload.get("createdAt") or now_iso()),
-        updatedAt=str(payload.get("updatedAt") or now_iso()),
-        emailSent=email_sent,
-        emailError=payload.get("emailError"),
     )
 
 
@@ -93,9 +68,4 @@ def household_payload(
         created=created,
         tokenRefreshRequired=token_refresh_required,
         members=[member_response(item) for item in store.list_members()],
-        invites=[
-            invite_response(item)
-            for item in store.list_invites()
-            if item.get("status") == "pending"
-        ],
     )

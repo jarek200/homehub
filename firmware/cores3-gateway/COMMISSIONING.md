@@ -44,7 +44,7 @@ Get the active dataset (secret — do not log or commit):
 matter esp ot_cli dataset active -x
 ```
 
-If Wi-Fi is down, credentials are in `~/.zshrc.local` as `WIFI_SSID` / `WIFI_PASSWORD`. Never print the password.
+If Wi-Fi is down, credentials are in `.env.local` as `WIFI_SSID` / `WIFI_PASSWORD`. Never print the password.
 
 ---
 
@@ -168,7 +168,7 @@ Then add the device to `fabricDevices` in `packages/catalog/homehub.json` if it 
 | `kPaaNotFound` / err **101** / `CHIP:0x000000AC` | Missing vendor PAA | Add `.der` under `paa_cert/`, rebuild SPIFFS, flash **without** erase |
 | `leader` → `detached` | Extra `thread start` | Wait; poll `state` until `leader` |
 | `idf.py` / `No module named click` | Homebrew Python 3.14 on `PATH` | Clean `PATH` then `. ~/esp/esp-idf/export.sh` |
-| GRILLPLATS: `GATT discovery failed` / `peer_add failed` / CoreS3 `LoadProhibited` | BLE drop while Matter polls / subscriptions / MQTT share the radio | Use firmware `grillplats-quiet-1+`. `pair` runs `matter esp homehub commission on` first (stops polls, subscriptions, MQTT for 180 s). Press plug **ON/OFF** to reopen pairing (15 min), keep it next to the CoreS3, retry `code-thread`. Do **not** hold 10 s (that factory-resets). |
+| GRILLPLATS: `GATT discovery failed` / `peer_add failed` / CoreS3 `LoadProhibited` | BLE drop while Matter polls / subscriptions / MQTT share the radio | Quiet commissioning pauses Matter polls, subscriptions, and MQTT publishes for 180 s. `pair` turns it on first (`matter esp homehub commission on` does the same). Press plug **ON/OFF** to reopen pairing (15 min), keep it next to the CoreS3, retry `code-thread`. Do **not** hold 10 s (that factory-resets). |
 | `Cannot add more services` / `CONFIG_MDNS_MAX_SERVICES (10)` then CASE timeout | OTBR SRP/mDNS table full | Set `CONFIG_MDNS_MAX_SERVICES=32` in the CoreS3 overlay, rebuild, flash **without** erase. Device may already be on the fabric — try `read-attr` before pairing again. |
 
 Hard reset does not wipe NVS. `erase-flash` does — you will form a **new** Thread network.

@@ -169,25 +169,12 @@ export interface HouseholdMember {
   updatedAt: string;
 }
 
-export interface HouseholdInvite {
-  inviteId: string;
-  email: string;
-  role: HouseholdRole;
-  status: 'pending' | 'accepted' | 'cancelled' | 'expired';
-  expiresAt: number;
-  createdAt: string;
-  updatedAt: string;
-  emailSent?: boolean | null;
-  emailError?: string | null;
-}
-
 export interface Household {
   householdId: string;
   role: HouseholdRole;
   created: boolean;
   tokenRefreshRequired: boolean;
   members: HouseholdMember[];
-  invites: HouseholdInvite[];
 }
 
 export interface SensorEvent {
@@ -217,40 +204,4 @@ export async function listSensorEvents(options: {
 
 export async function bootstrapHousehold(): Promise<Household> {
   return restRequest<Household>('/household/bootstrap', { method: 'POST' });
-}
-
-export async function getHousehold(): Promise<Household> {
-  return restRequest<Household>('/household');
-}
-
-export async function createHouseholdInvite(email: string): Promise<HouseholdInvite> {
-  return restRequest<HouseholdInvite>('/household/invites', {
-    method: 'POST',
-    body: { email },
-  });
-}
-
-export async function resendHouseholdInvite(inviteId: string): Promise<HouseholdInvite> {
-  return restRequest<HouseholdInvite>(`/household/invites/${encodeURIComponent(inviteId)}/resend`, {
-    method: 'POST',
-  });
-}
-
-export async function cancelHouseholdInvite(inviteId: string): Promise<HouseholdInvite> {
-  return restRequest<HouseholdInvite>(`/household/invites/${encodeURIComponent(inviteId)}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function acceptHouseholdInvite(token: string): Promise<Household> {
-  return restRequest<Household>('/household/invites/accept', {
-    method: 'POST',
-    body: { token },
-  });
-}
-
-export async function removeHouseholdMember(userId: string): Promise<Household> {
-  return restRequest<Household>(`/household/members/${encodeURIComponent(userId)}`, {
-    method: 'DELETE',
-  });
 }

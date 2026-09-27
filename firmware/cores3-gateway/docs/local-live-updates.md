@@ -4,10 +4,10 @@ This document describes the reliability improvements made to the HomeHub local p
 
 ## Current firmware
 
-The firmware label at the time of implementation is:
+The current firmware label is:
 
 ```text
-local-history-5
+sns-alerts-1
 ```
 
 ## What was implemented

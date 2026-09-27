@@ -1,9 +1,9 @@
 import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from homehub_api.auth import AuthContext
 from homehub_api.fake_store import FakeHubStore
-from homehub_api.household import hash_email, hash_invite_token
 from homehub_api.main import create_app
 
 
@@ -19,7 +19,7 @@ def _client(store: FakeHubStore, user_id: str, email: str) -> TestClient:
     return TestClient(app)
 
 
-def test_bootstrap_is_idempotent_and_creates_owner() -> None:
+def test_bootstrap_creates_owner_and_home_pointer() -> None:
     store = FakeHubStore()
     store.tenant_pk = "HOUSEHOLD#owner-1"
     with _client(store, "owner-1", "owner@example.com") as client:
@@ -31,82 +31,41 @@ def test_bootstrap_is_idempotent_and_creates_owner() -> None:
     assert second.json()["created"] is False
     assert store.get_profile("owner-1")["householdId"] == "owner-1"
     assert store.get_member("owner-1")["role"] == "OWNER"
+    assert store.household_metadata["ownerUserId"] == "owner-1"
+    assert store.home_pointer["householdId"] == "owner-1"
+    assert len(store.list_members()) == 1
     with _client(store, "owner-1", "owner@example.com") as client:
         listed = client.get("/household")
     assert listed.status_code == 200
     assert listed.json()["role"] == "OWNER"
 
 
-def test_owner_can_invite_and_matching_member_can_accept(monkeypatch) -> None:
+def test_second_user_joins_existing_household_as_owner() -> None:
     store = FakeHubStore()
     store.tenant_pk = "HOUSEHOLD#owner-1"
-    sent: list[tuple[str, str]] = []
-    monkeypatch.setattr(
-        "homehub_api.routers.household.invites.send_invite_email",
-        lambda email, token: sent.append((email, token)) or {"emailSent": "true"},
-    )
     with _client(store, "owner-1", "owner@example.com") as owner:
-        owner.post("/household/bootstrap")
-        created = owner.post("/household/invites", json={"email": "member@example.com"})
-        assert created.status_code == 200
-        assert created.json()["status"] == "pending"
-        assert sent[0][0] == "member@example.com"
-        token = sent[0][1]
-        listed = owner.get("/household")
-        assert listed.json()["invites"][0]["email"] == "member@example.com"
+        created = owner.post("/household/bootstrap")
+    assert created.status_code == 200
 
-    with _client(store, "member-1", "member@example.com") as member:
-        accepted = member.post("/household/invites/accept", json={"token": token})
-        again = member.post("/household/invites/accept", json={"token": token})
-    assert accepted.status_code == 200
-    assert accepted.json()["role"] == "MEMBER"
-    assert again.status_code == 410
-    assert store.get_profile("member-1")["householdId"] == "owner-1"
-    assert {item["userId"] for item in store.list_members()} == {"owner-1", "member-1"}
+    with _client(store, "person-2", "person@example.com") as person:
+        joined = person.post("/household/bootstrap")
+        again = person.post("/household/bootstrap")
+        listed = person.get("/household")
 
-
-def test_invite_rejects_email_mismatch_and_member_cannot_invite(monkeypatch) -> None:
-    store = FakeHubStore()
-    store.tenant_pk = "HOUSEHOLD#owner-1"
-    monkeypatch.setattr(
-        "homehub_api.routers.household.invites.send_invite_email",
-        lambda email, token: {"emailSent": "true"},
-    )
-    with _client(store, "owner-1", "owner@example.com") as owner:
-        owner.post("/household/bootstrap")
-        created = owner.post("/household/invites", json={"email": "member@example.com"})
-        token_hash = store.get_invite(created.json()["inviteId"])["tokenHash"]
-
-    # Reconstruct is not needed; use a dummy token that hashes differently.
-    with _client(store, "stranger-1", "stranger@example.com") as stranger:
-        rejected = stranger.post("/household/invites/accept", json={"token": "not-the-token"})
-        assert rejected.status_code in {403, 404, 410}
-
-    store.invite_tokens[token_hash]["status"] = "pending"
-    with _client(store, "stranger-1", "stranger@example.com") as stranger:
-        # Put the real token hash lookup but a different raw token cannot match.
-        store.invite_tokens[hash_invite_token("real-token")] = store.invite_tokens[token_hash]
-        denied = stranger.post("/household/invites/accept", json={"token": "real-token"})
-        assert denied.status_code == 403
-
-    store.put_member(
-        {
-            "userId": "member-1",
-            "email": "member@example.com",
-            "role": "MEMBER",
-            "householdId": "owner-1",
-        }
-    )
-    store.put_profile(
-        "member-1",
-        {"householdId": "owner-1", "role": "MEMBER", "email": "member@example.com"},
-    )
-    with _client(store, "member-1", "member@example.com") as member:
-        forbidden = member.post("/household/invites", json={"email": "third@example.com"})
-        assert forbidden.status_code == 403
+    assert joined.status_code == 200
+    assert joined.json()["role"] == "OWNER"
+    assert joined.json()["created"] is False
+    assert again.json()["created"] is False
+    assert store.get_profile("person-2")["householdId"] == "owner-1"
+    assert store.get_profile("person-2")["role"] == "OWNER"
+    assert store.household_metadata["ownerUserId"] == "owner-1"
+    assert store.home_pointer["householdId"] == "owner-1"
+    assert {item["userId"] for item in store.list_members()} == {"owner-1", "person-2"}
+    assert {item["role"] for item in listed.json()["members"]} == {"OWNER"}
+    assert len(store.list_members()) == 2
 
 
-def test_owner_can_remove_member(monkeypatch) -> None:
+def test_owner_can_remove_member() -> None:
     store = FakeHubStore()
     store.tenant_pk = "HOUSEHOLD#owner-1"
     with _client(store, "owner-1", "owner@example.com") as owner:
@@ -129,19 +88,33 @@ def test_owner_can_remove_member(monkeypatch) -> None:
     assert store.get_profile("member-1")["householdId"] is None
 
 
-def test_jwt_decode_includes_email_and_groups() -> None:
-    token = jwt.encode(
-        {"sub": "user-abc", "email": "Pat@Example.com", "cognito:groups": ["hh_user-abc"]},
-        "test",
-        algorithm="HS256",
-    )
+def test_jwt_decode_includes_email_and_groups(monkeypatch: pytest.MonkeyPatch) -> None:
     from homehub_api.auth import _auth_from_token
 
-    auth = _auth_from_token(token)
+    monkeypatch.setattr(
+        "homehub_api.auth._token_payload",
+        lambda _token: {
+            "sub": "user-abc",
+            "email": "Pat@Example.com",
+            "cognito:groups": ["hh_user-abc"],
+            "token_use": "id",
+        },
+    )
+
+    auth = _auth_from_token("signed-token")
     assert auth.user_id == "user-abc"
     assert auth.email == "pat@example.com"
     assert auth.groups == ["hh_user-abc"]
-    assert hash_email(auth.email) == hash_email("pat@example.com")
+
+
+def test_bearer_token_is_rejected_without_cognito_config() -> None:
+    token = jwt.encode({"sub": "user-abc", "token_use": "id"}, "test", algorithm="HS256")
+    from homehub_api.auth import _auth_from_token
+    from homehub_api.errors import ApiError
+
+    with pytest.raises(ApiError) as caught:
+        _auth_from_token(token)
+    assert caught.value.status_code == 401
 
 
 def test_cognito_username_prefers_user_id() -> None:
