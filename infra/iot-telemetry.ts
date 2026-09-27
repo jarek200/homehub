@@ -1,6 +1,7 @@
 /// <reference path="../.sst/platform/config.d.ts" />
 
 import * as aws from '@pulumi/aws';
+import { abortIncompleteUploads, denyInsecureTransport } from './bucket-guard';
 import { IamPropagationDelay } from './iam-wait';
 import { pythonCatalogCopy, pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
@@ -30,6 +31,8 @@ export function createIotTelemetry(
     ignorePublicAcls: true,
     restrictPublicBuckets: true,
   });
+  denyInsecureTransport('GatewayFirmwareTlsPolicy', firmwareBucket);
+  abortIncompleteUploads('GatewayFirmwareLifecycle', firmwareBucket);
 
   const telemetryBucket = new aws.s3.Bucket('TelemetryLake', {
     bucket: `${$app.name}-telemetry-${$app.stage}`,
@@ -43,6 +46,8 @@ export function createIotTelemetry(
     ignorePublicAcls: true,
     restrictPublicBuckets: true,
   });
+  denyInsecureTransport('TelemetryLakeTlsPolicy', telemetryBucket);
+  abortIncompleteUploads('TelemetryLakeLifecycle', telemetryBucket);
 
   const glueDatabase = new aws.glue.CatalogDatabase('TelemetryGlueDb', {
     name: `${$app.name}_${$app.stage}_telemetry`,
@@ -104,6 +109,8 @@ export function createIotTelemetry(
     ignorePublicAcls: true,
     restrictPublicBuckets: true,
   });
+  denyInsecureTransport('AthenaResultsTlsPolicy', athenaResultsBucket);
+  abortIncompleteUploads('AthenaResultsLifecycle', athenaResultsBucket);
 
   const firehoseRole = new aws.iam.Role('TelemetryFirehoseRole', {
     assumeRolePolicy: JSON.stringify({

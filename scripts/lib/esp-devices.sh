@@ -124,16 +124,50 @@ esp_device_label() {
   esac
 }
 
+esp_load_secret_file() {
+  local file="$1"
+  local line key value
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    line="${line#export }"
+    [[ "$line" == *=* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key%"${key##*[![:space:]]}"}"
+    case "$key" in
+      WIFI_SSID | WIFI_PASSWORD | ESP32_OTA_PASSWORD) ;;
+      *) continue ;;
+    esac
+    if [[ -n "${!key:-}" ]]; then
+      continue
+    fi
+    if [[ ${#value} -ge 2 && ( ${value:0:1} == '"' || ${value:0:1} == "'" ) && ${value:0:1} == ${value: -1} ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+    printf -v "$key" '%s' "$value"
+    export "$key"
+  done <"$file"
+}
+
+esp_load_local_secrets() {
+  esp_load_secret_file "$_REPO_ROOT/.env.local"
+  esp_load_secret_file "$HOME/.zshrc.local"
+}
+
 esp_require_wifi_creds() {
+  esp_load_local_secrets
   if [[ -z "${WIFI_SSID:-}" || -z "${WIFI_PASSWORD:-}" ]]; then
-    echo "Set WIFI_SSID and WIFI_PASSWORD (e.g. source ~/.zshrc)"
+    echo "Set WIFI_SSID and WIFI_PASSWORD in .env.local"
     exit 1
   fi
 }
 
 esp_require_ota_password() {
+  esp_load_local_secrets
   if [[ -z "${ESP32_OTA_PASSWORD:-}" ]]; then
-    echo "Set ESP32_OTA_PASSWORD in ~/.zshrc.local (required — boards were flashed with OTA password)."
+    echo "Set ESP32_OTA_PASSWORD in .env.local (required — boards were flashed with OTA password)."
     exit 1
   fi
 }

@@ -36,14 +36,25 @@ def _load_serial():
     return serial
 
 
-def _wifi_creds() -> tuple[str, str]:
-    text = Path.home().joinpath(".zshrc.local").read_text(encoding="utf-8")
+def _secret_files() -> list[Path]:
+    repo = Path(__file__).resolve().parents[2]
+    return [repo / ".env.local", Path.home() / ".zshrc.local"]
 
+
+def _wifi_creds() -> tuple[str, str]:
     def grab(name: str) -> str:
-        match = re.search(rf"export {name}=(['\"]?)(.+?)\1\s*$", text, re.M)
-        if not match:
-            _die(f"missing {name} in ~/.zshrc.local")
-        return match.group(2)
+        from_env = os.environ.get(name, "").strip()
+        if from_env:
+            return from_env
+        pattern = re.compile(rf"^(?:export\s+)?{name}=(['\"]?)(.+?)\1\s*$", re.M)
+        for path in _secret_files():
+            if not path.is_file():
+                continue
+            match = pattern.search(path.read_text(encoding="utf-8"))
+            if match:
+                return match.group(2)
+        _die(f"missing {name} in .env.local")
+        return ""
 
     return grab("WIFI_SSID"), grab("WIFI_PASSWORD")
 
@@ -215,7 +226,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="action", required=True)
 
     sub.add_parser("state", help="require Thread leader")
-    sub.add_parser("wifi-connect", help="join Wi-Fi from ~/.zshrc.local")
+    sub.add_parser("wifi-connect", help="join Wi-Fi from .env.local")
 
     send = sub.add_parser("send", help="send one console command")
     send.add_argument("--cmd", required=True)

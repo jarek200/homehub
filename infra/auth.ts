@@ -8,6 +8,8 @@ export function createAuth(
   // Cognito User Pool with post-confirmation trigger
   const auth = new sst.aws.CognitoUserPool('Auth', {
     usernames: ['email'],
+    mfa: 'optional',
+    softwareToken: true,
     transform: {
       userPool: (args) => {
         args.adminCreateUserConfig = {

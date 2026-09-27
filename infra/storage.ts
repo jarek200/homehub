@@ -11,6 +11,13 @@ export function createStorage() {
     ttl: 'expiresAt',
     deletionProtection: $app.stage === 'prod',
     stream: 'new-and-old-images',
+    transform: {
+      table: (args) => {
+        args.pointInTimeRecovery = {
+          enabled: $app.stage === 'prod',
+        };
+      },
+    },
   });
 
   return { table };

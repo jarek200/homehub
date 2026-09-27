@@ -205,13 +205,3 @@ export async function listSensorEvents(options: {
 export async function bootstrapHousehold(): Promise<Household> {
   return restRequest<Household>('/household/bootstrap', { method: 'POST' });
 }
-
-export async function getHousehold(): Promise<Household> {
-  return restRequest<Household>('/household');
-}
-
-export async function removeHouseholdMember(userId: string): Promise<Household> {
-  return restRequest<Household>(`/household/members/${encodeURIComponent(userId)}`, {
-    method: 'DELETE',
-  });
-}

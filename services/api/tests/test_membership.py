@@ -1,4 +1,5 @@
 import jwt
+import pytest
 from fastapi.testclient import TestClient
 
 from homehub_api.auth import AuthContext
@@ -87,18 +88,33 @@ def test_owner_can_remove_member() -> None:
     assert store.get_profile("member-1")["householdId"] is None
 
 
-def test_jwt_decode_includes_email_and_groups() -> None:
-    token = jwt.encode(
-        {"sub": "user-abc", "email": "Pat@Example.com", "cognito:groups": ["hh_user-abc"]},
-        "test",
-        algorithm="HS256",
-    )
+def test_jwt_decode_includes_email_and_groups(monkeypatch: pytest.MonkeyPatch) -> None:
     from homehub_api.auth import _auth_from_token
 
-    auth = _auth_from_token(token)
+    monkeypatch.setattr(
+        "homehub_api.auth._token_payload",
+        lambda _token: {
+            "sub": "user-abc",
+            "email": "Pat@Example.com",
+            "cognito:groups": ["hh_user-abc"],
+            "token_use": "id",
+        },
+    )
+
+    auth = _auth_from_token("signed-token")
     assert auth.user_id == "user-abc"
     assert auth.email == "pat@example.com"
     assert auth.groups == ["hh_user-abc"]
+
+
+def test_bearer_token_is_rejected_without_cognito_config() -> None:
+    token = jwt.encode({"sub": "user-abc", "token_use": "id"}, "test", algorithm="HS256")
+    from homehub_api.auth import _auth_from_token
+    from homehub_api.errors import ApiError
+
+    with pytest.raises(ApiError) as caught:
+        _auth_from_token(token)
+    assert caught.value.status_code == 401
 
 
 def test_cognito_username_prefers_user_id() -> None:

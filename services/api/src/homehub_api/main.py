@@ -84,6 +84,8 @@ def create_app(store: HubStore | None = None) -> FastAPI:
         version="1.0",
         description="RESTful IoT device management API for HomeHub.",
         lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
     )
 
     app.add_middleware(

@@ -44,7 +44,7 @@ Get the active dataset (secret — do not log or commit):
 matter esp ot_cli dataset active -x
 ```
 
-If Wi-Fi is down, credentials are in `~/.zshrc.local` as `WIFI_SSID` / `WIFI_PASSWORD`. Never print the password.
+If Wi-Fi is down, credentials are in `.env.local` as `WIFI_SSID` / `WIFI_PASSWORD`. Never print the password.
 
 ---
 

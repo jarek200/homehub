@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hmac
 import os
 from dataclasses import dataclass, field
 
 import jwt
 from fastapi import Depends, Header
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientError, PyJWTError
 
 from homehub_api.config import rest_api_key
 from homehub_api.errors import ApiError
@@ -21,6 +23,7 @@ class AuthContext:
 
 
 _jwk_client: PyJWKClient | None = None
+_jwk_issuer: str | None = None
 
 
 def _cognito_issuer() -> str | None:
@@ -31,27 +34,34 @@ def _cognito_issuer() -> str | None:
     return f"https://cognito-idp.{region}.amazonaws.com/{user_pool_id}"
 
 
+def _app_client_id() -> str | None:
+    value = os.environ.get("COGNITO_APP_CLIENT_ID", "").strip()
+    return value or None
+
+
 def _token_payload(token: str) -> dict:
     issuer = _cognito_issuer()
-    if not issuer:
-        payload = jwt.decode(token, options={"verify_signature": False})
-        if not isinstance(payload, dict):
-            raise ApiError("Invalid token", 401, "Unauthorized")
-        return payload
+    client_id = _app_client_id()
+    if not issuer or not client_id:
+        raise ApiError("Invalid token", 401, "Unauthorized")
 
-    global _jwk_client
+    global _jwk_client, _jwk_issuer
     jwks_url = f"{issuer}/.well-known/jwks.json"
-    if _jwk_client is None:
+    if _jwk_client is None or _jwk_issuer != issuer:
         _jwk_client = PyJWKClient(jwks_url)
-    signing_key = _jwk_client.get_signing_key_from_jwt(token)
-    payload = jwt.decode(
-        token,
-        signing_key.key,
-        algorithms=["RS256"],
-        issuer=issuer,
-        options={"verify_aud": False},
-    )
-    if not isinstance(payload, dict):
+        _jwk_issuer = issuer
+    try:
+        signing_key = _jwk_client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=issuer,
+            audience=client_id,
+        )
+    except (PyJWTError, PyJWKClientError) as exc:
+        raise ApiError("Invalid token", 401, "Unauthorized") from exc
+    if not isinstance(payload, dict) or payload.get("token_use") != "id":
         raise ApiError("Invalid token", 401, "Unauthorized")
     return payload
 
@@ -79,13 +89,11 @@ def verify_api_key_or_jwt(
         return _auth_from_token(token)
 
     expected = rest_api_key()
-    if expected:
-        if x_api_key != expected:
-            raise ApiError("Invalid or missing API key", 401, "Unauthorized")
+    provided = x_api_key or ""
+    if expected and hmac.compare_digest(provided, expected):
         return AuthContext(user_id=None, auth_method="api_key")
 
-    # Local dev when REST_API_KEY is not configured
-    return AuthContext(user_id=None, auth_method="none")
+    raise ApiError("Invalid or missing API key", 401, "Unauthorized")
 
 
 def require_user(

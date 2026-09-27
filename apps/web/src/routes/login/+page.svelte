@@ -4,7 +4,7 @@
 </svelte:head>
 
 <script lang="ts">
-import { fetchAuthSession, getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
+import { confirmSignIn, fetchAuthSession, getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
 import { onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
@@ -17,6 +17,8 @@ import { cognitoAuthError } from './auth-errors';
 
 let email = $state('');
 let password = $state('');
+let totpCode = $state('');
+let needsTotp = $state(false);
 let loading = $state(false);
 let error = $state('');
 
@@ -71,14 +73,28 @@ async function handleSubmit() {
   error = '';
 
   try {
+    if (needsTotp) {
+      const confirmed = await confirmSignIn({ challengeResponse: totpCode });
+      if (confirmed.isSignedIn) await finishSignIn();
+      return;
+    }
+
     try {
       await signOut({ global: true });
     } catch {
       // Ignore
     }
 
-    const { isSignedIn } = await signIn({ username: email, password });
-    if (isSignedIn) await finishSignIn();
+    const result = await signIn({ username: email, password });
+    if (result.isSignedIn) {
+      await finishSignIn();
+      return;
+    }
+    if (result.nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_TOTP_CODE') {
+      needsTotp = true;
+      return;
+    }
+    error = 'Sign-in needs another step that this page does not handle';
   } catch (err: unknown) {
     console.error('Auth error:', err);
     error = cognitoAuthError(err);
@@ -124,9 +140,26 @@ async function handleSubmit() {
         placeholder="••••••••"
         bind:value={password}
         required
+        disabled={needsTotp}
         class={inputMinimal}
       />
     </div>
+    {#if needsTotp}
+      <div class="flex flex-col gap-2">
+        <Label for="totp" class="text-muted-foreground text-xs font-normal">Authenticator code</Label>
+        <Input
+          id="totp"
+          type="text"
+          name="totp"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="123456"
+          bind:value={totpCode}
+          required
+          class={inputMinimal}
+        />
+      </div>
+    {/if}
 
     {#if error}
       <p class="text-[0.75rem] text-destructive">{error}</p>

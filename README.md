@@ -1,6 +1,6 @@
 # HomeHub
 
-A serverless smart-home hub: a SvelteKit console, a FastAPI on Lambda, Cognito, DynamoDB, and AWS IoT Core. The console is devices, a floor plan, and household members. Matter devices are commissioned from the API and join through a CoreS3 Thread gateway. A Timer Camera F can publish snapshots.
+A serverless smart-home hub: a SvelteKit console, a FastAPI on Lambda, Cognito, DynamoDB, and AWS IoT Core. The console is devices and a floor plan. Matter devices are commissioned from the API and join through a CoreS3 Thread gateway. A Timer Camera F can publish snapshots.
 
 ## Architecture
 

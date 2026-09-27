@@ -1,20 +1,20 @@
-import jwt
 from fastapi.testclient import TestClient
 
+from homehub_api.auth import AuthContext, verify_api_key_or_jwt
 from homehub_api.fake_store import FakeHubStore
 from homehub_api.main import create_app
 
 
-def auth_headers(sub: str = "user-1") -> dict[str, str]:
-    token = jwt.encode({"sub": sub}, "test", algorithm="HS256")
-    return {"Authorization": f"Bearer {token}"}
-
-
 class AuthedClient:
-    def __init__(self, store: FakeHubStore | None = None) -> None:
+    def __init__(self, store: FakeHubStore | None = None, user_id: str = "user-1") -> None:
         self.store = store or FakeHubStore()
-        self._client = TestClient(create_app(store=self.store))
-        self._headers = auth_headers()
+        app = create_app(store=self.store)
+        app.dependency_overrides[verify_api_key_or_jwt] = lambda: AuthContext(
+            user_id=user_id,
+            auth_method="jwt",
+        )
+        self._client = TestClient(app)
+        self._headers: dict[str, str] = {}
 
     def __enter__(self) -> "AuthedClient":
         self._client.__enter__()

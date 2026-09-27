@@ -17,7 +17,7 @@ Do not use a 16 MB `huge_app` FQBN (that layout has no OTA slot).
 ## First flash (USB)
 
 ```bash
-source ~/.zshrc   # WIFI_SSID, WIFI_PASSWORD, ESP32_OTA_PASSWORD
+# WIFI_SSID, WIFI_PASSWORD, and ESP32_OTA_PASSWORD live in .env.local
 bash scripts/firmware/flash-esp-usb.sh timer-cam-f
 ```
 
@@ -38,7 +38,6 @@ Wave a hand in front of the PIR — `/status` `motionActive` should go true and 
 Leave the camera on USB power.
 
 ```bash
-source ~/.zshrc
 bash scripts/firmware/list-esp-devices.sh
 bash scripts/firmware/flash-esp-ota.sh timer-cam-f
 ```
@@ -51,7 +50,6 @@ Override USB port: `TIMER_CAM_F_PORT=/dev/cu.usbserial-XXXXXXXX bash scripts/fir
 2. Provision certs and cloud firmware:
 
 ```bash
-source ~/.zshrc
 SST_STAGE=int bash scripts/provisioning/provision-esp-iot.sh timer-cam-f <deviceId>
 ```
 

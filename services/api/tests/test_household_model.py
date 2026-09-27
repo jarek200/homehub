@@ -92,7 +92,7 @@ def test_resolve_user_uses_home_pointer() -> None:
     assert resolve_household_pk_for_user(table, "new-user") == "HOUSEHOLD#family-1"
 
 
-def test_resolve_user_backfills_pointer_and_skips_demo() -> None:
+def test_resolve_user_without_pointer_uses_own_id() -> None:
     table = FakeTable(
         {
             ("HOUSEHOLD#demo", "METADATA"): {
@@ -105,15 +105,10 @@ def test_resolve_user_backfills_pointer_and_skips_demo() -> None:
                 "SK": "METADATA",
                 "householdId": "family-1",
             },
-            ("INVITE#abc", "METADATA"): {
-                "PK": "INVITE#abc",
-                "SK": "METADATA",
-                "householdId": "nope",
-            },
         }
     )
-    assert resolve_household_pk_for_user(table, "new-user") == "HOUSEHOLD#family-1"
-    assert table.items[(HOME_POINTER_PK, HOME_POINTER_SK)]["householdId"] == "family-1"
+    assert resolve_household_pk_for_user(table, "new-user") == "HOUSEHOLD#new-user"
+    assert (HOME_POINTER_PK, HOME_POINTER_SK) not in table.items
 
 
 def test_resolve_gateway_uses_lookup_without_scan() -> None:
