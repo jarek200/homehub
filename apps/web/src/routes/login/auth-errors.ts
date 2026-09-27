@@ -12,5 +12,8 @@ export function cognitoAuthError(err: unknown): string {
   if (authError.name === 'InvalidPasswordException') {
     return 'Password does not meet requirements';
   }
+  if (authError.name === 'CodeMismatchException') {
+    return 'Incorrect authenticator code';
+  }
   return authError.message || 'Login failed';
 }

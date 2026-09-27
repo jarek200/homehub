@@ -1,12 +1,11 @@
-from fastapi.testclient import TestClient
-
+from api_client import open_api_client
 from homehub_api.fake_store import FakeHubStore
 from homehub_api.main import create_app
 
 
 def test_create_matter_light_skips_provisioning() -> None:
     app = create_app(store=FakeHubStore())
-    with TestClient(app) as client:
+    with open_api_client(app) as client:
         response = client.post(
             "/devices",
             json={
@@ -32,7 +31,7 @@ def test_create_matter_light_skips_provisioning() -> None:
 
 def test_create_matter_gateway_still_provisions() -> None:
     app = create_app(store=FakeHubStore())
-    with TestClient(app) as client:
+    with open_api_client(app) as client:
         response = client.post(
             "/devices",
             json={

@@ -6,8 +6,6 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from botocore.exceptions import ClientError
-
 HOUSEHOLD_PREFIX = "HOUSEHOLD#"
 USER_PREFIX = "USER#"
 GATEWAY_PREFIX = "GATEWAY#"
@@ -125,61 +123,9 @@ def _pointer_household_id(table: Any) -> str:
     return str(item.get("householdId") or "")
 
 
-def _remember_home_pointer(table: Any, household_id: str) -> str:
-    existing = _pointer_household_id(table)
-    if existing:
-        return existing
-    try:
-        table.put_item(
-            Item={
-                "PK": HOME_POINTER_PK,
-                "SK": HOME_POINTER_SK,
-                "householdId": household_id,
-            },
-            ConditionExpression="attribute_not_exists(PK)",
-        )
-    except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
-            raise
-    return _pointer_household_id(table) or household_id
-
-
-def _metadata_household_ids(table: Any) -> list[str]:
-    found: list[str] = []
-    start_key: dict[str, Any] | None = None
-    while True:
-        kwargs: dict[str, Any] = {}
-        if start_key:
-            kwargs["ExclusiveStartKey"] = start_key
-        page = table.scan(**kwargs)
-        for item in page.get("Items") or []:
-            pk = str(item.get("PK") or "")
-            if item.get("SK") != HOUSEHOLD_METADATA_SK or not pk.startswith(HOUSEHOLD_PREFIX):
-                continue
-            household_id = str(item.get("householdId") or pk.removeprefix(HOUSEHOLD_PREFIX))
-            if household_id:
-                found.append(household_id)
-        start_key = page.get("LastEvaluatedKey")
-        if not start_key:
-            return found
-
-
-def _choose_household_id(candidates: list[str]) -> str:
-    unique = list(dict.fromkeys(candidates))
-    non_demo = [item for item in unique if item != DEMO_TENANT_ID]
-    pool = non_demo or unique
-    return sorted(pool)[0] if pool else ""
-
-
 def find_existing_household_id(table: Any) -> str:
     """The home already in this stage, remembered as HOMEHUB#HOME / HOUSEHOLD."""
-    pointer = _pointer_household_id(table)
-    if pointer:
-        return pointer
-    chosen = _choose_household_id(_metadata_household_ids(table))
-    if not chosen:
-        return ""
-    return _remember_home_pointer(table, chosen)
+    return _pointer_household_id(table)
 
 
 def resolve_household_pk_for_user(table: Any, user_id: str | None) -> str:

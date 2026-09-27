@@ -1,5 +1,4 @@
-from fastapi.testclient import TestClient
-
+from api_client import open_api_client
 from homehub_api.cores3_products import (
     next_matter_device_id,
     next_matter_node_id,
@@ -21,7 +20,7 @@ def test_next_ids_skip_reserved_nodes() -> None:
 
 
 def test_list_matter_products() -> None:
-    with TestClient(create_app(store=FakeHubStore())) as client:
+    with open_api_client(create_app(store=FakeHubStore())) as client:
         response = client.get("/matter/products")
         assert response.status_code == 200
         ids = [item["productId"] for item in response.json()["items"]]
@@ -65,7 +64,7 @@ def _gateway_store() -> FakeHubStore:
 
 def test_commission_does_not_create_device_until_pair() -> None:
     store = _gateway_store()
-    with TestClient(create_app(store=store)) as client:
+    with open_api_client(create_app(store=store)) as client:
         response = client.post(
             "/matter/commission",
             json={
@@ -106,7 +105,7 @@ def test_commission_does_not_create_device_until_pair() -> None:
 
 def test_get_commission_completes_from_pair_result() -> None:
     store = _gateway_store()
-    with TestClient(create_app(store=store)) as client:
+    with open_api_client(create_app(store=store)) as client:
         started = client.post(
             "/matter/commission",
             json={"productId": "kajplats", "setupPayload": "00000000000"},
@@ -120,7 +119,7 @@ def test_get_commission_completes_from_pair_result() -> None:
 
 def test_commission_failure_leaves_devices_unchanged() -> None:
     store = _gateway_store()
-    with TestClient(create_app(store=store)) as client:
+    with open_api_client(create_app(store=store)) as client:
         response = client.post(
             "/matter/commission",
             json={"productId": "kajplats", "setupPayload": "00000000000"},
@@ -133,7 +132,7 @@ def test_commission_failure_leaves_devices_unchanged() -> None:
 
 
 def test_unknown_product_is_rejected() -> None:
-    with TestClient(create_app(store=FakeHubStore())) as client:
+    with open_api_client(create_app(store=FakeHubStore())) as client:
         response = client.post(
             "/matter/commission",
             json={"productId": "not-a-product", "setupPayload": "00000000000"},
@@ -142,7 +141,7 @@ def test_unknown_product_is_rejected() -> None:
 
 
 def test_invalid_matter_code_is_rejected() -> None:
-    with TestClient(create_app(store=FakeHubStore())) as client:
+    with open_api_client(create_app(store=FakeHubStore())) as client:
         response = client.post(
             "/matter/commission",
             json={"productId": "kajplats", "setupPayload": "123"},

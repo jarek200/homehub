@@ -94,7 +94,8 @@ export default $config({
       iotProvisioning,
       iotTelemetry,
       snapshotStorage.snapshotBucket,
-      restApiKey
+      restApiKey,
+      authClient.id
     );
 
     const webAppUrl = getWebAppUrl();

@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from api_client import open_api_client
 from homehub_api.fake_store import FakeHubStore
 from homehub_api.main import create_app
 
@@ -13,7 +14,7 @@ def store() -> FakeHubStore:
 @pytest.fixture
 def client(store: FakeHubStore) -> TestClient:
     app = create_app(store=store)
-    with TestClient(app) as test_client:
+    with open_api_client(app) as test_client:
         yield test_client
 
 
@@ -456,6 +457,26 @@ def test_auth_error_shape_when_api_key_required(
         message="Invalid or missing API key",
         code="Unauthorized",
     )
+
+
+def test_devices_reject_missing_credentials(
+    monkeypatch: pytest.MonkeyPatch, store: FakeHubStore
+) -> None:
+    monkeypatch.delenv("REST_API_KEY", raising=False)
+    with TestClient(create_app(store=store)) as raw:
+        response = raw.get("/devices")
+    assert response.status_code == 401
+    _assert_error_shape(
+        response.json(),
+        message="Invalid or missing API key",
+        code="Unauthorized",
+    )
+
+
+def test_interactive_docs_are_disabled(client: TestClient) -> None:
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 200
 
 
 def test_profile_requires_cognito_user(client: TestClient) -> None:
