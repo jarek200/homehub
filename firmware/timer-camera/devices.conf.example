@@ -1,0 +1,4 @@
+# alias|board|hostname|mac
+# board: timer-cam-f (M5Stack Timer Camera F)
+# Copy to devices.conf (gitignored) and fill in the MAC printed on the serial console.
+timer-cam-f|timer-cam-f|homehub-timer-cam|aa:bb:cc:dd:ee:ff

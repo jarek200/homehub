@@ -1,0 +1,10 @@
+{
+  "name": "@homehub/catalog",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared HomeHub product, fabric, and limit data used by TypeScript and Python.",
+  "license": "MIT",
+  "exports": {
+    "./homehub.json": "./homehub.json"
+  }
+}

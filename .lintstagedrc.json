@@ -1,0 +1,4 @@
+{
+  "*.{js,jsx,ts,tsx,svelte}": ["pnpm exec biome check --write --no-errors-on-unmatched"],
+  "*.json": ["pnpm exec biome format --write --no-errors-on-unmatched"]
+}

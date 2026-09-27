@@ -1,0 +1,1 @@
+"""HomeHub REST API package."""

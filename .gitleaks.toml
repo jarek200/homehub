@@ -1,0 +1,12 @@
+title = "HomeHub"
+
+[allowlist]
+description = "Gitignored local credentials and toolchain state."
+paths = [
+  '''(^|/)\.sst/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)generated/iot_config\.h$''',
+  '''(^|/)\.env(\..*)?$''',
+  '''(^|/)devices\.conf$''',
+]
