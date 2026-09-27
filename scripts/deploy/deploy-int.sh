@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy the shared int stack with custom domain (same settings as GitHub Actions).
+# Deploy the live stack at the APP_URL hostname (same settings as GitHub Actions).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

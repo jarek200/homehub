@@ -1,15 +1,15 @@
 ---
 name: homehub-deploy-int
 description: >-
-  Deploy HomeHub to the shared int stage with the custom domain from
-  $APP_URL. Use when the user asks to deploy int,
-  run deploy:int, restore the int URL, or deploy from a local machine without
-  losing the custom domain.
+  Deploy HomeHub to the live int stage. The public hostname is APP_URL
+  (https://homehub.apps.jarekwyprzal.com), not a homehub-int host. Use when
+  the user asks to deploy int, run deploy:int, restore that hostname, or
+  deploy from a local machine without losing the custom domain.
 ---
 
 # HomeHub int deploy
 
-Local `pnpm deploy:int` must preserve the custom domain. A bare `sst deploy --stage int` without domain env vars deploys to a random CloudFront URL.
+Local `pnpm deploy:int` must preserve the custom domain from `APP_URL` (`https://homehub.apps.jarekwyprzal.com`). A bare `sst deploy --stage int` without domain env vars deploys to a random CloudFront URL. The AWS stage stays `int`.
 
 ## Always use the wrapper
 
