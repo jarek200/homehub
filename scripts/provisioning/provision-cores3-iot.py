@@ -24,7 +24,7 @@ def _table(name: str):
 
 
 def _tenant_pks(hub_id: str) -> list[str]:
-    household_id = hub_id.removeprefix("HOUSEHOLD#").removeprefix("HUB#")
+    household_id = hub_id.removeprefix("HOUSEHOLD#")
     return [f"HOUSEHOLD#{household_id}"]
 
 
@@ -149,7 +149,7 @@ def provision(args: argparse.Namespace) -> None:
             "enabled": False,
             "runtimeKind": "physical",
             "status": "READY",
-            "tenantPk": f"HOUSEHOLD#{hub_id.removeprefix('HOUSEHOLD#').removeprefix('HUB#')}",
+            "tenantPk": f"HOUSEHOLD#{hub_id.removeprefix('HOUSEHOLD#')}",
             "hubId": hub_id,
             "ssmCertPrefix": prefix,
             "certificateId": certificate_id,
@@ -157,7 +157,7 @@ def provision(args: argparse.Namespace) -> None:
         }
     )
 
-    household_id = hub_id.removeprefix("HOUSEHOLD#").removeprefix("HUB#")
+    household_id = hub_id.removeprefix("HOUSEHOLD#")
     existing_lookup = table.get_item(Key={"PK": f"GATEWAY#{device_id}", "SK": "HOUSEHOLD"}).get(
         "Item"
     )

@@ -13,7 +13,6 @@ HOUSEHOLD_PREFIX = "HOUSEHOLD#"
 USER_PREFIX = "USER#"
 GATEWAY_PREFIX = "GATEWAY#"
 INVITE_PREFIX = "INVITE#"
-LEGACY_HUB_PREFIX = "HUB#"
 
 HOUSEHOLD_METADATA_SK = "METADATA"
 HOUSEHOLD_LOOKUP_SK = "HOUSEHOLD"
@@ -28,7 +27,6 @@ STATE_WRITE_MAX_ATTEMPTS = 5
 
 DEMO_TENANT_ID = "demo"
 DEMO_TENANT_PK = f"{HOUSEHOLD_PREFIX}{DEMO_TENANT_ID}"
-LEGACY_DEMO_TENANT_PK = f"{LEGACY_HUB_PREFIX}{DEMO_TENANT_ID}"
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -65,20 +63,10 @@ def is_household_pk(tenant_pk: str) -> bool:
     return tenant_pk.startswith(HOUSEHOLD_PREFIX)
 
 
-def is_legacy_hub_pk(tenant_pk: str) -> bool:
-    return tenant_pk.startswith(LEGACY_HUB_PREFIX)
-
-
 def household_id_from_pk(tenant_pk: str) -> str:
     if is_household_pk(tenant_pk):
         return tenant_pk.removeprefix(HOUSEHOLD_PREFIX)
-    if is_legacy_hub_pk(tenant_pk):
-        return tenant_pk.removeprefix(LEGACY_HUB_PREFIX)
     return tenant_pk
-
-
-def hub_pk_for_user(user_id: str) -> str:
-    return household_pk(user_id)
 
 
 def normalize_tenant_pk(value: str | None, *, default: str | None = None) -> str:
@@ -87,8 +75,6 @@ def normalize_tenant_pk(value: str | None, *, default: str | None = None) -> str
         return default or DEMO_TENANT_PK
     if is_household_pk(raw):
         return raw
-    if is_legacy_hub_pk(raw):
-        return household_pk(household_id_from_pk(raw))
     return household_pk(raw)
 
 
@@ -154,7 +140,7 @@ def is_invite_expired(expires_at: Any, *, now: datetime | None = None) -> bool:
 
 
 def channel_for_household_pk(tenant_pk: str) -> str | None:
-    if not is_household_pk(tenant_pk) and not is_legacy_hub_pk(tenant_pk):
+    if not is_household_pk(tenant_pk):
         return None
     household_id = household_id_from_pk(tenant_pk)
     return f"household/{household_id}" if household_id else None
@@ -210,11 +196,9 @@ def resolve_household_pk_for_gateway(
     return household_pk(hid)
 
 
-def snapshot_object_key(device_id: str, recorded_at: str, household_id: str | None = None) -> str:
+def snapshot_object_key(device_id: str, recorded_at: str, household_id: str) -> str:
     stamp = recorded_at.replace(":", "").replace("+00:00", "Z")
-    if household_id:
-        return f"snapshots/{household_id}/{device_id}/{stamp}.jpg"
-    return f"snapshots/{device_id}/{stamp}.jpg"
+    return f"snapshots/{household_id}/{device_id}/{stamp}.jpg"
 
 
 def snapshot_prefixes(
@@ -223,7 +207,6 @@ def snapshot_prefixes(
     prefixes: list[str] = []
     if household_id:
         prefixes.append(f"snapshots/{household_id}/{device_id}/")
-    prefixes.append(f"snapshots/{device_id}/")
     camera_thing = (thing_name or "").strip() or f"homehub-{device_id}"
     thing_prefix = f"snapshots/{camera_thing}/"
     if thing_prefix not in prefixes:

@@ -24,16 +24,14 @@ export const CREATE_DEVICE_TYPES = DEVICE_TYPES.filter(
 );
 
 export const RUNTIME_KINDS = [
-  { value: 'simulated', label: 'Simulated' },
   { value: 'physical', label: 'Physical device' },
   { value: 'matter', label: 'Matter device (via CoreS3 gateway)' },
 ] as const;
 
 export type RuntimeKind = (typeof RUNTIME_KINDS)[number]['value'];
 
-/** Map legacy API/device records onto the current device type slug. */
+/** Return a known device type, or the raw slug when it is not in the catalog. */
 export function normalizeDeviceType(type: string): DeviceType {
-  if (type === 'humidity-sensor') return 'environmental-sensor';
   if (DEVICE_TYPES.some((item) => item.value === type)) {
     return type as DeviceType;
   }

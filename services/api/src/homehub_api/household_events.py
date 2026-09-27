@@ -49,12 +49,6 @@ def tenant_pk_from_record(record: dict[str, Any]) -> str | None:
     return pk or None
 
 
-def channel_for_hub_pk(tenant_pk: str) -> str | None:
-    from homehub_api.household import channel_for_household_pk
-
-    return channel_for_household_pk(tenant_pk)
-
-
 def _typed_string(value: Any) -> str:
     if isinstance(value, str):
         return value

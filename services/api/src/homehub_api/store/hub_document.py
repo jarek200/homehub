@@ -10,7 +10,6 @@ from homehub_api.store._surface import StoreSurface
 
 class HubDocumentMixin(StoreSurface):
     def get_hub_state(self) -> dict[str, Any]:
-        from homehub_api.cores3_fabric import is_legacy_dummy_household_state
         from homehub_api.hub_state import (
             default_household_state,
             jsonable_plan,
@@ -23,8 +22,6 @@ class HubDocumentMixin(StoreSurface):
             state = normalize_household_state(raw)
             if item.get("revision") is not None and state.get("stateVersion") is None:
                 state["stateVersion"] = revision_of(item, raw)
-            if is_legacy_dummy_household_state(raw):
-                return self.update_hub_state(lambda _current: state)
             converted = jsonable_plan(state)
             return converted if isinstance(converted, dict) else state
         return self.update_hub_state(lambda current: current or default_household_state())

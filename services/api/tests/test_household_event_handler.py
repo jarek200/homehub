@@ -9,9 +9,9 @@ def test_handler_reports_partial_batch_failures(monkeypatch) -> None:
                 "eventID": "ok-1",
                 "eventName": "MODIFY",
                 "dynamodb": {
-                    "Keys": {"PK": {"S": "HUB#user-1"}, "SK": {"S": "HUB_STATE"}},
+                    "Keys": {"PK": {"S": "HOUSEHOLD#user-1"}, "SK": {"S": "HUB_STATE"}},
                     "NewImage": {
-                        "PK": {"S": "HUB#user-1"},
+                        "PK": {"S": "HOUSEHOLD#user-1"},
                         "SK": {"S": "HUB_STATE"},
                         "state": {"M": {"scene": {"S": "home"}, "updatedAt": {"S": "now"}}},
                     },
@@ -21,9 +21,9 @@ def test_handler_reports_partial_batch_failures(monkeypatch) -> None:
                 "eventID": "bad-1",
                 "eventName": "MODIFY",
                 "dynamodb": {
-                    "Keys": {"PK": {"S": "HUB#user-2"}, "SK": {"S": "HUB_STATE"}},
+                    "Keys": {"PK": {"S": "HOUSEHOLD#user-2"}, "SK": {"S": "HUB_STATE"}},
                     "NewImage": {
-                        "PK": {"S": "HUB#user-2"},
+                        "PK": {"S": "HOUSEHOLD#user-2"},
                         "SK": {"S": "HUB_STATE"},
                         "state": {"M": {"scene": {"S": "away"}}},
                     },
@@ -52,7 +52,9 @@ def test_handler_skips_non_state_records(monkeypatch) -> None:
                 {
                     "eventID": "plan-1",
                     "eventName": "MODIFY",
-                    "dynamodb": {"Keys": {"PK": {"S": "HUB#user-1"}, "SK": {"S": "FLOOR_PLAN"}}},
+                    "dynamodb": {
+                        "Keys": {"PK": {"S": "HOUSEHOLD#user-1"}, "SK": {"S": "FLOOR_PLAN"}}
+                    },
                 }
             ]
         },

@@ -8,11 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from homehub_api.cores3_fabric import (
-    cores3_household_state,
-    empty_household_state,
-    is_legacy_dummy_household_state,
-)
+from homehub_api.cores3_fabric import cores3_household_state, empty_household_state
 from homehub_api.cores3_products import HOUSEHOLD_KEYS, TYPE_TO_HOUSEHOLD
 
 HUB_STATE_SK = "HUB_STATE"
@@ -73,10 +69,6 @@ def default_household_state(now: str | None = None) -> dict[str, Any]:
 
 
 def normalize_household_state(state: dict[str, Any]) -> dict[str, Any]:
-    if is_legacy_dummy_household_state(state):
-        return default_household_state(
-            state.get("updatedAt") if isinstance(state.get("updatedAt"), str) else None
-        )
     updated_at = state.get("updatedAt")
     empty = empty_household_state(updated_at if isinstance(updated_at, str) else _now_iso())
     next_state = {**empty, **state}

@@ -12,7 +12,7 @@ from homehub_api.device_configuration import (
 DeviceStatus = Literal["ONLINE", "OFFLINE", "UNKNOWN"]
 LifecycleStatus = Literal["PROVISIONING", "READY", "FAILED", "DECOMMISSIONED"]
 ReadingState = Literal["normal", "warning"]
-RuntimeKind = Literal["simulated", "physical", "matter"]
+RuntimeKind = Literal["physical", "matter"]
 DeviceType = Literal[
     "environmental-sensor",
     "camera",

@@ -125,7 +125,7 @@ def _to_device(item: dict[str, Any]) -> DeviceResponse:
         name=str(item["name"]),
         type=device_type,
         location=item.get("location"),
-        runtimeKind=item.get("runtimeKind", "simulated"),
+        runtimeKind=item.get("runtimeKind", "physical"),
         gatewayId=item.get("gatewayId"),
         nodeId=int(item["nodeId"]) if item.get("nodeId") is not None else None,
         endpoint=int(item["endpoint"]) if item.get("endpoint") is not None else None,

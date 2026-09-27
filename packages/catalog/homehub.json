@@ -10,23 +10,6 @@
   "reservedNodeIds": [6, 8],
   "gatewayId": "cores3-gateway",
   "householdKinds": ["light", "plug", "contact", "motion", "climate", "leak", "button"],
-  "legacyDummyIds": [
-    "back-door",
-    "front-door",
-    "hallway",
-    "hallway-motion",
-    "hallway-switch",
-    "kitchen",
-    "kitchen-charger",
-    "leak-bath-1",
-    "leak-bath-2",
-    "leak-kitchen",
-    "leak-utility",
-    "living",
-    "living-motion",
-    "living-window",
-    "nuki-front"
-  ],
   "products": [
     {
       "productId": "kajplats",

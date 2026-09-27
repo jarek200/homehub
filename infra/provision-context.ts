@@ -2,7 +2,6 @@
 
 export const DEMO_TENANT_PK = 'HOUSEHOLD#demo';
 const HOUSEHOLD_PREFIX = 'HOUSEHOLD#';
-const HUB_PREFIX = 'HUB#';
 const DEVICE_SK_PREFIX = 'DEVICE#';
 
 export type ProvisionStreamRecord = {
@@ -37,9 +36,6 @@ export function hubIdFromPk(tenantPk: string): string {
   if (tenantPk.startsWith(HOUSEHOLD_PREFIX)) {
     return tenantPk.slice(HOUSEHOLD_PREFIX.length);
   }
-  if (tenantPk.startsWith(HUB_PREFIX)) {
-    return tenantPk.slice(HUB_PREFIX.length);
-  }
   return tenantPk;
 }
 
@@ -72,7 +68,7 @@ export function parseProvisionContext(input: unknown): ProvisionContext | null {
     deviceId,
     name: image.name?.S ?? '',
     type: image.type?.S ?? '',
-    runtimeKind: image.runtimeKind?.S?.trim() || 'simulated',
+    runtimeKind: image.runtimeKind?.S?.trim() || 'physical',
     configuration,
     thingName: thingNameFor(deviceId),
     ssmCertPrefix: ssmPrefixFor(deviceId),

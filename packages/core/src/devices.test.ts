@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLegacyDummyHouseholdState } from './cores3-fabric';
-import { hubIdFromPk, hubPkForUser, LIFECYCLE_STATUSES } from './devices';
-import { DEMO_TENANT_PK } from './household';
+import { LIFECYCLE_STATUSES } from './devices';
 import {
   airQualityLabel,
   applyHouseholdLiveToMetrics,
@@ -34,15 +32,6 @@ describe('LIFECYCLE_STATUSES', () => {
   });
 });
 
-describe('hub helpers', () => {
-  it('maps user ids to hub partition keys', () => {
-    expect(hubPkForUser('user-abc')).toBe('HOUSEHOLD#user-abc');
-    expect(hubIdFromPk('HOUSEHOLD#user-abc')).toBe('user-abc');
-    expect(hubIdFromPk('HUB#user-abc')).toBe('user-abc');
-    expect(DEMO_TENANT_PK).toBe('HOUSEHOLD#demo');
-  });
-});
-
 describe('cores3 household state', () => {
   const household = createCores3HouseholdState();
 
@@ -62,10 +51,6 @@ describe('cores3 household state', () => {
       'matter-3',
       'matter-6',
     ]);
-    expect(isLegacyDummyHouseholdState(household)).toBe(false);
-    expect(
-      isLegacyDummyHouseholdState({ lock: { id: 'nuki-front', name: 'Front', state: 'LOCKED' } })
-    ).toBe(true);
   });
 
   it('maps climate sensors by device id', () => {

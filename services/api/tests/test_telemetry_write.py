@@ -21,7 +21,7 @@ class _FakeTable:
         self.update_kwargs: list[dict[str, Any]] = []
 
     def get_item(self, Key: dict[str, str]) -> dict[str, Any]:  # noqa: N803
-        if Key.get("PK") in {"SIMULATOR", "DEVICE_REGISTRY"}:
+        if Key.get("PK") == "DEVICE_REGISTRY":
             return {}
         if self.device_item and Key.get("SK") == self.device_item.get("SK"):
             return {"Item": self.device_item}
@@ -39,7 +39,7 @@ def test_write_telemetry_denormalizes_last_and_recent_readings(
 ) -> None:
     device_id = "dev-1"
     device_item = {
-        "PK": "HUB#demo",
+        "PK": "HOUSEHOLD#demo",
         "SK": f"DEVICE#{device_id}",
         "deviceId": device_id,
         "name": "Kitchen",
@@ -112,7 +112,7 @@ def test_write_telemetry_honors_explicit_tenant(monkeypatch: Any) -> None:
 
     write_telemetry(
         {
-            "tenantPk": "HUB#user-1",
+            "tenantPk": "HOUSEHOLD#user-1",
             "deviceId": device_id,
             "metrics": {"temperature": 23.4, "humidity": 61.0},
             "recordedAt": "2026-09-09T23:00:00Z",
@@ -127,7 +127,7 @@ def test_write_telemetry_honors_explicit_tenant(monkeypatch: Any) -> None:
 def test_write_telemetry_keeps_offline_devices_offline(monkeypatch: Any) -> None:
     device_id = "dev-offline"
     device_item = {
-        "PK": "HUB#demo",
+        "PK": "HOUSEHOLD#demo",
         "SK": f"DEVICE#{device_id}",
         "deviceId": device_id,
         "name": "Basement",
@@ -163,7 +163,7 @@ def test_write_telemetry_keeps_offline_devices_offline(monkeypatch: Any) -> None
 def test_write_telemetry_stores_snapshot_key(monkeypatch: Any) -> None:
     device_id = "cam-1"
     device_item = {
-        "PK": "HUB#demo",
+        "PK": "HOUSEHOLD#demo",
         "SK": f"DEVICE#{device_id}",
         "deviceId": device_id,
         "name": "Hallway",
@@ -338,8 +338,8 @@ def test_write_telemetry_publishes_camera_device_update(monkeypatch: Any) -> Non
 def test_registered_device_tenant_wins_over_payload_hub() -> None:
     class RegistryTable:
         def get_item(self, Key: dict[str, str]) -> dict[str, Any]:  # noqa: N803
-            if Key == {"PK": "SIMULATOR", "SK": "DEVICE#dev-1"}:
-                return {"Item": {"tenantPk": "HUB#trusted-user"}}
+            if Key == {"PK": "DEVICE_REGISTRY", "SK": "DEVICE#dev-1"}:
+                return {"Item": {"tenantPk": "HOUSEHOLD#trusted-user"}}
             return {}
 
     tenant_pk = _tenant_pk_for_device(

@@ -3,7 +3,6 @@ import {
   cognitoHouseholdGroup,
   householdIdFromPk,
   isHouseholdPk,
-  isLegacyHubPk,
   normalizeCognitoGroups,
 } from './household';
 import type { HubHouseholdState } from './hub';
@@ -72,7 +71,7 @@ export function isHouseholdSubscribeAllowed(
 }
 
 export function channelForHouseholdPk(tenantPk: string): string | null {
-  if (!isHouseholdPk(tenantPk) && !isLegacyHubPk(tenantPk)) return null;
+  if (!isHouseholdPk(tenantPk)) return null;
   const householdId = householdIdFromPk(tenantPk);
   return householdId ? householdChannelForId(householdId) : null;
 }

@@ -42,9 +42,9 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
     record = {
         "eventName": "INSERT",
         "dynamodb": {
-            "Keys": {"PK": {"S": "HUB#demo"}, "SK": {"S": "DEVICE#dev1"}},
+            "Keys": {"PK": {"S": "HOUSEHOLD#demo"}, "SK": {"S": "DEVICE#dev1"}},
             "NewImage": {
-                "PK": {"S": "HUB#demo"},
+                "PK": {"S": "HOUSEHOLD#demo"},
                 "SK": {"S": "DEVICE#dev1"},
                 "deviceId": {"S": "dev1"},
                 "name": {"S": "Hallway"},
@@ -57,9 +57,9 @@ def test_parse_stream_record_filters_provisioning_inserts() -> None:
     parsed = parse_stream_record(record)
     assert parsed is not None
     assert parsed["deviceId"] == "dev1"
-    assert parsed["tenantPk"] == "HUB#demo"
+    assert parsed["tenantPk"] == "HOUSEHOLD#demo"
     assert parsed["type"] == "environmental-sensor"
-    assert parsed["runtimeKind"] == "simulated"
+    assert parsed["runtimeKind"] == "physical"
     assert parsed["ssmCertPrefix"] == "/homehub/devices/dev1"
 
 
@@ -67,9 +67,9 @@ def test_parse_stream_record_preserves_physical_runtime() -> None:
     record = {
         "eventName": "INSERT",
         "dynamodb": {
-            "Keys": {"PK": {"S": "HUB#demo"}, "SK": {"S": "DEVICE#fb1"}},
+            "Keys": {"PK": {"S": "HOUSEHOLD#demo"}, "SK": {"S": "DEVICE#fb1"}},
             "NewImage": {
-                "PK": {"S": "HUB#demo"},
+                "PK": {"S": "HOUSEHOLD#demo"},
                 "SK": {"S": "DEVICE#fb1"},
                 "deviceId": {"S": "fb1"},
                 "type": {"S": "environmental-sensor"},
@@ -87,9 +87,9 @@ def test_parse_stream_record_preserves_user_hub() -> None:
     record = {
         "eventName": "INSERT",
         "dynamodb": {
-            "Keys": {"PK": {"S": "HUB#user-abc"}, "SK": {"S": "DEVICE#dev2"}},
+            "Keys": {"PK": {"S": "HOUSEHOLD#user-abc"}, "SK": {"S": "DEVICE#dev2"}},
             "NewImage": {
-                "PK": {"S": "HUB#user-abc"},
+                "PK": {"S": "HOUSEHOLD#user-abc"},
                 "SK": {"S": "DEVICE#dev2"},
                 "deviceId": {"S": "dev2"},
                 "lifecycleStatus": {"S": "PROVISIONING"},
@@ -98,7 +98,7 @@ def test_parse_stream_record_preserves_user_hub() -> None:
     }
     parsed = parse_stream_record(record)
     assert parsed is not None
-    assert parsed["tenantPk"] == "HUB#user-abc"
+    assert parsed["tenantPk"] == "HOUSEHOLD#user-abc"
 
 
 def test_parse_stream_record_ignores_ready_devices() -> None:
@@ -115,7 +115,7 @@ def test_parse_stream_record_ignores_ready_devices() -> None:
 def test_resolve_provision_context_from_step_output() -> None:
     context = resolve_provision_context(
         {
-            "tenantPk": "HUB#demo",
+            "tenantPk": "HOUSEHOLD#demo",
             "deviceId": "dev-co",
             "type": "camera",
             "thingName": "homehub-dev-co",
@@ -131,7 +131,7 @@ def test_resolve_provision_context_unwraps_lambda_payload() -> None:
             "StatusCode": 200,
             "Payload": json.dumps(
                 {
-                    "tenantPk": "HUB#demo",
+                    "tenantPk": "HOUSEHOLD#demo",
                     "deviceId": "dev-co",
                     "certificateId": "cert-1",
                 }
@@ -145,7 +145,7 @@ def test_resolve_provision_context_unwraps_lambda_payload() -> None:
 def test_resolve_provision_context_merges_nested_cert_and_thing_results() -> None:
     context = resolve_provision_context(
         {
-            "tenantPk": "HUB#demo",
+            "tenantPk": "HOUSEHOLD#demo",
             "deviceId": "dev-co",
             "type": "camera",
             "cert": {
@@ -164,7 +164,7 @@ def test_resolve_provision_context_merges_nested_cert_and_thing_results() -> Non
 def test_resolve_provision_context_infers_device_id_from_cert_prefix() -> None:
     context = resolve_provision_context(
         {
-            "tenantPk": "HUB#demo",
+            "tenantPk": "HOUSEHOLD#demo",
             "certificateArn": "arn:aws:iot:eu-west-1:123:cert/abc",
             "ssmCertPrefix": "/homehub/devices/dev-co",
         }
@@ -174,7 +174,7 @@ def test_resolve_provision_context_infers_device_id_from_cert_prefix() -> None:
 
 def test_merge_provision_context_preserves_fields_across_tasks() -> None:
     merged = merge_provision_context(
-        {"tenantPk": "HUB#demo", "deviceId": "dev-co", "type": "camera"},
+        {"tenantPk": "HOUSEHOLD#demo", "deviceId": "dev-co", "type": "camera"},
         certificateId="cert-1",
         thingName="homehub-dev-co",
     )
@@ -187,9 +187,9 @@ def test_resolve_provision_context_from_stream_record() -> None:
     record = {
         "eventName": "INSERT",
         "dynamodb": {
-            "Keys": {"PK": {"S": "HUB#demo"}, "SK": {"S": "DEVICE#dev-co"}},
+            "Keys": {"PK": {"S": "HOUSEHOLD#demo"}, "SK": {"S": "DEVICE#dev-co"}},
             "NewImage": {
-                "PK": {"S": "HUB#demo"},
+                "PK": {"S": "HOUSEHOLD#demo"},
                 "SK": {"S": "DEVICE#dev-co"},
                 "deviceId": {"S": "dev-co"},
                 "name": {"S": "Kitchen CO"},
@@ -262,7 +262,7 @@ def test_create_cert_attaches_camera_policy_only_for_cameras(monkeypatch) -> Non
             return FakeIotData()
         raise AssertionError(name)
 
-    monkeypatch.setenv("IOT_POLICY_NAME", "homehub-int-simulator")
+    monkeypatch.setenv("IOT_POLICY_NAME", "homehub-int-device")
     monkeypatch.setenv("CAMERA_IOT_POLICY_NAME", "homehub-int-camera")
     monkeypatch.setenv("AMAZON_ROOT_CA_PEM", "CA")
     monkeypatch.setenv("IOT_DATA_ENDPOINT", "https://iot.example.com")
@@ -304,5 +304,5 @@ def test_create_cert_attaches_camera_policy_only_for_cameras(monkeypatch) -> Non
         },
         None,
     )
-    assert attached == ["homehub-int-simulator"]
+    assert attached == ["homehub-int-device"]
     assert shadows == [("homehub-env-1", {"state": {"desired": {"type": "environmental-sensor"}}})]

@@ -10,7 +10,7 @@ const FAIL_CAUSE =
   "{% $substring($exists($states.errorOutput.Cause) and $string($states.errorOutput.Cause) != '' ? $string($states.errorOutput.Cause) : ($exists($states.errorOutput.Error) ? $string($states.errorOutput.Error) : 'Provisioning failed'), 0, 500) %}";
 
 const REGISTRY_ITEM =
-  "{% ($item := { 'PK': { 'S': 'DEVICE_REGISTRY' }, 'SK': { 'S': 'DEVICE#' & $deviceId }, 'deviceId': { 'S': $deviceId }, 'thingName': { 'S': $thingName }, 'enabled': { 'Bool': $runtimeKind != 'physical' }, 'runtimeKind': { 'S': $runtimeKind }, 'status': { 'S': 'READY' }, 'tenantPk': { 'S': $tenantPk }, 'hubId': { 'S': $hubId }, 'ssmCertPrefix': { 'S': $ssmCertPrefix }, 'updatedAt': { 'S': $states.context.State.EnteredTime } }; $exists($certificateId) and $certificateId != '' ? $merge([$item, { 'certificateId': { 'S': $certificateId } }]) : $item) %}";
+  "{% ($item := { 'PK': { 'S': 'DEVICE_REGISTRY' }, 'SK': { 'S': 'DEVICE#' & $deviceId }, 'deviceId': { 'S': $deviceId }, 'thingName': { 'S': $thingName }, 'enabled': { 'Bool': false }, 'runtimeKind': { 'S': $runtimeKind }, 'status': { 'S': 'READY' }, 'tenantPk': { 'S': $tenantPk }, 'hubId': { 'S': $hubId }, 'ssmCertPrefix': { 'S': $ssmCertPrefix }, 'updatedAt': { 'S': $states.context.State.EnteredTime } }; $exists($certificateId) and $certificateId != '' ? $merge([$item, { 'certificateId': { 'S': $certificateId } }]) : $item) %}";
 
 function catchFail(next = 'HasDeviceToFail') {
   return [{ ErrorEquals: ['States.ALL'], Assign: { failureCause: FAIL_CAUSE }, Next: next }];
@@ -72,7 +72,7 @@ export function buildProvisionDefinition(input: {
           deviceType:
             "{% $exists($record.dynamodb.NewImage.type.S) ? $record.dynamodb.NewImage.type.S : '' %}",
           runtimeKind:
-            "{% $exists($record.dynamodb.NewImage.runtimeKind.S) and $record.dynamodb.NewImage.runtimeKind.S != '' ? $record.dynamodb.NewImage.runtimeKind.S : 'simulated' %}",
+            "{% $exists($record.dynamodb.NewImage.runtimeKind.S) and $record.dynamodb.NewImage.runtimeKind.S != '' ? $record.dynamodb.NewImage.runtimeKind.S : 'physical' %}",
           configuration:
             '{% $exists($record.dynamodb.NewImage.configuration.S) ? $record.dynamodb.NewImage.configuration.S : null %}',
           certificateArn: '',
@@ -86,7 +86,7 @@ export function buildProvisionDefinition(input: {
         Assign: {
           thingName: "{% $deviceId != '' ? 'homehub-' & $deviceId : '' %}",
           ssmCertPrefix: "{% $deviceId != '' ? '/homehub/devices/' & $deviceId : '' %}",
-          hubId: "{% $replace($replace($tenantPk, 'HOUSEHOLD#', ''), 'HUB#', '') %}",
+          hubId: "{% $replace($tenantPk, 'HOUSEHOLD#', '') %}",
         },
         Next: 'HasDeviceId',
       },

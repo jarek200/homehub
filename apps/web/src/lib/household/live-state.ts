@@ -1,13 +1,11 @@
 import {
   type CameraSnapshotEventV1,
-  createCores3HouseholdState,
   type DeviceUpdatedEventV1,
   emptyHouseholdState,
   type FloorPlan,
   type HubHouseholdState,
   hasHouseholdSequenceGap,
   householdChannelForId,
-  isLegacyDummyHouseholdState,
   isNewerHouseholdEvent,
   parseCameraSnapshotEvent,
   parseDeviceUpdatedEvent,
@@ -23,9 +21,6 @@ import { getHouseholdPlan, getHouseholdState, getMyProfile } from '$lib/services
 export type LiveConnectionState = 'connecting' | 'connected' | 'disconnected';
 
 function normalizeHousehold(state: HubHouseholdState): HubHouseholdState {
-  if (isLegacyDummyHouseholdState(state)) {
-    return createCores3HouseholdState();
-  }
   const empty = emptyHouseholdState();
   return {
     ...empty,

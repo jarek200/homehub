@@ -4,7 +4,6 @@ export const HOUSEHOLD_PREFIX = 'HOUSEHOLD#';
 export const USER_PREFIX = 'USER#';
 export const GATEWAY_PREFIX = 'GATEWAY#';
 export const INVITE_PREFIX = 'INVITE#';
-export const LEGACY_HUB_PREFIX = 'HUB#';
 
 export const HOUSEHOLD_METADATA_SK = 'METADATA';
 export const HOUSEHOLD_LOOKUP_SK = 'HOUSEHOLD';
@@ -24,7 +23,6 @@ export const STATE_WRITE_MAX_ATTEMPTS = 5;
 
 export const DEMO_TENANT_ID = 'demo';
 export const DEMO_TENANT_PK = `${HOUSEHOLD_PREFIX}${DEMO_TENANT_ID}`;
-export const LEGACY_DEMO_TENANT_PK = `${LEGACY_HUB_PREFIX}${DEMO_TENANT_ID}`;
 
 export function householdPk(householdId: string): string {
   return `${HOUSEHOLD_PREFIX}${householdId}`;
@@ -58,13 +56,8 @@ export function isHouseholdPk(tenantPk: string): boolean {
   return tenantPk.startsWith(HOUSEHOLD_PREFIX);
 }
 
-export function isLegacyHubPk(tenantPk: string): boolean {
-  return tenantPk.startsWith(LEGACY_HUB_PREFIX);
-}
-
 export function householdIdFromPk(tenantPk: string): string {
   if (isHouseholdPk(tenantPk)) return tenantPk.slice(HOUSEHOLD_PREFIX.length);
-  if (isLegacyHubPk(tenantPk)) return tenantPk.slice(LEGACY_HUB_PREFIX.length);
   return tenantPk;
 }
 
@@ -72,7 +65,6 @@ export function normalizeTenantPk(value: string): string {
   const raw = value.trim();
   if (!raw) return DEMO_TENANT_PK;
   if (isHouseholdPk(raw)) return raw;
-  if (isLegacyHubPk(raw)) return householdPk(householdIdFromPk(raw));
   return householdPk(raw);
 }
 

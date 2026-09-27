@@ -12,11 +12,10 @@ from ulid import new as new_ulid
 
 from homehub_api.config import DEMO_TENANT_PK
 from homehub_api.dynamo import set_update
-from homehub_api.household import normalize_tenant_pk
+from homehub_api.household import channel_for_household_pk, normalize_tenant_pk
 from homehub_api.household_events import (
     build_camera_snapshot_event,
     build_device_updated_event,
-    channel_for_hub_pk,
 )
 from homehub_api.telemetry_model import (
     metrics_to_dynamo,
@@ -223,7 +222,7 @@ def write_telemetry(event: dict[str, Any]) -> None:
 def _publish_event(tenant_pk: str, payload: dict[str, Any]) -> None:
     if not (os.environ.get("APPSYNC_EVENTS_HTTP_URL") or "").strip():
         return
-    channel = channel_for_hub_pk(tenant_pk)
+    channel = channel_for_household_pk(tenant_pk)
     if not channel:
         return
     try:

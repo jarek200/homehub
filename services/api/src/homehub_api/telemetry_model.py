@@ -27,20 +27,11 @@ def _coerce_state(
     return derive_alarm_state(metrics, limits, device_type)[1]
 
 
-def normalize_device_type(device_type: str | None) -> str | None:
-    if not device_type:
-        return device_type
-    if device_type == "humidity-sensor":
-        return "environmental-sensor"
-    return device_type
-
-
 def _is_environmental_sensor(device_type: str | None) -> bool:
-    return normalize_device_type(device_type) == "environmental-sensor"
+    return device_type == "environmental-sensor"
 
 
 def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, float | bool]:
-    normalized_type = normalize_device_type(device_type) or device_type
     if _is_environmental_sensor(device_type):
         return {
             "temperature": round(random.uniform(20.0, 24.0), 1),
@@ -53,24 +44,24 @@ def sample_metrics(device_type: str, configuration: Any = None) -> dict[str, flo
             "batteryPercent": round(random.uniform(55.0, 85.0), 0),
         }
 
-    if normalized_type == "camera":
+    if device_type == "camera":
         return {
             "pan": 90.0,
             "tilt": 90.0,
         }
 
-    if normalized_type == "leak-sensor":
+    if device_type == "leak-sensor":
         return {
             "leak": False,
             "batteryPercent": round(random.uniform(55.0, 95.0), 0),
         }
 
-    if normalized_type in {"contact-sensor", "motion-sensor", "lock"}:
+    if device_type in {"contact-sensor", "motion-sensor", "lock"}:
         return {
             "batteryPercent": round(random.uniform(55.0, 95.0), 0),
         }
 
-    if normalized_type == "plug":
+    if device_type == "plug":
         return {
             "on": True,
         }

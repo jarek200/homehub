@@ -1,15 +1,6 @@
 import catalog from '@homehub/catalog/homehub.json';
-import { householdIdFromPk, householdPk } from './household';
 
 export const INPUT_LIMITS = catalog.inputLimits;
-
-export function hubPkForUser(userId: string): string {
-  return householdPk(userId);
-}
-
-export function hubIdFromPk(tenantPk: string): string {
-  return householdIdFromPk(tenantPk);
-}
 
 export const DEVICE_STATUSES = ['ONLINE', 'OFFLINE', 'UNKNOWN'] as const;
 export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
@@ -17,7 +8,7 @@ export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 export const LIFECYCLE_STATUSES = ['PROVISIONING', 'READY', 'FAILED', 'DECOMMISSIONED'] as const;
 export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 
-export const RUNTIME_KINDS = ['simulated', 'physical', 'matter'] as const;
+export const RUNTIME_KINDS = ['physical', 'matter'] as const;
 export type RuntimeKind = (typeof RUNTIME_KINDS)[number];
 
 export const POWER_MODES = catalog.powerModes;

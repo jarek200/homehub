@@ -1,8 +1,8 @@
+from homehub_api.household import channel_for_household_pk
 from homehub_api.household_events import (
     build_camera_snapshot_event,
     build_device_updated_event,
     build_household_state_event,
-    channel_for_hub_pk,
     is_hub_state_record,
     sanitize_household_state,
     tenant_pk_from_record,
@@ -14,15 +14,14 @@ from homehub_api.iot.household_events import (
 )
 
 
-def test_channel_for_hub_pk() -> None:
-    assert channel_for_hub_pk("HOUSEHOLD#user-abc") == "household/user-abc"
-    assert channel_for_hub_pk("HUB#user-abc") == "household/user-abc"
-    assert channel_for_hub_pk("USER#abc") is None
+def test_channel_for_household_pk() -> None:
+    assert channel_for_household_pk("HOUSEHOLD#user-abc") == "household/user-abc"
+    assert channel_for_household_pk("USER#abc") is None
 
 
 def test_is_hub_state_record() -> None:
     assert is_hub_state_record(
-        {"dynamodb": {"Keys": {"SK": {"S": "HUB_STATE"}, "PK": {"S": "HUB#user-1"}}}}
+        {"dynamodb": {"Keys": {"SK": {"S": "HUB_STATE"}, "PK": {"S": "HOUSEHOLD#user-1"}}}}
     )
     assert not is_hub_state_record({"dynamodb": {"Keys": {"SK": {"S": "FLOOR_PLAN"}}}})
 
@@ -109,9 +108,9 @@ def test_unmarshal_and_filter_stream_record() -> None:
         "eventID": "abc",
         "eventName": "MODIFY",
         "dynamodb": {
-            "Keys": {"PK": {"S": "HUB#user-1"}, "SK": {"S": "HUB_STATE"}},
+            "Keys": {"PK": {"S": "HOUSEHOLD#user-1"}, "SK": {"S": "HUB_STATE"}},
             "NewImage": {
-                "PK": {"S": "HUB#user-1"},
+                "PK": {"S": "HOUSEHOLD#user-1"},
                 "SK": {"S": "HUB_STATE"},
                 "updatedAt": {"S": "2026-09-17T12:00:00Z"},
                 "state": {
@@ -126,7 +125,7 @@ def test_unmarshal_and_filter_stream_record() -> None:
             },
         },
     }
-    assert tenant_pk_from_record(record) == "HUB#user-1"
+    assert tenant_pk_from_record(record) == "HOUSEHOLD#user-1"
     parsed = household_event_from_record(record)
     assert parsed is not None
     channel, payload = parsed
@@ -137,7 +136,7 @@ def test_unmarshal_and_filter_stream_record() -> None:
     ignored = dict(record)
     ignored["dynamodb"] = {
         **record["dynamodb"],
-        "Keys": {"PK": {"S": "HUB#user-1"}, "SK": {"S": "FLOOR_PLAN"}},
+        "Keys": {"PK": {"S": "HOUSEHOLD#user-1"}, "SK": {"S": "FLOOR_PLAN"}},
     }
     assert household_event_from_record(ignored) is None
 

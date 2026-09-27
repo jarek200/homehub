@@ -18,12 +18,13 @@ def test_set_update_builds_named_placeholders() -> None:
 
 
 def test_sk_begins_with_matches_key_condition() -> None:
-    expected = Key("PK").eq("HUB#demo") & Key("SK").begins_with("DEVICE#")
-    assert sk_begins_with("HUB#demo", "DEVICE#").get_expression() == expected.get_expression()
+    expected = Key("PK").eq("HOUSEHOLD#demo") & Key("SK").begins_with("DEVICE#")
+    assert sk_begins_with("HOUSEHOLD#demo", "DEVICE#").get_expression() == expected.get_expression()
 
 
 def test_sk_between_matches_key_condition() -> None:
-    expected = Key("PK").eq("HUB#demo") & Key("SK").between("EVENT#a", "EVENT#z")
+    expected = Key("PK").eq("HOUSEHOLD#demo") & Key("SK").between("EVENT#a", "EVENT#z")
     assert (
-        sk_between("HUB#demo", "EVENT#a", "EVENT#z").get_expression() == expected.get_expression()
+        sk_between("HOUSEHOLD#demo", "EVENT#a", "EVENT#z").get_expression()
+        == expected.get_expression()
     )

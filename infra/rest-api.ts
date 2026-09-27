@@ -2,7 +2,7 @@
 
 import * as aws from '@pulumi/aws';
 import type { Output } from '@pulumi/pulumi';
-import { pythonLambdaEnv } from './python-lambda';
+import { pythonCatalogCopy, pythonLambdaEnv } from './python-lambda';
 import { stageConfig } from './stage-config';
 
 type StorageTable = ReturnType<typeof import('./storage').createStorage>['table'];
@@ -95,6 +95,7 @@ export function createRestApi(
   const routeArgs = {
     handler: 'services/api/src/homehub_api/handler.handler',
     runtime: 'python3.13' as const,
+    copyFiles: pythonCatalogCopy,
     memory: stageConfig.lambda.memory,
     timeout: stageConfig.lambda.timeout,
     link: [table],

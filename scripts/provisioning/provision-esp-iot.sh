@@ -93,7 +93,7 @@ if [[ -z "$DEVICE_ITEM" || "$DEVICE_ITEM" == "null" ]]; then
 fi
 
 LIFECYCLE="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("lifecycleStatus",{}).get("S",""))')"
-RUNTIME_KIND="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("runtimeKind",{}).get("S","simulated"))')"
+RUNTIME_KIND="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("runtimeKind",{}).get("S","physical"))')"
 DEVICE_TYPE="$(echo "$DEVICE_ITEM" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("Item",{}).get("type",{}).get("S",""))')"
 if [[ "$LIFECYCLE" != "READY" ]]; then
   echo "Device ${DEVICE_ID} lifecycle is ${LIFECYCLE}; wait until READY."
@@ -115,7 +115,6 @@ AWS_REGION_NAME="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo eu
 SNAPSHOT_BUCKET="${HOMEHUB_SNAPSHOT_BUCKET:-homehub-snapshots-${SST_STAGE}}"
 IOT_ROLE_ALIAS="${HOMEHUB_IOT_ROLE_ALIAS:-homehub-${SST_STAGE}-camera-s3}"
 HOUSEHOLD_ID="${HUB_ID#HOUSEHOLD#}"
-HOUSEHOLD_ID="${HOUSEHOLD_ID#HUB#}"
 
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/homehub-iot.XXXXXX")"
 chmod 700 "$TMP_DIR"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upsert CoreS3 fabric devices into real households only — never demo or HUB#."""
+"""Upsert CoreS3 fabric devices into real households only — never the demo household."""
 
 from __future__ import annotations
 
