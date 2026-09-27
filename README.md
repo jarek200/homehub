@@ -105,7 +105,7 @@ pnpm sso
 pnpm deploy:int
 ```
 
-`pnpm reset:int` removes the int stage. Device certificates live in SSM under `/homehub/devices/{deviceId}/` and are revoked when a device is deleted.
+Device certificates live in SSM under `/homehub/devices/{deviceId}/` and are revoked when a device is deleted.
 
 ## License
 

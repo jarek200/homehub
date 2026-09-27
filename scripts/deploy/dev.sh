@@ -12,7 +12,7 @@ STAGE="$(homehub_personal_stage)"
 if [[ "$STAGE" == "int" || "$STAGE" == "prod" ]]; then
   echo "Refusing to run sst dev against shared stage '$STAGE'."
   echo "Unset SST_STAGE (defaults to your OS username) or set SST_STAGE=yourname."
-  echo "Deploy shared stages with: pnpm deploy:int / pnpm deploy:prod"
+  echo "Deploy the live stack with: pnpm deploy:int"
   exit 1
 fi
 
@@ -25,7 +25,7 @@ homehub_aws_check_auth
 cd "$ROOT"
 
 echo "SST dev stage: $STAGE (profile=${AWS_PROFILE:-default}, region=${AWS_REGION:-})"
-echo "Shared int/prod stacks are untouched. Use pnpm deploy:int for the stable demo."
+echo "The live stack is untouched. Use pnpm deploy:int to publish it."
 
 pnpm exec sst unlock --stage "$STAGE"
 exec pnpm exec sst dev --stage "$STAGE"

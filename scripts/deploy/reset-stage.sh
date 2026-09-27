@@ -2,7 +2,6 @@
 # Tear down an SST stage and remove leftover runtime resources so the next deploy starts clean.
 #
 # Usage:
-#   pnpm reset:int
 #   bash scripts/deploy/reset-stage.sh int
 #
 # After reset, redeploy with: pnpm deploy:int

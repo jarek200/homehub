@@ -7,8 +7,6 @@
     "dev": "uv sync --all-packages && bash scripts/deploy/dev.sh",
     "dev:local": "bash scripts/deploy/dev-local.sh",
     "deploy:int": "bash scripts/deploy/deploy-int.sh",
-    "deploy:prod": "pnpm sst deploy --stage prod",
-    "reset:int": "bash scripts/deploy/reset-stage.sh int",
     "sso": "aws sso login --sso-session=homehub",
     "lint": "pnpm exec biome check .",
     "lint:api": "uv sync --all-packages --dev && uv run --directory services/api ruff check . && uv run --directory services/api ruff format --check . && uv run --directory services/api mypy",
