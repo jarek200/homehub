@@ -1,0 +1,9 @@
+# Name,     Type, SubType, Offset,  Size,   Flags
+# A/B OTA on 16 MB CoreS3. nvs stays at 0x9000 so USB flash without erase keeps Thread/Wi-Fi.
+nvs,        data, nvs,     0x9000,  0x6000,
+otadata,    data, ota,     0xf000,  0x2000,
+phy_init,   data, phy,     0x11000, 0x1000,
+ota_0,      app,  ota_0,   0x20000, 0x600000,
+ota_1,      app,  ota_1,   ,        0x600000,
+rcp_fw,     data, spiffs,  ,        0x96000,
+paa_cert,   data, spiffs,  ,        0x20000,

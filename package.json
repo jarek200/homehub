@@ -1,0 +1,35 @@
+{
+  "name": "homehub",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "uv sync --all-packages && bash scripts/deploy/dev.sh",
+    "dev:local": "bash scripts/deploy/dev-local.sh",
+    "deploy:int": "bash scripts/deploy/deploy-int.sh",
+    "sso": "aws sso login --sso-session=homehub",
+    "lint": "pnpm exec biome check .",
+    "lint:api": "uv sync --all-packages --dev && uv run --directory services/api ruff check . && uv run --directory services/api ruff format --check . && uv run --directory services/api mypy",
+    "lint:fix": "pnpm exec biome check . --write",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run && pnpm test:api",
+    "test:api": "uv sync --all-packages --dev && uv run --directory services/api pytest",
+    "prepare": "husky",
+    "verify": "pnpm lint && pnpm lint:api && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "author": "",
+  "license": "MIT",
+  "description": "HomeHub \u2014 smart home IoT hub with REST API, DynamoDB, Cognito, and SST IaC",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@pulumi/aws": "^7.36.0",
+    "@pulumi/pulumi": "^3.251.0",
+    "@types/node": "^24.13.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "sst": "^4.17.1",
+    "turbo": "^2.11.2",
+    "vitest": "^4.1.10"
+  },
+  "packageManager": "pnpm@10.20.0"
+}

@@ -1,0 +1,208 @@
+{
+  "inputLimits": {
+    "name": 100,
+    "type": 64,
+    "location": 100,
+    "configuration": 4096
+  },
+  "powerModes": ["low-power-voc", "maintenance", "always-on", "sleep-motion"],
+  "cameraPowerModes": ["always-on", "sleep-motion"],
+  "reservedNodeIds": [6, 8],
+  "gatewayId": "cores3-gateway",
+  "householdKinds": ["light", "plug", "contact", "motion", "climate", "leak", "button"],
+  "products": [
+    {
+      "productId": "kajplats",
+      "name": "KAJPLATS",
+      "label": "KAJPLATS bulb",
+      "type": "light",
+      "household": "light",
+      "endpoint": 1,
+      "clusters": ["onoff", "level"]
+    },
+    {
+      "productId": "timmerflotte",
+      "name": "TIMMERFLOTTE",
+      "label": "TIMMERFLOTTE temperature / humidity",
+      "type": "environmental-sensor",
+      "household": "climate",
+      "endpoint": 1,
+      "clusters": ["temperature", "humidity", "battery"],
+      "clusterEndpoints": {
+        "humidity": 2,
+        "battery": 0
+      }
+    },
+    {
+      "productId": "myggspray",
+      "name": "MYGGSPRAY",
+      "label": "MYGGSPRAY motion + lux",
+      "type": "motion-sensor",
+      "household": "motion",
+      "endpoint": 1,
+      "clusters": ["occupancy", "illuminance", "battery"],
+      "clusterEndpoints": {
+        "occupancy": 2,
+        "illuminance": 1,
+        "battery": 0
+      }
+    },
+    {
+      "productId": "myggbett",
+      "name": "MYGGBETT",
+      "label": "MYGGBETT door / window",
+      "type": "contact-sensor",
+      "household": "contact",
+      "endpoint": 1,
+      "clusters": ["boolean-state", "battery"],
+      "clusterEndpoints": {
+        "battery": 0
+      }
+    },
+    {
+      "productId": "alpstuga",
+      "name": "ALPSTUGA",
+      "label": "ALPSTUGA air quality",
+      "type": "environmental-sensor",
+      "household": "climate",
+      "endpoint": 1,
+      "clusters": ["temperature", "humidity", "co2", "pm25", "air-quality", "battery"],
+      "clusterEndpoints": {
+        "battery": 0
+      }
+    },
+    {
+      "productId": "klippbok",
+      "name": "KLIPPBOK",
+      "label": "KLIPPBOK leak sensor",
+      "type": "leak-sensor",
+      "household": "leak",
+      "endpoint": 1,
+      "clusters": ["boolean-state", "battery"],
+      "clusterEndpoints": {
+        "battery": 0
+      }
+    },
+    {
+      "productId": "grillplats",
+      "name": "GRILLPLATS",
+      "label": "GRILLPLATS plug",
+      "type": "plug",
+      "household": "plug",
+      "endpoint": 1,
+      "clusters": ["onoff"]
+    }
+  ],
+  "fabricDevices": [
+    {
+      "deviceId": "cores3-gateway",
+      "name": "CoreS3 Thread gateway",
+      "type": "matter-gateway",
+      "location": "Home",
+      "runtimeKind": "physical",
+      "nodeId": null,
+      "endpoint": null,
+      "clusters": null
+    },
+    {
+      "deviceId": "matter-1",
+      "name": "KAJPLATS",
+      "type": "light",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 1,
+      "endpoint": 1,
+      "clusters": ["onoff"]
+    },
+    {
+      "deviceId": "matter-2",
+      "name": "TIMMERFLOTTE 1",
+      "type": "environmental-sensor",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 2,
+      "endpoint": 1,
+      "clusters": ["temperature", "humidity", "battery"]
+    },
+    {
+      "deviceId": "matter-3",
+      "name": "TIMMERFLOTTE 2",
+      "type": "environmental-sensor",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 3,
+      "endpoint": 1,
+      "clusters": ["temperature", "humidity", "battery"]
+    },
+    {
+      "deviceId": "matter-4",
+      "name": "MYGGSPRAY",
+      "type": "motion-sensor",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 4,
+      "endpoint": 1,
+      "clusters": ["occupancy", "illuminance", "battery"]
+    },
+    {
+      "deviceId": "matter-5",
+      "name": "MYGGBETT",
+      "type": "contact-sensor",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 5,
+      "endpoint": 1,
+      "clusters": ["boolean-state", "battery"]
+    },
+    {
+      "deviceId": "matter-6",
+      "name": "ALPSTUGA",
+      "type": "environmental-sensor",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 7,
+      "endpoint": 1,
+      "clusters": ["temperature", "humidity", "co2", "pm25", "air-quality", "battery"]
+    },
+    {
+      "deviceId": "matter-7",
+      "name": "KLIPPBOK",
+      "type": "leak-sensor",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 9,
+      "endpoint": 1,
+      "clusters": ["boolean-state", "battery"]
+    },
+    {
+      "deviceId": "matter-9",
+      "name": "GRILLPLATS",
+      "type": "plug",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 10,
+      "endpoint": 1,
+      "clusters": ["onoff"]
+    },
+    {
+      "deviceId": "matter-10",
+      "name": "GRILLPLATS 2",
+      "type": "plug",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 11,
+      "endpoint": 1,
+      "clusters": ["onoff"]
+    },
+    {
+      "deviceId": "matter-11",
+      "name": "KAJPLATS 2",
+      "type": "light",
+      "location": "Home",
+      "runtimeKind": "matter",
+      "nodeId": 12,
+      "endpoint": 1,
+      "clusters": ["onoff", "level"]
+    }
+  ]
+}

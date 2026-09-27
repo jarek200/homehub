@@ -1,0 +1,15 @@
+diff --git a/components/esp_matter_controller/attestation_store/esp_matter_attestation_trust_store.cpp b/components/esp_matter_controller/attestation_store/esp_matter_attestation_trust_store.cpp
+index 25eef31..5215ed2 100644
+--- a/components/esp_matter_controller/attestation_store/esp_matter_attestation_trust_store.cpp
++++ b/components/esp_matter_controller/attestation_store/esp_matter_attestation_trust_store.cpp
+@@ -96,8 +96,9 @@ void paa_der_cert_iterator::release()
+ 
+ esp_err_t spiffs_attestation_trust_store::init()
+ {
++    // OTBR images also have an rcp_fw SPIFFS partition; never mount "first SPIFFS".
+     esp_vfs_spiffs_conf_t conf = {
+-        .base_path = "/paa", .partition_label = nullptr, .max_files = 5, .format_if_mount_failed = false};
++        .base_path = "/paa", .partition_label = "paa_cert", .max_files = 5, .format_if_mount_failed = false};
+     ESP_RETURN_ON_ERROR(esp_vfs_spiffs_register(&conf), TAG, "Failed to initialize SPIFFS");
+     size_t total = 0, used = 0;
+     ESP_RETURN_ON_ERROR(esp_spiffs_info(conf.partition_label, &total, &used), TAG, "Failed to get SPIFFS info");

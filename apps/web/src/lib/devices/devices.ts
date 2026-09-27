@@ -1,0 +1,223 @@
+import type { DeviceConfiguration, LifecycleStatus } from '@homehub/core';
+import { formatCameraSettingsSummary } from '$lib/devices/device-camera-settings';
+import { formatReportingIntervalSummary } from '$lib/devices/device-power-settings';
+import {
+  asDeviceConfiguration,
+  type DeviceThresholds,
+  defaultReportingIntervalSeconds,
+  defaultThresholdsForType,
+  formatThresholdSummary,
+  parseThresholds,
+} from '$lib/devices/device-thresholds';
+import {
+  CREATE_DEVICE_TYPES,
+  DEVICE_TYPES,
+  type DeviceType,
+  normalizeDeviceType,
+} from '$lib/devices/device-type';
+
+export type { DeviceThresholds };
+export {
+  CREATE_DEVICE_TYPES,
+  type DeviceType,
+  formatThresholdSummary,
+  normalizeDeviceType,
+  parseThresholds,
+};
+
+const DEVICE_STATUSES = [
+  { value: 'ONLINE', label: 'On' },
+  { value: 'OFFLINE', label: 'Off' },
+  { value: 'UNKNOWN', label: 'Unknown' },
+] as const;
+
+const LIFECYCLE_LABELS: Record<LifecycleStatus, string> = {
+  PROVISIONING: 'Provisioning',
+  READY: 'Ready',
+  FAILED: 'Failed',
+  DECOMMISSIONED: 'Decommissioned',
+};
+
+export function getDefaultConfiguration(deviceType?: string): DeviceConfiguration {
+  const normalizedType = normalizeDeviceType(deviceType ?? 'environmental-sensor');
+  if (normalizedType === 'camera') {
+    return {
+      reportingIntervalSeconds: 30,
+      frameSize: 'qvga',
+      jpegQuality: 12,
+      brightness: 1,
+      saturation: -2,
+      contrast: 0,
+      vflip: true,
+      hmirror: false,
+      motionEnabled: true,
+      motionCooldownSeconds: 15,
+      captureMode: 'both',
+      powerMode: 'always-on',
+      maintenanceMode: false,
+    };
+  }
+  if (normalizedType === 'environmental-sensor') {
+    return {
+      reportingIntervalSeconds: 300,
+      maintenanceMode: false,
+      thresholds: defaultThresholdsForType(normalizedType),
+    };
+  }
+  return {
+    reportingIntervalSeconds: 10,
+    thresholds: defaultThresholdsForType(normalizedType),
+  };
+}
+
+export function configurationForType(
+  configuration: DeviceConfiguration | null | undefined,
+  deviceType: string
+): DeviceConfiguration {
+  const normalizedType = normalizeDeviceType(deviceType);
+  const defaults = getDefaultConfiguration(normalizedType);
+  const parsed = asDeviceConfiguration(configuration);
+  if (!parsed) {
+    return defaults;
+  }
+  const parsedThresholds =
+    typeof parsed.thresholds === 'object' && parsed.thresholds != null
+      ? (parsed.thresholds as DeviceThresholds)
+      : {};
+  if (normalizedType === 'camera') {
+    const merged: DeviceConfiguration = {
+      ...defaults,
+      ...parsed,
+      reportingIntervalSeconds:
+        typeof parsed.reportingIntervalSeconds === 'number'
+          ? parsed.reportingIntervalSeconds
+          : defaults.reportingIntervalSeconds,
+    };
+    delete merged.pan;
+    delete merged.tilt;
+    return merged;
+  }
+  if (normalizedType === 'environmental-sensor') {
+    return {
+      ...parsed,
+      reportingIntervalSeconds:
+        typeof parsed.reportingIntervalSeconds === 'number'
+          ? parsed.reportingIntervalSeconds
+          : defaults.reportingIntervalSeconds,
+      powerMode: parsed.powerMode ?? defaults.powerMode,
+      maintenanceMode: parsed.maintenanceMode ?? defaults.maintenanceMode,
+      thresholds: {
+        ...(defaults.thresholds as DeviceThresholds),
+        ...parsedThresholds,
+      },
+    };
+  }
+  return {
+    ...parsed,
+    reportingIntervalSeconds:
+      typeof parsed.reportingIntervalSeconds === 'number'
+        ? parsed.reportingIntervalSeconds
+        : defaults.reportingIntervalSeconds,
+    thresholds: {
+      ...(defaults.thresholds as DeviceThresholds),
+      ...parsedThresholds,
+    },
+  };
+}
+
+function isEnvironmentalSensor(type: string): boolean {
+  return normalizeDeviceType(type) === 'environmental-sensor';
+}
+
+export function isCamera(type: string): boolean {
+  return normalizeDeviceType(type) === 'camera';
+}
+
+export function supportsReadings(type: string): boolean {
+  return isEnvironmentalSensor(type);
+}
+
+export function durableSensorKind(type: string): 'contact' | 'motion' | null {
+  const normalized = normalizeDeviceType(type);
+  if (normalized === 'contact-sensor') return 'contact';
+  if (normalized === 'motion-sensor') return 'motion';
+  return null;
+}
+
+export function formatDeviceType(type: string): string {
+  return DEVICE_TYPES.find((item) => item.value === normalizeDeviceType(type))?.label ?? type;
+}
+
+export function formatStatus(status: string): string {
+  return status.charAt(0) + status.slice(1).toLowerCase();
+}
+
+export function isDeviceOn(status: string): boolean {
+  return status === 'ONLINE';
+}
+
+export function formatOperatingStatus(status: string): string {
+  const match = DEVICE_STATUSES.find((item) => item.value === status);
+  return match?.label ?? formatStatus(status);
+}
+
+export function operatingStatusAriaLabel(isOn: boolean, deviceName: string): string {
+  return isOn ? `Turn ${deviceName} off` : `Turn ${deviceName} on`;
+}
+
+export function formatLifecycleStatus(status: string): string {
+  if (status in LIFECYCLE_LABELS) {
+    return LIFECYCLE_LABELS[status as LifecycleStatus];
+  }
+  return formatStatus(status);
+}
+
+/** Text color for device power status — green on, red off. */
+export function statusColorClass(status: string): string {
+  if (status === 'ONLINE') return 'text-emerald-600 dark:text-emerald-400';
+  if (status === 'OFFLINE') return 'text-red-600 dark:text-red-400';
+  return 'text-muted-foreground';
+}
+
+export function formatWhen(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+export function formatConfigurationSummary(
+  configuration: DeviceConfiguration | null | undefined,
+  deviceType?: string
+): string {
+  if (!configuration) return '—';
+  try {
+    const parts: string[] = [];
+    const parsed = asDeviceConfiguration(configuration);
+    const interval =
+      typeof parsed?.reportingIntervalSeconds === 'number'
+        ? parsed.reportingIntervalSeconds
+        : defaultReportingIntervalSeconds(deviceType ?? '');
+    if (normalizeDeviceType(deviceType ?? '') === 'environmental-sensor') {
+      parts.push(formatReportingIntervalSummary(parsed ?? { reportingIntervalSeconds: interval }));
+    } else {
+      parts.push(`Reports every ${String(interval)}s`);
+    }
+    if (normalizeDeviceType(deviceType ?? '') === 'camera') {
+      parts.push(formatCameraSettingsSummary(configuration));
+      const pan = typeof parsed?.pan === 'number' ? parsed.pan : 90;
+      const tilt = typeof parsed?.tilt === 'number' ? parsed.tilt : 90;
+      parts.push(`Pan ${pan}° · Tilt ${tilt}°`);
+      return parts.join(' · ');
+    }
+    return parts.length ? parts.join(' · ') : 'Default settings';
+  } catch {
+    return 'Configured';
+  }
+}
+
+export const inputMinimal =
+  'rounded-none border-x-0 border-t-0 border-b border-border bg-transparent px-0 shadow-none ' +
+  'focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-foreground placeholder:text-muted-foreground';

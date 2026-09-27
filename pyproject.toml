@@ -1,0 +1,10 @@
+[project]
+name = "homehub"
+version = "0.1.0"
+description = "HomeHub monorepo — SST uv workspace root"
+license = { text = "MIT" }
+requires-python = "==3.13.*"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["services/api"]

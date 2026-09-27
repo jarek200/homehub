@@ -1,0 +1,2 @@
+## Copy into an esp-matter controller project; do not fetch IDF components from CI.
+dependencies: {}

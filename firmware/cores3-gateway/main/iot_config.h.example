@@ -1,0 +1,26 @@
+// Copy to generated/iot_config.h via scripts/provisioning/provision-cores3-iot.sh (never commit secrets).
+#ifndef HOMEHUB_IOT_CONFIG_H
+#define HOMEHUB_IOT_CONFIG_H
+
+// #define HOMEHUB_IOT_ENABLED 1
+// #define HOMEHUB_IOT_ENDPOINT "xxxxxxxxxx-ats.iot.eu-west-1.amazonaws.com"
+// #define HOMEHUB_DEVICE_ID "cores3-gateway"
+// #define HOMEHUB_HUB_ID "demo"
+// #define HOMEHUB_THING_NAME "homehub-cores3-gateway"
+// static const char HOMEHUB_AWS_ROOT_CA[] = R"HOMEHUB_EOF(
+// -----BEGIN CERTIFICATE-----
+// ...
+// -----END CERTIFICATE-----
+// )HOMEHUB_EOF";
+// static const char HOMEHUB_DEVICE_CERT[] = R"HOMEHUB_EOF(
+// -----BEGIN CERTIFICATE-----
+// ...
+// -----END CERTIFICATE-----
+// )HOMEHUB_EOF";
+// static const char HOMEHUB_DEVICE_KEY[] = R"HOMEHUB_EOF(
+// -----BEGIN RSA PRIVATE KEY-----
+// ...
+// -----END RSA PRIVATE KEY-----
+// )HOMEHUB_EOF";
+
+#endif

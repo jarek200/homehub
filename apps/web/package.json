@@ -1,0 +1,39 @@
+{
+  "name": "@homehub/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "svelte-kit sync && vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "pnpm --dir ../.. exec biome check apps/web",
+    "lint:fix": "pnpm --dir ../.. exec biome check apps/web --write",
+    "format": "pnpm --dir ../.. exec biome format apps/web --write"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "HomeHub SvelteKit console",
+  "dependencies": {
+    "@homehub/core": "workspace:*",
+    "aws-amplify": "^6.18.0",
+    "bits-ui": "^2.18.1"
+  },
+  "devDependencies": {
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "clsx": "^2.1.1",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "svelte-kit-sst": "2",
+    "tailwind-merge": "^3.6.0",
+    "tailwind-variants": "^3.2.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0"
+  },
+  "type": "module",
+  "packageManager": "pnpm@10.20.0"
+}

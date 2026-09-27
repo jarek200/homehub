@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Hot Living Room",
+    "enabled": true,
+    "condition": {
+      "device": "living-room-temperature",
+      "property": "temperature",
+      "operator": ">",
+      "value": 26
+    },
+    "action": {
+      "device": "living-room-fan",
+      "command": "on"
+    },
+    "hysteresis": 2
+  },
+  {
+    "name": "Night hallway",
+    "enabled": true,
+    "condition": {
+      "device": "hallway-motion",
+      "property": "motion",
+      "operator": ">",
+      "value": 0
+    },
+    "action": {
+      "device": "hallway-light",
+      "command": "on"
+    },
+    "hysteresis": 0
+  }
+]
