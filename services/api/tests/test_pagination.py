@@ -30,7 +30,7 @@ def test_list_devices_returns_next_cursor(monkeypatch) -> None:
 
     resource = MagicMock()
     resource.Table.return_value = table
-    monkeypatch.setattr("homehub_api.store.boto3.resource", lambda _service: resource)
+    monkeypatch.setattr("homehub_api.store.hub_store.boto3.resource", lambda _service: resource)
 
     store = HubStore("test-table", tenant_pk="HOUSEHOLD#demo")
     first_page = store.list_devices(limit=1)

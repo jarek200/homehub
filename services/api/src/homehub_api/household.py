@@ -1,35 +1,31 @@
-"""Household keys, membership roles, invitations, and tenant resolution."""
+"""Household keys, membership roles, and tenant resolution."""
 
 from __future__ import annotations
 
-import hashlib
 import os
-import re
-import secrets
 from datetime import UTC, datetime
 from typing import Any
+
+from botocore.exceptions import ClientError
 
 HOUSEHOLD_PREFIX = "HOUSEHOLD#"
 USER_PREFIX = "USER#"
 GATEWAY_PREFIX = "GATEWAY#"
-INVITE_PREFIX = "INVITE#"
 
 HOUSEHOLD_METADATA_SK = "METADATA"
 HOUSEHOLD_LOOKUP_SK = "HOUSEHOLD"
+HOME_POINTER_PK = "HOMEHUB#HOME"
+HOME_POINTER_SK = "HOUSEHOLD"
 HUB_STATE_SK = "HUB_STATE"
 HUB_RULES_SK = "HUB_RULES"
 PROFILE_SK = "PROFILE"
 MEMBER_SK_PREFIX = "MEMBER#"
-INVITE_SK_PREFIX = "INVITE#"
 DEVICE_SK_PREFIX = "DEVICE#"
 
-INVITE_TTL_SECONDS = 7 * 24 * 60 * 60
 STATE_WRITE_MAX_ATTEMPTS = 5
 
 DEMO_TENANT_ID = "demo"
 DEMO_TENANT_PK = f"{HOUSEHOLD_PREFIX}{DEMO_TENANT_ID}"
-
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def now_iso() -> str:
@@ -52,16 +48,8 @@ def gateway_pk(gateway_id: str) -> str:
     return f"{GATEWAY_PREFIX}{gateway_id}"
 
 
-def invite_pk(token_hash: str) -> str:
-    return f"{INVITE_PREFIX}{token_hash}"
-
-
 def member_sk(user_id: str) -> str:
     return f"{MEMBER_SK_PREFIX}{user_id}"
-
-
-def invite_sk(invite_id: str) -> str:
-    return f"{INVITE_SK_PREFIX}{invite_id}"
 
 
 def is_household_pk(tenant_pk: str) -> bool:
@@ -108,38 +96,6 @@ def normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
-def is_valid_email(email: str) -> bool:
-    return bool(_EMAIL_RE.match(normalize_email(email)))
-
-
-def hash_invite_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
-
-
-def hash_email(email: str) -> str:
-    return hashlib.sha256(normalize_email(email).encode("utf-8")).hexdigest()
-
-
-def new_invite_token() -> str:
-    return secrets.token_urlsafe(32)
-
-
-def invite_expires_at(*, now: datetime | None = None, ttl_seconds: int = INVITE_TTL_SECONDS) -> int:
-    stamp = now or datetime.now(UTC)
-    if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=UTC)
-    return int(stamp.timestamp()) + ttl_seconds
-
-
-def is_invite_expired(expires_at: Any, *, now: datetime | None = None) -> bool:
-    try:
-        deadline = int(expires_at)
-    except (TypeError, ValueError):
-        return True
-    stamp = now or datetime.now(UTC)
-    return deadline <= int(stamp.timestamp())
-
-
 def channel_for_household_pk(tenant_pk: str) -> str | None:
     if not is_household_pk(tenant_pk):
         return None
@@ -149,10 +105,6 @@ def channel_for_household_pk(tenant_pk: str) -> str | None:
 
 def app_url() -> str:
     return (os.environ.get("APP_URL") or os.environ.get("VITE_APP_URL") or "").rstrip("/")
-
-
-def ses_from_address() -> str:
-    return (os.environ.get("SES_FROM_ADDRESS") or "").strip()
 
 
 def get_profile_item(table: Any, user_id: str) -> dict[str, Any] | None:
@@ -167,12 +119,78 @@ def get_gateway_household_item(table: Any, gateway_id: str) -> dict[str, Any] | 
     return dict(item) if item else None
 
 
+def _pointer_household_id(table: Any) -> str:
+    result = table.get_item(Key={"PK": HOME_POINTER_PK, "SK": HOME_POINTER_SK})
+    item = result.get("Item") or {}
+    return str(item.get("householdId") or "")
+
+
+def _remember_home_pointer(table: Any, household_id: str) -> str:
+    existing = _pointer_household_id(table)
+    if existing:
+        return existing
+    try:
+        table.put_item(
+            Item={
+                "PK": HOME_POINTER_PK,
+                "SK": HOME_POINTER_SK,
+                "householdId": household_id,
+            },
+            ConditionExpression="attribute_not_exists(PK)",
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+            raise
+    return _pointer_household_id(table) or household_id
+
+
+def _metadata_household_ids(table: Any) -> list[str]:
+    found: list[str] = []
+    start_key: dict[str, Any] | None = None
+    while True:
+        kwargs: dict[str, Any] = {}
+        if start_key:
+            kwargs["ExclusiveStartKey"] = start_key
+        page = table.scan(**kwargs)
+        for item in page.get("Items") or []:
+            pk = str(item.get("PK") or "")
+            if item.get("SK") != HOUSEHOLD_METADATA_SK or not pk.startswith(HOUSEHOLD_PREFIX):
+                continue
+            household_id = str(item.get("householdId") or pk.removeprefix(HOUSEHOLD_PREFIX))
+            if household_id:
+                found.append(household_id)
+        start_key = page.get("LastEvaluatedKey")
+        if not start_key:
+            return found
+
+
+def _choose_household_id(candidates: list[str]) -> str:
+    unique = list(dict.fromkeys(candidates))
+    non_demo = [item for item in unique if item != DEMO_TENANT_ID]
+    pool = non_demo or unique
+    return sorted(pool)[0] if pool else ""
+
+
+def find_existing_household_id(table: Any) -> str:
+    """The home already in this stage, remembered as HOMEHUB#HOME / HOUSEHOLD."""
+    pointer = _pointer_household_id(table)
+    if pointer:
+        return pointer
+    chosen = _choose_household_id(_metadata_household_ids(table))
+    if not chosen:
+        return ""
+    return _remember_home_pointer(table, chosen)
+
+
 def resolve_household_pk_for_user(table: Any, user_id: str | None) -> str:
     if not user_id:
         return resolve_demo_pk(table)
     profile = get_profile_item(table, user_id)
     household_id = str(profile.get("householdId") or "") if profile else ""
-    return household_pk(household_id or user_id)
+    if household_id:
+        return household_pk(household_id)
+    existing = find_existing_household_id(table)
+    return household_pk(existing or user_id)
 
 
 def resolve_demo_pk(table: Any) -> str:

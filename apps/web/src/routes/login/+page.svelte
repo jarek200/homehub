@@ -5,14 +5,13 @@
 
 <script lang="ts">
 import { fetchAuthSession, getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
-import { tick } from 'svelte';
+import { onMount, tick } from 'svelte';
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { auth } from '$lib/auth.svelte';
 import { Button } from '$lib/components/ui/button/index.js';
 import { Input } from '$lib/components/ui/input/index.js';
 import { Label } from '$lib/components/ui/label/index.js';
-import { persistInviteToken } from '$lib/household';
 import { getMyProfile } from '$lib/services/rest-api';
 import { cognitoAuthError } from './auth-errors';
 
@@ -27,20 +26,15 @@ const inputMinimal =
 
 const redirectTarget = $derived(page.url.searchParams.get('redirect') || '/plan');
 
-$effect(() => {
-  const redirect = page.url.searchParams.get('redirect') || '';
-  const inviteMatch = redirect.match(/[?&]token=([^&]+)/);
-  if (inviteMatch?.[1]) {
-    persistInviteToken(decodeURIComponent(inviteMatch[1]));
-  }
-
+onMount(() => {
+  const destination = redirectTarget;
   void (async () => {
     try {
       await import('$lib/amplify');
       const user = await getCurrentUser();
       const session = await fetchAuthSession();
       if (user && session.tokens) {
-        goto(redirectTarget, { replaceState: true });
+        goto(destination, { replaceState: true });
       }
     } catch {
       // Not logged in
